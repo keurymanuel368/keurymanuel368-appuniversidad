@@ -1,0 +1,15 @@
+node_modules
+dist
+.wrangler
+.dev.vars
+backups/
+*.log
+# App del widget (Android): compilados y rutas locales
+android-widget/.gradle/
+android-widget/build/
+android-widget/app/build/
+android-widget/local.properties
+*.keystore
+*.jks
+hs_err_pid*.log
+replay_pid*.log

@@ -1,0 +1,97 @@
+export class ApiError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: opts.method || 'GET',
+    headers: opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    credentials: 'same-origin',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error || `Error ${res.status}`);
+  return data as T;
+}
+
+export type Task = {
+  id: number; title: string; due_at: number | null; url: string | null; source: string; status: string; notes: string | null; submitted_at?: number | null;
+  grade?: number | null; grade_max?: number | null; grade_feedback?: string | null; facilitator?: string | null; focus_minutes?: number; description?: string | null;
+  course_id: number | null; course_name: string | null; course_short: string | null; course_color: string | null;
+};
+export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number };
+export type PayWindow = { state: 'open' | 'closed'; period: string; opensAt: number; closesAt: number; daysToOpen: number; daysToClose: number; paid: boolean; amount: string; openDay: number; closeDay: number };
+export type Dashboard = {
+  today: string; name: string; termProgress: number | null;
+  counts: { pending: number; today: number; week: number; overdue: number };
+  average: number | null; tasks: Task[]; graded: Task[]; weekProgress: { total: number; done: number };
+  news: { id: number; title: string; kind: string; created_at: number; read: number; course_name: string | null }[]; unreadNews: number; courses: Course[]; pay: PayWindow;
+  lastSync: number | null; lastSyncError: string; summaryHour: number;
+  mascot?: { mood: string; headline: string; sub: string; streak: number };
+};
+export type PensumRow = { id: number; term: number; code: string | null; name: string; credits: number; status: string; grade: number | null; prereqs: string | null; coreqs?: string | null; kind?: string };
+export type Elective = { code: string; name: string; credits: number; block: string };
+export type CareersRes = {
+  current: { id: string; name: string; version?: string; source?: string; totalCredits?: number; notes: string[]; electives: Elective[] } | null;
+  careers: { id: string; name: string; area: string; available: boolean }[];
+};
+
+// ----- Fechas en hora de República Dominicana -----
+const TZ = 'America/Santo_Domingo';
+const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('es-DO', { timeZone: TZ, ...o });
+
+export function dayKey(sec: number): string {
+  return fmt({ year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(sec * 1000));
+}
+
+export function whenLabel(sec: number | null): string {
+  if (!sec) return 'Sin fecha';
+  const now = Math.floor(Date.now() / 1000);
+  const d = new Date(sec * 1000);
+  const hora = fmt({ hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+  if (dayKey(sec) === dayKey(now)) return `Hoy · ${hora}`;
+  if (dayKey(sec) === dayKey(now + 86400)) return `Mañana · ${hora}`;
+  const diff = (sec - now) / 86400;
+  if (diff > 0 && diff < 6) return `${cap(fmt({ weekday: 'long' }).format(d))} · ${hora}`;
+  return cap(fmt({ weekday: 'short', day: 'numeric', month: 'short' }).format(d)).replace(/\./g, '');
+}
+
+export function dateLabel(sec: number): string {
+  return fmt({ day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(sec * 1000)).replace(/\./g, '');
+}
+
+export function urgency(sec: number | null): 'red' | 'orange' | 'blue' | 'gray' {
+  if (!sec) return 'gray';
+  const left = sec - Date.now() / 1000;
+  if (left < 0) return 'red';
+  if (left < 86400 || dayKey(sec) === dayKey(Math.floor(Date.now() / 1000))) return 'orange';
+  if (left < 7 * 86400) return 'blue';
+  return 'gray';
+}
+
+/** Convierte el valor de un <input type="datetime-local"> (hora de RD) a segundos Unix. */
+export function localInputToUnix(v: string): number | null {
+  if (!v) return null;
+  const [date, time = '23:59'] = v.split('T');
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d, h, mi) / 1000) + 4 * 3600;
+}
+
+export function unixToLocalInput(sec: number | null): string {
+  if (!sec) return '';
+  const d = new Date((sec - 4 * 3600) * 1000);
+  return d.toISOString().slice(0, 16);
+}
+
+export type SendResult = { ok: boolean; channels: ('whatsapp' | 'callmebot' | 'push')[]; error?: string };
+const CHANNEL = { whatsapp: 'WhatsApp', callmebot: 'CallMeBot', push: 'notificación' } as const;
+export const channelsLabel = (r: SendResult) => r.channels.map((c) => CHANNEL[c]).join(' y ');
+
+export const cap =(s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Quita los códigos que el EVA pone al inicio de los avisos ("202633-CBC103-HV4-2347-0: SEMANA I…" → "SEMANA I…"). */
+export function cleanTitle(t: string): string {
+  const out = t.replace(/^\s*\d{4,}-[A-Z0-9]+(?:-[A-Z0-9]+)*\s*[:\-–]\s*/i, '').replace(/^(Re|Fwd?|RV|RE):\s*/i, '').trim();
+  return out || t;
+}

@@ -1,0 +1,7 @@
+[
+  { "term": 1, "code": "CBC-105", "name": "Tecnología para el Aprendizaje Virtual", "credits": 3, "status": "en_curso" },
+  { "term": 1, "code": "CBM-107", "name": "Razonamiento Lógico Matemático", "credits": 3, "status": "en_curso" },
+  { "term": 1, "code": "ORI-000", "name": "Orientación a la Educación a Distancia Virtual", "credits": 2, "status": "en_curso" },
+  { "term": 1, "code": "COM-000", "name": "Comunicación Oral y Escrita", "credits": 3, "status": "en_curso" },
+  { "term": 2, "code": "XXX-000", "name": "Asignatura de ejemplo con prerrequisito", "credits": 3, "status": "pendiente", "prereqs": "CBM-107" }
+]

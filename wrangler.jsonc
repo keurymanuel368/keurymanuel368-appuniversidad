@@ -1,0 +1,35 @@
+{
+  // Rumbo: un solo Worker sirve la app (PWA) y la API. Todo en el plan gratis de Cloudflare.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rumbo",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rumbo-db",
+      // Pega aquí el id que te da: npx wrangler d1 create rumbo-db
+      "database_id": "4ebcd232-495b-4893-8bd6-0fe9a3f516dc",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Workers AI (plan gratis): transcribe las notas de voz que le mandas al asistente por WhatsApp.
+  "ai": { "binding": "AI" },
+  // Un solo cron cada 30 minutos: sincroniza el EVA, envía el resumen diario y los recordatorios.
+  "triggers": { "crons": ["*/30 * * * *"] },
+  "vars": {
+    "TZ_OFFSET_HOURS": "-4",
+    "MOODLE_URL": "https://eva.uapa.edu.do"
+  }
+  // Secretos (NO van aquí). Créalos con: npx wrangler secret put NOMBRE
+  // APP_PASSWORD, SESSION_SECRET, MOODLE_TOKEN,
+  // WA_PHONE_NUMBER_ID, WA_TOKEN, WA_VERIFY_TOKEN, WA_APP_SECRET, WA_MY_NUMBER,
+  // CALLMEBOT_APIKEY
+}

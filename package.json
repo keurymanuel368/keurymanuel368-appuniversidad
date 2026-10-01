@@ -1,0 +1,29 @@
+{
+  "name": "rumbo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite",
+    "build": "tsc -p tsconfig.web.json --noEmit && vite build",
+    "dev": "npm run build && wrangler dev",
+    "db:local": "wrangler d1 migrations apply rumbo-db --local",
+    "db:remote": "wrangler d1 migrations apply rumbo-db --remote",
+    "deploy": "npm run build && wrangler deploy && node scripts/announce.mjs",
+    "typecheck": "tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.9.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260930.2",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "wrangler": "^4.145.0"
+  }
+}
