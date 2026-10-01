@@ -9,6 +9,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 17,
+    date: '2026-10-01',
+    title: 'Te avisa cuando te califican',
+    items: [
+      'Cuando el facilitador corrige una tarea te llega un aviso con la nota, un emoji según cómo te fue y su comentario. Al tocarlo se abre la tarea.',
+      'Si te cambian una nota también te avisa (y te dice cuánto tenías antes).',
+      'La ficha de cada tarea muestra el comentario del facilitador, y las calificaciones quedan guardadas en Avisos.',
+      'Copias de seguridad automáticas de tus datos cada semana: Ajustes → Copias de seguridad (también puedes descargarlas).',
+      'Rumbo te avisa si el EVA deja de conectar, si la IA no responde o si falla una copia.',
+    ],
+  },
+  {
     version: 16,
     date: '2026-10-01',
     title: 'Rumbo y el widget se actualizan solos',

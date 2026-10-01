@@ -20,6 +20,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Copias de seguridad semanales de tus datos (KV, plan gratis). Se ven y descargan en Ajustes.
+  "kv_namespaces": [{ "binding": "BACKUPS", "id": "ae58212e218447b9bee6016159d31556" }],
   // Workers AI (plan gratis): transcribe las notas de voz que le mandas al asistente por WhatsApp.
   "ai": { "binding": "AI" },
   // Un solo cron cada 30 minutos: sincroniza el EVA, envía el resumen diario y los recordatorios.

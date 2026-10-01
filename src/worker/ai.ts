@@ -274,9 +274,9 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
 /** Separa lo que se ve en pantalla de los datos internos (versión hablada, acciones, memoria). */
 /** Etiquetas que algunos modelos ponen al inicio ("Respuesta:", "1) Respuesta para la pantalla:") y no se deben ver ni oír. */
 const LABEL = /^\s*(?:\d[).]\s*)?[*_#\s]*(?:respuesta|texto|pantalla|mensaje|reply)(?:\s+(?:para|en)\s+(?:la\s+)?pantalla)?[*_\s]*:\s*[*_]*\s*/i;
-function labelLength(text: string): number { const m = LABEL.exec(text); return m ? m[0].length : 0; }
+export function labelLength(text: string): number { const m = LABEL.exec(text); return m ? m[0].length : 0; }
 
-function splitOutput(full: string): { visible: string; say: string; actions: Action[]; remember: string } {
+export function splitOutput(full: string): { visible: string; say: string; actions: Action[]; remember: string } {
   const i = full.search(/\n?\s*===\s*\n?/);
   let visible = (i >= 0 ? full.slice(0, i) : full).replace(LABEL, '').trim();
   const meta = i >= 0 ? full.slice(i).replace(/^\s*===\s*/, '') : '';

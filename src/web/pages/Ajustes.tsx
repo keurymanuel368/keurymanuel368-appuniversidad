@@ -296,6 +296,51 @@ function WidgetCard() {
   );
 }
 
+type BackupInfo = { key: string; at: number; bytes: number; rows: number };
+/** Copias de seguridad de tus datos: automáticas cada semana, a mano cuando quieras, y descargables. */
+function BackupCard() {
+  const [data, setData] = useState<{ enabled: boolean; list: BackupInfo[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const load = () => api<{ enabled: boolean; list: BackupInfo[] }>('/backups').then(setData).catch(() => setData({ enabled: false, list: [] }));
+  useEffect(() => { void load(); }, []);
+  async function now() {
+    setBusy(true); haptic(8);
+    try { await api('/backups', { method: 'POST' }); toast('Copia de seguridad lista ✅'); await load(); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  }
+  const last = data?.list[0];
+  const when = (ms: number) => new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(ms);
+  return (
+    <>
+      <div className="toggle">
+        <span className="set-ic green"><Icon name="check" size={18} /></span>
+        <div className="t"><b>Copias de seguridad</b><span>{!data ? 'Revisando…' : last ? `Última: ${when(last.at)} · se hace sola cada semana` : 'Todavía no hay copias: se hará sola esta semana'}</span></div>
+        <button className="btn soft sm" onClick={() => { haptic(6); setOpen(true); }}>Ver</button>
+      </div>
+      {open && (
+        <Modal title="Copias de seguridad" onClose={() => setOpen(false)}>
+          <p className="hint"><Icon name="alert" size={16} />Rumbo guarda una copia de todos tus datos (tareas, notas, pagos, avisos y lo que la IA recuerda) cada semana. Se conservan las últimas 8. Tu código también se respalda solo en GitHub cada vez que se publica algo nuevo.</p>
+          <button className="btn primary lg block" onClick={now} disabled={busy || !data?.enabled}><Icon name="sync" size={18} />{busy ? 'Haciendo la copia…' : 'Hacer una copia ahora'}</button>
+          <a className="btn line block" href="/api/backups/download" download><Icon name="download" size={18} />Descargar mis datos de hoy</a>
+          {data && data.list.length > 0 && (
+            <div className="backup-list" role="list" aria-label="Copias guardadas">
+              {data.list.map((b) => (
+                <a key={b.key} role="listitem" className="backup-row" href={`/api/backups/download?key=${encodeURIComponent(b.key)}`} download>
+                  <span className="set-ic blue"><Icon name="book" size={16} /></span>
+                  <span className="br-txt"><b>{when(b.at)}</b><small>{b.rows.toLocaleString('es-DO')} registros · {Math.max(1, Math.round(b.bytes / 1024))} KB</small></span>
+                  <Icon name="download" size={18} />
+                </a>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** Motores de IA gratis en cadena: si uno se agota, sigue el siguiente. */
 function AiEnginesCard({ engines }: { engines: string[] }) {
   const [help, setHelp] = useState(false);
@@ -504,6 +549,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                 <Status ok text="Listo" />
               </div>
               <WidgetCard />
+              <BackupCard />
               <MailCard connected={st.mail.connected} lastAt={st.mail.lastAt} onChanged={q.reload} />
               <AiEnginesCard engines={st.ai.engines} />
               <TelegramCard st={st.telegram} onChanged={q.reload} />

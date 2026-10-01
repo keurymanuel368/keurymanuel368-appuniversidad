@@ -10,6 +10,7 @@
 // Cada proveedor tiene VARIOS modelos y cada modelo tiene su propio límite por minuto:
 // si uno está ocupado (429), retirado (404/410) o responde vacío, se prueba el siguiente modelo y luego el siguiente proveedor.
 import type { Env } from './env';
+import { noteAiFailure } from './health';
 
 export type ChatMsg = { role: string; content: string };
 type Provider = { name: string; url: string; modelsUrl: string; key: string; fixed?: string; onlyFree?: boolean };
@@ -47,6 +48,15 @@ const cooldown = new Map<string, number>();
 const coolKey = (p: Provider, m: string) => `${p.name}|${m}`;
 const isCool = (p: Provider, m: string) => (cooldown.get(coolKey(p, m)) || 0) > Date.now();
 
+/** Ordena los modelos disponibles del mejor al peor (según PREFER) y se queda con los primeros. */
+export function rankModels(ids: string[]): string[] {
+  const usable = ids.filter((id) => !NOT_CHAT.test(id));
+  const ranked: string[] = [];
+  for (const re of PREFER) for (const id of usable) if (re.test(id) && !ranked.includes(id)) ranked.push(id);
+  if (!ranked.length) ranked.push(...usable.slice(0, 3));
+  return ranked.slice(0, MAX_CANDIDATES);
+}
+
 async function listModels(p: Provider): Promise<string[]> {
   try {
     const res = await fetch(p.modelsUrl, { headers: { Authorization: `Bearer ${p.key}` } });
@@ -68,11 +78,7 @@ async function candidates(env: Env, p: Provider, refresh = false): Promise<strin
       if (saved && Date.now() - saved.at < 86400_000 && saved.ids.some((m) => !bad.has(m))) return saved.ids.filter((m) => !bad.has(m));
     } catch { /* se vuelve a pedir */ }
   }
-  const ids = (await listModels(p)).filter((m) => !bad.has(m));
-  const ranked: string[] = [];
-  for (const re of PREFER) for (const id of ids) if (re.test(id) && !ranked.includes(id)) ranked.push(id);
-  if (!ranked.length) ranked.push(...ids.slice(0, 3));
-  const top = ranked.slice(0, MAX_CANDIDATES);
+  const top = rankModels((await listModels(p)).filter((m) => !bad.has(m)));
   if (top.length) { await putSetting(env, key, JSON.stringify({ at: Date.now(), ids: top })); console.log(`IA: ${p.name} → ${top.join(', ')}`); }
   return top;
 }
@@ -83,7 +89,7 @@ async function markBad(env: Env, p: Provider, model: string) {
   if (!bad.includes(model)) { bad.push(model); await putSetting(env, k, JSON.stringify(bad.slice(-60))); }
 }
 
-const modelGone = (status: number, body: string) => status === 404 || status === 410 || (status === 400 && /model|not (found|supported)|does not exist|decommission/i.test(body));
+export const modelGone = (status: number, body: string) => status === 404 || status === 410 || (status === 400 && /model|not (found|supported)|does not exist|decommission/i.test(body));
 
 /** Lee un stream SSE estilo OpenAI y devuelve solo el texto (ignora el "pensamiento" de modelos que razonan). */
 async function* openAiDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
@@ -207,6 +213,7 @@ export async function llmStream(env: Env, messages: ChatMsg[], opts: { maxTokens
     }
   }
   if (errors.length) console.log('IA sin motor disponible: ' + errors.join(' | '));
+  await noteAiFailure(env, errors.slice(0, 3).join(' | '));
   throw new Error(errors.some((x) => /4006|daily free alloc|429|quota|rate/i.test(x)) ? 'cuota agotada' : errors[0] || 'No hay motores de IA configurados');
 }
 

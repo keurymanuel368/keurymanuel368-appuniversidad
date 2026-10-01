@@ -1569,3 +1569,11 @@ button.card:active, .stat:not(.static):active, .course:active, .tile:active, .gf
 .fb-head { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); }
 .feedback-card p { margin-top: 6px; font-size: 14.5px; line-height: 1.5; color: var(--ink-2); white-space: pre-line; }
 :root[data-mode="dark"] .fb-head { color: #8DB4FF; }
+
+/* Copias de seguridad */
+.backup-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.backup-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; min-height: 52px; }
+.backup-row:active { transform: scale(.98); }
+.br-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.br-txt b { font-size: 14px; }
+.br-txt small { font-size: 12.5px; color: var(--muted); }

@@ -2,6 +2,7 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   AI: Ai;
+  BACKUPS?: KVNamespace;
   TZ_OFFSET_HOURS: string;
   MOODLE_URL: string;
   // Secretos

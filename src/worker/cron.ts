@@ -5,6 +5,8 @@ import { payWindow, periodLabel, summaryShort, summaryText } from './data';
 import { syncEva } from './moodle';
 import { sendToMe } from './notify';
 import { announceRelease } from './changelog';
+import { backupDue, makeBackup } from './backup';
+import { checkHealth } from './health';
 import { cuandoTexto, localDate, nowSec, ymd } from './time';
 
 export async function runScheduled(env: Env): Promise<string[]> {
@@ -88,6 +90,14 @@ export async function runScheduled(env: Env): Promise<string[]> {
 
   // Novedades de Rumbo (se anuncian una sola vez por versión)
   try { await announceRelease(env); } catch (e) { log.push('Novedades: ' + (e as Error).message); }
+
+  // Copia de seguridad semanal de tus datos
+  let backupError: string | undefined;
+  try { if (await backupDue(env)) { const b = await makeBackup(env); log.push(`Copia de seguridad: ${b.rows} filas`); } }
+  catch (e) { backupError = (e as Error).message; log.push('Copia de seguridad: ' + backupError); }
+
+  // Alertas si algo dejó de funcionar (EVA, IA, copias)
+  try { log.push(...(await checkHealth(env, { backupError }))); } catch (e) { log.push('Salud: ' + (e as Error).message); }
 
   // Limpieza: registros de envío de más de 90 días
   await env.DB.prepare('DELETE FROM sent_log WHERE sent_at < ?').bind(now - 90 * 86400).run();

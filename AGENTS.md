@@ -88,6 +88,13 @@ python scripts/make-icons.py   # regenerar iconos (requiere Pillow)
 ```
 Para probar con datos de ejemplo, carga filas en la D1 **local**; nunca en la remota.
 
+## 6b. Respaldo, pruebas y alertas (Fase 1)
+- **Código:** repositorio privado https://github.com/manuel3680p-debug/rumbo. `npm run deploy` corre las pruebas, publica y al final hace commit + push solo (`scripts/backup-code.mjs`). El repo usa un ayudante de credenciales local que pide el token de la cuenta manuel3680p-debug a `gh`.
+- **Datos:** copia semanal automática (cron) en KV `BACKUPS` (`src/worker/backup.ts`, últimas 8, sin claves privadas). Ajustes → Copias de seguridad para hacer o descargar. Copia completa local: `npm run backup:db` (carpeta `backups/`, ignorada por git). D1 además tiene Time Travel de 7 días.
+- **Pruebas:** `npm test` (Vitest, carpeta `tests/`). Si cambias la voz, la lectura de la IA, los modelos, las notas o las fechas, agrega o ajusta pruebas.
+- **Alertas:** `src/worker/health.ts` avisa una vez al día si el EVA falla o lleva más de 12 h sin sincronizar, si todos los motores de IA fallan o si falla la copia.
+- **Calificaciones:** `src/worker/grades.ts` avisa notas nuevas o cambiadas (con el comentario del facilitador, `grades.feedback`) desde cualquier sincronización.
+
 ## 7. Convenciones de código
 - TypeScript estricto, componentes funcionales, sin librerías nuevas salvo que sea imprescindible.
 - Textos de la UI cortos, cálidos y claros, en español dominicano neutro. Fechas con `America/Santo_Domingo`.

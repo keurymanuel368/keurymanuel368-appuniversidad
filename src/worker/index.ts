@@ -10,6 +10,7 @@ import { transcribeAudio, transcribeWhatsAppAudio } from './voice';
 import { downloadTelegramFile, sendTelegram, setupTelegram, telegramReady, tgCall } from './telegram';
 import { calendarIcs } from './calendar';
 import { WIDGET_VERSION, widgetData } from './widget';
+import { dumpData, gunzip, listBackups, makeBackup } from './backup';
 import { CHANGELOG, announceRelease } from './changelog';
 import { CAREERS, findCareer } from './pensums';
 import { handleCommand } from './assistant';
@@ -310,6 +311,24 @@ app.post('/api/widget/setup', async (c) => {
   return c.json({ link: `rumbo://conectar?u=${encodeURIComponent(origin)}&t=${token}`, apk: `${origin}/rumbo-widget.apk?v=${WIDGET_VERSION}`, preview: await widgetData(c.env) });
 });
 app.post('/api/widget/reset', async (c) => { await setSetting(c.env, 'widget_token', ''); return c.json({ ok: true }); });
+
+// Copias de seguridad de tus datos
+app.get('/api/backups', async (c) => c.json({ enabled: !!c.env.BACKUPS, list: await listBackups(c.env) }));
+app.post('/api/backups', async (c) => {
+  try { return c.json({ ok: true, backup: await makeBackup(c.env) }); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+app.get('/api/backups/download', async (c) => {
+  const key = c.req.query('key');
+  let json: string;
+  if (key && c.env.BACKUPS) {
+    const buf = await c.env.BACKUPS.get(key, 'arrayBuffer');
+    if (!buf) return c.json({ error: 'Copia no encontrada' }, 404);
+    json = await gunzip(buf);
+  } else json = JSON.stringify(await dumpData(c.env)); // sin clave: tus datos de este momento
+  const name = `rumbo-datos-${(key || new Date().toISOString()).replace(/^backup:/, '').slice(0, 19).replace(/[:T]/g, '-')}.json`;
+  return new Response(json, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' } });
+});
 
 app.post('/api/calendar/reset', async (c) => { await setSetting(c.env, 'calendar_token', ''); return c.json({ ok: true }); });
 
