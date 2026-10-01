@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, type FormEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { api, ApiError, type Course } from './api';
 import { Icon } from './icons';
 import { Modal, TaskModal, Toaster, haptic } from './components';
-import { Inicio } from './pages/Inicio';
-import { Tareas } from './pages/Tareas';
-import { Asignaturas } from './pages/Asignaturas';
-import { Pagos } from './pages/Pagos';
-import { Pensum } from './pages/Pensum';
-import { Asistente } from './pages/Asistente';
-import { Ajustes } from './pages/Ajustes';
-import { Avisos } from './pages/Avisos';
 import { Welcome } from './Welcome';
+
+// Cada pantalla se descarga solo cuando la abres: la app arranca más rápido.
+const Inicio = lazy(() => import('./pages/Inicio').then((m) => ({ default: m.Inicio })));
+const Tareas = lazy(() => import('./pages/Tareas').then((m) => ({ default: m.Tareas })));
+const Asignaturas = lazy(() => import('./pages/Asignaturas').then((m) => ({ default: m.Asignaturas })));
+const Pagos = lazy(() => import('./pages/Pagos').then((m) => ({ default: m.Pagos })));
+const Pensum = lazy(() => import('./pages/Pensum').then((m) => ({ default: m.Pensum })));
+const Asistente = lazy(() => import('./pages/Asistente').then((m) => ({ default: m.Asistente })));
+const Ajustes = lazy(() => import('./pages/Ajustes').then((m) => ({ default: m.Ajustes })));
+const Avisos = lazy(() => import('./pages/Avisos').then((m) => ({ default: m.Avisos })));
 import { Buddy } from './Buddy';
 
 const PAGES = [
@@ -42,6 +44,7 @@ export function App() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [version, setVersion] = useState(0);
   const [welcome, setWelcome] = useState(() => { try { return !localStorage.getItem("rumbo-welcome"); } catch { return false; } });
+  useEffect(() => { const on = () => setWelcome(true); window.addEventListener('rumbo:tour', on); return () => window.removeEventListener('rumbo:tour', on); }, []);
   // Numeritos rojos: avisos/correos sin leer y tareas que vencen hoy o ya vencieron.
   const [badges, setBadges] = useState({ news: 0, tasks: 0 });
   useEffect(() => {
@@ -106,7 +109,30 @@ export function App() {
   }, []);
 
   const go = (p: string) => { haptic(5); if (location.hash === '#' + p) { setMore(false); window.scrollTo({ top: 0, behavior: 'smooth' }); } else location.hash = p; };
-  async function logout() { await api('/logout', { method: 'POST' }); setAuth('out'); }
+  async function logout() {
+    await api('/logout', { method: 'POST' });
+    navigator.serviceWorker?.controller?.postMessage('clear-api'); // borra los datos guardados del teléfono
+    setAuth('out');
+  }
+  // Después de abrir, descarga en silencio las demás pantallas: cambiar de sección es instantáneo y funcionan sin internet.
+  useEffect(() => {
+    if (auth !== 'in') return;
+    const warm = () => {
+      for (const load of [() => import('./pages/Tareas'), () => import('./pages/Asignaturas'), () => import('./pages/Asistente'), () => import('./pages/Avisos'), () => import('./pages/Pagos'), () => import('./pages/Pensum'), () => import('./pages/Ajustes'), () => import('./pages/Inicio')]) load().catch(() => {});
+      for (const path of ['/tasks?status=pending', '/courses', '/courses/history', '/announcements', '/pensum', '/payments', '/mascot', '/messages?channel=app']) api(path).catch(() => {});
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(warm) : warm()), 2500);
+    return () => clearTimeout(t);
+  }, [auth]);
+  const [cached, setCached] = useState(false);
+  useEffect(() => {
+    const on = () => setCached(true);
+    window.addEventListener('rumbo:offline-data', on);
+    const back = () => setCached(false);
+    window.addEventListener('online', back);
+    return () => { window.removeEventListener('rumbo:offline-data', on); window.removeEventListener('online', back); };
+  }, []);
   function openNew() {
     haptic(10);
     setCreating(true);
@@ -147,6 +173,7 @@ export function App() {
 
       <main className="main" id="contenido" tabIndex={-1} aria-label={PAGES.find((p) => p.id === page)?.label}>
         <div className="page" key={page + ':' + version}>
+          <Suspense fallback={<PageLoading />}>
           {page === 'inicio' && <Inicio go={go} />}
           {page === 'tareas' && <Tareas />}
           {page === 'asignaturas' && <Asignaturas />}
@@ -155,6 +182,7 @@ export function App() {
           {page === 'avisos' && <Avisos />}
           {page === 'asistente' && <Asistente />}
           {page === 'ajustes' && <Ajustes onLogout={logout} />}
+          </Suspense>
         </div>
       </main>
 
@@ -185,7 +213,7 @@ export function App() {
       )}
 
       {creating && <TaskModal task={{}} courses={courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); setVersion((v) => v + 1); }} />}
-      {!online && <div className="offline" role="status"><Icon name="alert" size={16} />Sin conexión: lo nuevo llegará al volver</div>}
+      {(!online || cached) && <div className="offline" role="status"><Icon name="alert" size={16} />{online ? 'Mostrando lo último guardado' : 'Sin conexión: te muestro lo último guardado'}</div>}
       {welcome && <Welcome onDone={() => setWelcome(false)} />}
       <Toaster />
     </div>
@@ -242,6 +270,18 @@ function Login({ onIn }: { onIn: () => void }) {
         </ul>
         <span className="auth-foot">Privado y solo tuyo · BY DEXA · UAPA</span>
       </form>
+    </div>
+  );
+}
+
+/** Mientras se descarga una pantalla (solo la primera vez): esqueleto suave. */
+function PageLoading() {
+  return (
+    <div className="page-loading" aria-busy="true" aria-label="Cargando">
+      <div className="sk" style={{ height: 30, width: '45%', borderRadius: 10 }} />
+      <div className="sk" style={{ height: 150, borderRadius: 24 }} />
+      <div className="sk" style={{ height: 90, borderRadius: 20 }} />
+      <div className="sk" style={{ height: 90, borderRadius: 20 }} />
     </div>
   );
 }

@@ -95,6 +95,11 @@ Para probar con datos de ejemplo, carga filas en la D1 **local**; nunca en la re
 - **Alertas:** `src/worker/health.ts` avisa una vez al día si el EVA falla o lleva más de 12 h sin sincronizar, si todos los motores de IA fallan o si falla la copia.
 - **Calificaciones:** `src/worker/grades.ts` avisa notas nuevas o cambiadas (con el comentario del facilitador, `grades.feedback`) desde cualquier sincronización.
 
+## 6c. Rendimiento y sin conexión (Fase 2)
+- Las pantallas se cargan con `React.lazy` (App.tsx) y se precargan en segundo plano después de entrar.
+- `public/sw.js` guarda las respuestas GET de `/api/*` (red primero, caché si no hay internet) en `rumbo-api-v1`, menos lo que es en vivo (`NO_CACHE`). La respuesta de caché lleva `X-Rumbo-Offline: 1` y la app muestra «Mostrando lo último guardado». Al cerrar sesión se borra esa caché.
+- Widget pequeño 2×2: `RumboWidgetSmall` + `layout/widget_small.xml`; se dibuja en `RumboWidget.renderSmall`.
+
 ## 7. Convenciones de código
 - TypeScript estricto, componentes funcionales, sin librerías nuevas salvo que sea imprescindible.
 - Textos de la UI cortos, cálidos y claros, en español dominicano neutro. Fechas con `America/Santo_Domingo`.

@@ -3,13 +3,21 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    method: opts.method || 'GET',
-    headers: opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    credentials: 'same-origin',
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method: opts.method || 'GET',
+      headers: opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      credentials: 'same-origin',
+    });
+  } catch {
+    throw new ApiError(0, 'Sin conexión: inténtalo cuando vuelva el internet.');
+  }
+  // Datos guardados (sin internet): la app muestra un aviso discreto.
+  if (res.headers.get('X-Rumbo-Offline')) window.dispatchEvent(new Event('rumbo:offline-data'));
   const data = await res.json().catch(() => ({}));
+  if (res.status === 503 && (data as { error?: string }).error === 'Sin conexión') throw new ApiError(0, 'Sin conexión: esto todavía no está guardado en el teléfono.');
   if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error || `Error ${res.status}`);
   return data as T;
 }

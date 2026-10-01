@@ -9,6 +9,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 18,
+    date: '2026-10-01',
+    title: 'Más rápida, sin internet y con widget pequeño',
+    items: [
+      'Funciona sin internet: tus tareas, notas, avisos, pagos y pensum se ven aunque no tengas señal (te avisa que es lo último guardado).',
+      'Abre más rápido y cambiar de pantalla es instantáneo: cada sección se prepara en segundo plano.',
+      'Nuevo widget pequeño (2×2) con la mascota animada, tu racha y lo próximo que vence. Mantén presionada la pantalla de inicio → Widgets → Rumbo.',
+      'Bienvenida nueva guiada por la mascota. Puedes verla otra vez en Ajustes → Ver el recorrido de bienvenida.',
+    ],
+  },
+  {
     version: 17,
     date: '2026-10-01',
     title: 'Te avisa cuando te califican',

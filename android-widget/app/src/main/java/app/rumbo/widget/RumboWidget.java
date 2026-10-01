@@ -63,7 +63,54 @@ public class RumboWidget extends AppWidgetProvider {
     }
 
     static void redraw(Context app) {
-        render(app, AppWidgetManager.getInstance(app), allIds(app), prefs(app).getString("last", null));
+        AppWidgetManager mgr = AppWidgetManager.getInstance(app);
+        String last = prefs(app).getString("last", null);
+        render(app, mgr, allIds(app), last);
+        renderSmall(app, mgr, mgr.getAppWidgetIds(new ComponentName(app, RumboWidgetSmall.class)), last);
+    }
+
+    /** Widget pequeño (2×2): mascota animada, racha y lo próximo que vence. */
+    static void renderSmall(Context ctx, AppWidgetManager mgr, int[] ids, String json) {
+        if (ids == null || ids.length == 0) return;
+        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_small);
+        String base = prefs(ctx).getString("url", null);
+        Intent open = base != null ? new Intent(Intent.ACTION_VIEW, Uri.parse(base + "/#inicio")) : new Intent(ctx, MainActivity.class);
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        v.setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(ctx, 11, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        boolean upd = Updater.pending(ctx);
+        v.setViewVisibility(R.id.update, upd ? View.VISIBLE : View.GONE);
+        if (upd) {
+            Intent u = new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            v.setOnClickPendingIntent(R.id.update, PendingIntent.getActivity(ctx, 13, u, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        }
+        String mood = "tranqui";
+        if (json == null) {
+            v.setTextViewText(R.id.headline, base == null ? "Conecta tu Rumbo" : "Cargando…");
+            v.setTextViewText(R.id.sub, "");
+            v.setViewVisibility(R.id.streak, View.GONE);
+        } else {
+            try {
+                JSONObject d = new JSONObject(json);
+                mood = d.optString("mood", "tranqui");
+                v.setViewVisibility(R.id.streak, View.VISIBLE);
+                v.setTextViewText(R.id.streak, "🔥 " + d.optInt("streak"));
+                JSONArray tasks = d.optJSONArray("tasks");
+                if (tasks != null && tasks.length() > 0) {
+                    JSONObject t = tasks.getJSONObject(0);
+                    v.setTextViewText(R.id.headline, t.optString("title"));
+                    v.setTextViewText(R.id.sub, t.optString("when"));
+                } else {
+                    v.setTextViewText(R.id.headline, d.optString("headline"));
+                    v.setTextViewText(R.id.sub, d.optString("updated"));
+                }
+            } catch (Exception e) {
+                v.setTextViewText(R.id.headline, "Rumbo");
+            }
+        }
+        if (!mood.matches("feliz|tranqui|atento|alerta")) mood = "tranqui";
+        v.setInt(R.id.root, "setBackgroundResource", drawable(ctx, "wbg_" + mood));
+        for (int i = 0; i < FRAME_IDS.length; i++) v.setImageViewResource(FRAME_IDS[i], drawable(ctx, "mascot_" + mood + FRAMES[i]));
+        mgr.updateAppWidget(ids, v);
     }
 
     /** Descarga los datos en segundo plano, revisa si hay versión nueva y redibuja todos los widgets. */

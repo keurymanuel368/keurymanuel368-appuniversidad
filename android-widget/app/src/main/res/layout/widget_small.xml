@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget pequeño (2×2): mascota animada, racha y lo próximo que vence. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/wbg_tranqui">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <ImageView
+                android:layout_width="78dp"
+                android:layout_height="78dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/halo" />
+
+            <ViewFlipper
+                android:id="@+id/mascot"
+                android:layout_width="60dp"
+                android:layout_height="70dp"
+                android:layout_gravity="center"
+                android:autoStart="true"
+                android:flipInterval="550">
+                <ImageView android:id="@+id/f1" style="@style/Frame" android:src="@drawable/mascot_tranqui" />
+                <ImageView android:id="@+id/f2" style="@style/Frame" android:src="@drawable/mascot_tranqui_up" />
+                <ImageView android:id="@+id/f3" style="@style/Frame" android:src="@drawable/mascot_tranqui" />
+                <ImageView android:id="@+id/f4" style="@style/Frame" android:src="@drawable/mascot_tranqui" />
+                <ImageView android:id="@+id/f5" style="@style/Frame" android:src="@drawable/mascot_tranqui_blink" />
+                <ImageView android:id="@+id/f6" style="@style/Frame" android:src="@drawable/mascot_tranqui" />
+                <ImageView android:id="@+id/f7" style="@style/Frame" android:src="@drawable/mascot_tranqui_wave" />
+                <ImageView android:id="@+id/f8" style="@style/Frame" android:src="@drawable/mascot_tranqui_wave2" />
+                <ImageView android:id="@+id/f9" style="@style/Frame" android:src="@drawable/mascot_tranqui_wave" />
+                <ImageView android:id="@+id/f10" style="@style/Frame" android:src="@drawable/mascot_tranqui" />
+            </ViewFlipper>
+
+            <TextView
+                android:id="@+id/streak"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:background="@drawable/pill_white"
+                android:fontFamily="sans-serif-black"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="1dp"
+                android:text="🔥 0"
+                android:textColor="#F97316"
+                android:textSize="11sp" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/headline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-black"
+            android:gravity="center"
+            android:maxLines="2"
+            android:text="Conecta tu Rumbo"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/sub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/update"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="6dp"
+        android:background="@drawable/pill_white"
+        android:paddingHorizontal="7dp"
+        android:paddingVertical="1dp"
+        android:text="⬆️"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</FrameLayout>

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_desc">Tu racha y lo próximo que vence, con la mascota de Rumbo</string>
+    <string name="widget_small_desc">La mascota, tu racha y lo próximo que vence</string>
 </resources>

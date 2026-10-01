@@ -180,6 +180,7 @@ function ThemeCard() {
         <div className="t"><b>Mascota en todas las pantallas</b><span>{mascot ? 'Cae al cambiar de pantalla. Tócala, o mantenla presionada para hablar.' : 'Está durmiendo. Actívala cuando quieras.'}</span></div>
         <button className={`switch ${mascot ? 'on' : ''}`} role="switch" aria-checked={mascot} aria-label="Mascota" onClick={toggleMascot} />
       </div>
+      <button className="btn line block tour-btn" onClick={() => { haptic(6); window.dispatchEvent(new Event('rumbo:tour')); }}><Icon name="compass" size={18} />Ver el recorrido de bienvenida</button>
     </div>
   );
 }
