@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+// El modo estudio se descarga solo cuando lo abres.
+const StudyModal = lazy(() => import('./Study').then((m) => ({ default: m.StudyModal })));
 import { createPortal } from 'react-dom';
 import { api, cap, type Course, type Task, unixToLocalInput, localInputToUnix, urgency, whenLabel } from './api';
 import { Icon } from './icons';
@@ -262,6 +264,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [focus, setFocus] = useState(false);
+  const [studying, setStudying] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [task, setTask] = useState<Task>(initial);
   // Las instrucciones y el tiempo de estudio se cargan al abrir la ficha.
@@ -326,6 +329,8 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
       )}
 
       <div className="ts-actions">
+        {!done && <button className="btn study-btn lg block" onClick={() => { haptic(10); setStudying(true); }}><Icon name="spark" size={19} />Estudiar con IA<small>plan · práctica · explicación</small></button>}
+        {studying && <Suspense fallback={null}><StudyModal task={task} onClose={() => setStudying(false)} /></Suspense>}
         {!done && <button className="btn focus-btn lg block" onClick={() => { haptic(10); setFocus(true); }}><Icon name="clock" size={19} />Modo enfoque{task.focus_minutes ? ` · llevas ${task.focus_minutes} min` : ''}</button>}
         {task.url && <a className="btn primary lg block" href={task.url} target="_blank" rel="noopener"><Icon name="link" size={18} />Abrir en el EVA</a>}
         <div className="ts-row">

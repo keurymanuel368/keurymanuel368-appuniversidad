@@ -11,6 +11,8 @@ import { downloadTelegramFile, sendTelegram, setupTelegram, telegramReady, tgCal
 import { calendarIcs } from './calendar';
 import { WIDGET_VERSION, widgetData } from './widget';
 import { dumpData, gunzip, listBackups, makeBackup } from './backup';
+import { study, type StudyMode } from './study';
+import { achievements } from './achievements';
 import { CHANGELOG, announceRelease } from './changelog';
 import { CAREERS, findCareer } from './pensums';
 import { handleCommand } from './assistant';
@@ -29,8 +31,22 @@ app.get('/api/version', (c) => c.json({ app: CHANGELOG[0].version, widget: WIDGE
 app.post('/api/login', async (c) => {
   const { password } = await c.req.json<{ password?: string }>().catch(() => ({ password: '' }));
   if (!c.env.APP_PASSWORD || !c.env.SESSION_SECRET) return c.json({ error: 'Faltan los secretos APP_PASSWORD y SESSION_SECRET en el servidor.' }, 500);
-  if (!password || !safeEqual(password, c.env.APP_PASSWORD)) return c.json({ error: 'Contraseña incorrecta.' }, 401);
+  // Protección contra quien intente adivinar la contraseña: 5 intentos fallidos = 15 minutos bloqueado.
+  const ip = c.req.header('cf-connecting-ip') || 'local';
+  const since = nowSec() - 15 * 60;
+  const fails = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND at > ?').bind(ip, since).first<{ n: number }>().catch(() => null))?.n || 0;
+  if (fails >= 5) return c.json({ error: 'Demasiados intentos. Espera 15 minutos e inténtalo otra vez.' }, 429);
+  if (!password || !safeEqual(password, c.env.APP_PASSWORD)) {
+    await c.env.DB.prepare('INSERT INTO login_attempts (ip, at) VALUES (?, ?)').bind(ip, nowSec()).run().catch(() => {});
+    if (fails + 1 >= 5) await sendToMe(c.env, '*🔐 Bloqueé intentos de entrar a Rumbo*\nAlguien falló la contraseña 5 veces. Si no fuiste tú, no pasa nada: quedó bloqueado 15 minutos.', { title: '🔐 Intentos fallidos de entrar', tag: 'security' }).catch(() => {});
+    return c.json({ error: fails + 1 >= 5 ? 'Demasiados intentos. Espera 15 minutos e inténtalo otra vez.' : `Contraseña incorrecta. Te quedan ${4 - fails} intento${4 - fails === 1 ? '' : 's'}.` }, 401);
+  }
+  await c.env.DB.prepare('DELETE FROM login_attempts WHERE ip = ? OR at < ?').bind(ip, nowSec() - 86400).run().catch(() => {});
   c.header('Set-Cookie', await createSessionCookie(c.env));
+  // Aviso de seguridad: alguien (tú) entró desde un dispositivo.
+  const ua = c.req.header('user-agent') || '';
+  const device = `${/Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iPhone' : /Windows/i.test(ua) ? 'Windows' : /Mac/i.test(ua) ? 'Mac' : 'otro dispositivo'} · ${/Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : 'navegador'}`;
+  c.executionCtx.waitUntil(sendToMe(c.env, `*🔐 Nuevo inicio de sesión en Rumbo*\n${device}. Si no fuiste tú, ve a Ajustes → Cerrar sesión en todos los dispositivos.`, { title: '🔐 Nuevo inicio de sesión', pushBody: `${device}. Si no fuiste tú, cierra todas las sesiones en Ajustes.`, tag: 'security', url: '/#ajustes' }).catch(() => undefined));
   return c.json({ ok: true });
 });
 
@@ -330,6 +346,24 @@ app.get('/api/backups/download', async (c) => {
   return new Response(json, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' } });
 });
 
+// Modo estudio con IA (plan, tarjetas o explicación de una tarea)
+app.post('/api/study/:id', async (c) => {
+  const b = await c.req.json<{ mode?: string; fresh?: boolean }>().catch(() => ({} as { mode?: string; fresh?: boolean }));
+  const mode = (['plan', 'tarjetas', 'explica'].includes(b.mode || '') ? b.mode : 'plan') as StudyMode;
+  try { return c.json(await study(c.env, Number(c.req.param('id')), mode, !!b.fresh)); }
+  catch (e) { return c.json({ error: /cuota|motor/i.test((e as Error).message) ? 'Los motores de IA están ocupados. Inténtalo en un minuto.' : (e as Error).message }, 502); }
+});
+
+// Logros
+app.get('/api/achievements', async (c) => c.json(await achievements(c.env)));
+
+// Seguridad: cierra la sesión en todos los dispositivos (incluido este)
+app.post('/api/logout-all', async (c) => {
+  await setSetting(c.env, 'session_version', String(Date.now()));
+  c.header('Set-Cookie', clearSessionCookie());
+  return c.json({ ok: true });
+});
+
 app.post('/api/calendar/reset', async (c) => { await setSetting(c.env, 'calendar_token', ''); return c.json({ ok: true }); });
 
 // Modo enfoque: suma minutos de estudio a una tarea
@@ -509,7 +543,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours'];
+const EDITABLE = ['notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);

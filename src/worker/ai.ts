@@ -110,7 +110,7 @@ En "reply" NO afirmes que ya hiciste la acción con detalles; di algo corto como
 - register_payment {amount?}     (cuando dice que pagó la cuota)
 - sync_eva {}                    (traer lo nuevo del EVA)
 - mark_news_read {}
-- set_setting {key, value}       keys: summary_hour (0-23), summary_enabled (0/1), task_reminders ("72,24,3"), student_name, notify_tareas|notify_notas|notify_pagos|notify_avisos|notify_resumen|notify_novedades (0/1)
+- set_setting {key, value}       keys: summary_hour (0-23), summary_enabled (0/1), study_hour (0-23, hora de estudio diaria), study_enabled (0/1), task_reminders ("72,24,3"), student_name, notify_tareas|notify_notas|notify_pagos|notify_avisos|notify_resumen|notify_novedades (0/1)
 - set_pensum {code, status: "aprobada"|"en_curso"|"pendiente", grade?}
 Usa los #id del contexto. Las fechas, con el CALENDARIO del contexto.
 
@@ -244,7 +244,7 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
         }
         case 'set_setting': {
           const key = String(a.key || '');
-          const allowed = ['summary_hour', 'summary_enabled', 'task_reminders', 'student_name', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades'];
+          const allowed = ['summary_hour', 'summary_enabled', 'study_hour', 'study_enabled', 'task_reminders', 'student_name', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades'];
           if (!allowed.includes(key)) { out.push(`⚠️ No puedo cambiar «${key}» desde el chat`); break; }
           await setSetting(env, key, String(a.value ?? ''));
           out.push(`✅ Ajuste cambiado: ${key.replace('notify_', 'avisos de ').replace('summary_hour', 'hora del resumen').replace('summary_enabled', 'resumen diario').replace('task_reminders', 'recordatorios').replace('student_name', 'tu nombre')} → ${String(a.value)}`);

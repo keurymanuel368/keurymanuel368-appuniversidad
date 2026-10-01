@@ -13,6 +13,7 @@ const Pagos = lazy(() => import('./pages/Pagos').then((m) => ({ default: m.Pagos
 const Pensum = lazy(() => import('./pages/Pensum').then((m) => ({ default: m.Pensum })));
 const Asistente = lazy(() => import('./pages/Asistente').then((m) => ({ default: m.Asistente })));
 const Ajustes = lazy(() => import('./pages/Ajustes').then((m) => ({ default: m.Ajustes })));
+const Ayuda = lazy(() => import('./pages/Ayuda').then((m) => ({ default: m.Ayuda })));
 const Avisos = lazy(() => import('./pages/Avisos').then((m) => ({ default: m.Avisos })));
 import { Buddy } from './Buddy';
 
@@ -25,6 +26,7 @@ const PAGES = [
   { id: 'avisos', label: 'Avisos', icon: 'bell', hint: 'Novedades, pagos y eventos' },
   { id: 'asistente', label: 'Asistente', icon: 'spark', hint: 'Pregúntale lo que quieras' },
   { id: 'ajustes', label: 'Ajustes', icon: 'gear', hint: 'Conexiones y avisos' },
+  { id: 'ayuda', label: 'Ayuda', icon: 'help', hint: 'Preguntas frecuentes' },
 ];
 // Barra inferior en móvil: dos a cada lado del botón central del asistente.
 const TABS_LEFT = ['inicio', 'tareas'];
@@ -182,6 +184,7 @@ export function App() {
           {page === 'avisos' && <Avisos />}
           {page === 'asistente' && <Asistente />}
           {page === 'ajustes' && <Ajustes onLogout={logout} />}
+          {page === 'ayuda' && <Ayuda go={go} />}
           </Suspense>
         </div>
       </main>

@@ -25,9 +25,14 @@ export function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/** Versión de las sesiones: al subirla, todas las sesiones abiertas dejan de valer. */
+async function sessionVersion(env: Env): Promise<string> {
+  return (await env.DB.prepare(`SELECT value FROM settings WHERE key = 'session_version'`).first<{ value: string }>().catch(() => null))?.value || '0';
+}
+
 export async function createSessionCookie(env: Env): Promise<string> {
   const exp = nowSec() + DAYS * 86400;
-  const payload = String(exp);
+  const payload = `${exp}-${await sessionVersion(env)}`;
   const sig = await hmac(env.SESSION_SECRET || '', payload);
   return `${COOKIE}=${payload}.${sig}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${DAYS * 86400}`;
 }
@@ -42,8 +47,10 @@ export async function isAuthenticated(env: Env, cookieHeader: string | null): Pr
   if (!match) return false;
   const [payload, sig] = match.slice(COOKIE.length + 1).split('.');
   if (!payload || !sig) return false;
-  if (Number(payload) < nowSec()) return false;
-  return safeEqual(await hmac(env.SESSION_SECRET, payload), sig);
+  const [exp, ver = '0'] = payload.split('-');
+  if (Number(exp) < nowSec()) return false;
+  if (!safeEqual(await hmac(env.SESSION_SECRET, payload), sig)) return false;
+  return ver === (await sessionVersion(env));
 }
 
 /** Verifica la firma X-Hub-Signature-256 que Meta envía en el webhook. */

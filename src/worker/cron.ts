@@ -7,6 +7,7 @@ import { sendToMe } from './notify';
 import { announceRelease } from './changelog';
 import { backupDue, makeBackup } from './backup';
 import { checkHealth } from './health';
+import { checkAchievements } from './achievements';
 import { cuandoTexto, localDate, nowSec, ymd } from './time';
 
 export async function runScheduled(env: Env): Promise<string[]> {
@@ -90,6 +91,21 @@ export async function runScheduled(env: Env): Promise<string[]> {
 
   // Novedades de Rumbo (se anuncian una sola vez por versión)
   try { await announceRelease(env); } catch (e) { log.push('Novedades: ' + (e as Error).message); }
+
+  // Hora de estudio: a la hora que elegiste, lo que te toca estudiar hoy (lo que vence pronto).
+  const studyHour = Number(s.study_hour || 19);
+  if (s.study_enabled !== '0' && local.getUTCHours() >= studyHour && local.getUTCHours() < 23 && await markSent(env, `study:${today}`)) {
+    const { results: todo } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
+      WHERE t.status = 'pending' AND t.due_at IS NOT NULL AND t.due_at > ? AND t.due_at <= ? ORDER BY t.due_at LIMIT 3`).bind(now - 3 * 86400, now + 2 * 86400).all<{ id: number; title: string; due_at: number; course: string | null }>();
+    if (todo.length) {
+      const lines = todo.map((t) => `• ${t.title}${t.course ? ' (' + t.course + ')' : ''} · ${t.due_at < now ? 'atrasada' : 'vence ' + cuandoTexto(env, t.due_at)}`);
+      const r = await sendToMe(env, `*📚 Hora de estudiar*\n${lines.join('\n')}\n\nTip: abre la tarea y toca «Estudiar con IA».`, { title: `📚 Hora de estudiar: ${todo.length === 1 ? todo[0].title : todo.length + ' tareas'}`, pushBody: lines.join('\n'), tag: 'study', url: todo.length === 1 ? `/#tareas/${todo[0].id}` : '/#tareas', type: 'tareas' });
+      log.push(`Hora de estudio: ${r.ok ? 'avisada' : r.error}`);
+    }
+  }
+
+  // Logros nuevos
+  try { const got = await checkAchievements(env); if (got.length) log.push('Logros: ' + got.join(', ')); } catch (e) { log.push('Logros: ' + (e as Error).message); }
 
   // Copia de seguridad semanal de tus datos
   let backupError: string | undefined;

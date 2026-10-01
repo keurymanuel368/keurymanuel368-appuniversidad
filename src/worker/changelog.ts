@@ -9,6 +9,19 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 19,
+    date: '2026-10-01',
+    title: '🎉 Rumbo 1.0 ya está aquí',
+    items: [
+      'Estudiar con IA: abre una tarea pendiente y te arma un plan paso a paso, tarjetas para practicar y una explicación que puedes escuchar.',
+      'Logros tipo Duolingo en Inicio: 15 medallas por entregas, rachas, notas y más. La mascota celebra cada una contigo 🏆',
+      'Hora de estudio: cada día a la hora que elijas (Ajustes) te aviso qué te toca estudiar.',
+      '«¿Y si…?» en Notas: mueve la barra y mira con cuánto terminarías el trimestre según lo que saques en lo que falta.',
+      'Más seguridad: bloqueo tras 5 intentos fallidos, aviso de cada inicio de sesión y «Cerrar sesión en todos los dispositivos».',
+      'Nueva pantalla de Ayuda (Más → Ayuda) con buscador y respuestas a las dudas más comunes.',
+    ],
+  },
+  {
     version: 18,
     date: '2026-10-01',
     title: 'Más rápida, sin internet y con widget pequeño',

@@ -17,6 +17,7 @@ const LANDING: Record<string, string[]> = {
   pagos: ['Ojo con la ventana de pago 💸', 'Que no se te pase la cuota', 'Aquí llevamos las cuentas claras'],
   avisos: ['Esto es lo nuevo 📣', 'Te traje las novedades', 'Revisa por si acaso'],
   ajustes: ['Aquí lo configuras todo ⚙️', 'Ponme a tu gusto', 'Ajustes, a tu manera'],
+  ayuda: ['¿Te trabaste? Aquí te ayudo 🙋', 'Busca tu duda o pregúntame', 'Para eso estoy, mano'],
 };
 const CHEER = [
   '¡Tú puedes con todo! 💪', 'Un chin cada día y llegas lejos', 'Toma agüita y sigue 💧', 'Ese título viene, tranquilo 🎓',

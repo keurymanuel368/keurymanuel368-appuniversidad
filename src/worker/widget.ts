@@ -35,7 +35,7 @@ const FRASES = [
 ];
 
 /** Racha: días seguidos (hasta hoy o ayer) en los que entregaste o completaste algo. */
-async function streak(env: Env): Promise<number> {
+export async function streak(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(`SELECT COALESCE(submitted_at, updated_at) AS t FROM tasks WHERE status = 'done' AND COALESCE(submitted_at, updated_at) > ?`)
     .bind(nowSec() - 120 * 86400).all<{ t: number }>();
   const days = new Set(results.map((r) => dayKey(localDate(env, r.t))));

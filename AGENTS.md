@@ -100,6 +100,14 @@ Para probar con datos de ejemplo, carga filas en la D1 **local**; nunca en la re
 - `public/sw.js` guarda las respuestas GET de `/api/*` (red primero, caché si no hay internet) en `rumbo-api-v1`, menos lo que es en vivo (`NO_CACHE`). La respuesta de caché lleva `X-Rumbo-Offline: 1` y la app muestra «Mostrando lo último guardado». Al cerrar sesión se borra esa caché.
 - Widget pequeño 2×2: `RumboWidgetSmall` + `layout/widget_small.xml`; se dibuja en `RumboWidget.renderSmall`.
 
+## 6d. Rumbo 1.0 (Fases 3 y 4)
+- **Modo estudio** (`src/worker/study.ts`, `src/web/Study.tsx`): `POST /api/study/:id {mode: plan|tarjetas|explica, fresh?}`; respuestas guardadas en `study_cache` (migración 0008).
+- **Logros** (`src/worker/achievements.ts`, `src/web/Achievements.tsx`): se calculan con datos reales; los ganados se guardan en `settings.achievements_seen` y el cron avisa los nuevos (la primera vez, en silencio).
+- **Hora de estudio**: `settings.study_hour` / `study_enabled`; el cron avisa una vez al día lo que vence en las próximas 48 h.
+- **Proyección del índice**: componente `Projection` en `pages/Asignaturas.tsx` (ponderado por créditos).
+- **Seguridad**: `login_attempts` (5 fallos = 15 min de bloqueo), aviso de cada inicio de sesión, `settings.session_version` para cerrar todas las sesiones (`POST /api/logout-all`).
+- **Ayuda**: `pages/Ayuda.tsx` (FAQ con buscador). Si agregas una función visible, agrega su pregunta aquí.
+
 ## 7. Convenciones de código
 - TypeScript estricto, componentes funcionales, sin librerías nuevas salvo que sea imprescindible.
 - Textos de la UI cortos, cálidos y claros, en español dominicano neutro. Fechas con `America/Santo_Domingo`.

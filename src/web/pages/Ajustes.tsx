@@ -508,6 +508,11 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                 <div className="t"><b>Resumen diario</b><span>Tareas del día, pagos y promedio</span></div>
                 <button className={`switch ${summaryOn ? 'on' : ''}`} role="switch" aria-checked={summaryOn} aria-label="Resumen diario" onClick={() => { haptic(8); save('summary_enabled', summaryOn ? '0' : '1'); }} />
               </div>
+              <div className="toggle">
+                <span className="set-ic violet"><Icon name="book" size={18} /></span>
+                <div className="t"><b>Hora de estudio</b><span>Cada día a tu hora te aviso qué te toca estudiar (lo que vence pronto)</span></div>
+                <button className={`switch ${s.study_enabled !== '0' ? 'on' : ''}`} role="switch" aria-checked={s.study_enabled !== '0'} aria-label="Hora de estudio" onClick={() => { haptic(8); save('study_enabled', s.study_enabled === '0' ? '1' : '0'); }} />
+              </div>
               <div className="form-grid">
                 <div className="field"><label htmlFor="sh">Hora del resumen</label>
                   <select id="sh" className="input" value={s.summary_hour} onChange={(e) => save('summary_hour', e.target.value)}>
@@ -515,6 +520,10 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                   </select></div>
                 <div className="field"><label htmlFor="tr">Recordar entregas (horas antes)</label><input id="tr" className="input num" defaultValue={s.task_reminders} onBlur={(e) => save('task_reminders', e.target.value.replace(/[^\d,]/g, ''))} /></div>
                 <div className="field"><label htmlFor="es">Sincronizar el EVA cada (horas)</label><input id="es" className="input num" inputMode="numeric" defaultValue={s.eva_sync_hours} onBlur={(e) => save('eva_sync_hours', e.target.value.replace(/\D/g, '') || '2')} /></div>
+                <div className="field"><label htmlFor="sth">Hora de estudio (te aviso qué toca)</label>
+                  <select id="sth" className="input" value={s.study_hour || '19'} onChange={(e) => save('study_hour', e.target.value)}>
+                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
+                  </select></div>
                 <div className="field"><label htmlFor="nm">Cómo te saludo</label><input id="nm" className="input" defaultValue={s.student_name} onBlur={(e) => save('student_name', e.target.value)} /></div>
               </div>
             </div>
@@ -573,6 +582,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
               {st.whatsapp.configured && <button className={`action-row ${busy === 'repair' ? 'spinning' : ''}`} disabled={!!busy} onClick={repair}><span className="set-ic green"><Icon name="sync" size={18} /></span><b>{busy === 'repair' ? 'Revisando WhatsApp…' : 'Revisar y reparar WhatsApp'}</b><Icon name="chevron" size={18} /></button>}
               <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>
               <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
+              <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>
             </div>
             {report && (
               <div className="card">

@@ -3,6 +3,7 @@ import { api, cleanTitle, channelsLabel, type Dashboard, type SendResult, type T
 import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, toast, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
+import { AchievementsCard } from '../Achievements';
 
 function greeting() {
   const h = Number(new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', hour: 'numeric', hour12: false }).format(new Date()));
@@ -130,6 +131,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
           </button>
         </div>
       </section>
+
+      <AchievementsCard />
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 

@@ -57,6 +57,13 @@ function TermSummary({ courses, onPick }: { courses: Course[]; onPick: (id: numb
   const totalCr = withAvg.reduce((a, c) => a + creditsOf(c), 0);
   const index = withAvg.reduce((a, c) => a + c.average! * creditsOf(c), 0) / totalCr;
   const risky = withAvg.filter((c) => c.average! < 75).sort((a, b) => a.average! - b.average!);
+  // Proyección: «si saco X en todo lo que falta, ¿con cuánto termino el trimestre?»
+  const left = courses.reduce((n, c) => n + Math.max(0, c.total - c.graded), 0);
+  const projected = (x: number) => {
+    const rows = courses.filter((c) => c.total > 0);
+    const cr = rows.reduce((a, c) => a + creditsOf(c), 0);
+    return rows.reduce((a, c) => a + ((c.average ?? x) * c.graded + x * Math.max(0, c.total - c.graded)) / Math.max(1, c.total) * creditsOf(c), 0) / Math.max(1, cr);
+  };
   return (
     <div className="term-summary stagger">
       <div className="ts-index">
@@ -65,6 +72,7 @@ function TermSummary({ courses, onPick }: { courses: Course[]; onPick: (id: numb
         <span>{index >= 90 ? 'Excelente: vas con honores 🏅' : index >= 80 ? 'Muy bien, sigue así' : index >= 70 ? 'Aprobando, pero con poco margen' : 'Por debajo de 70: hay que subirlo'}</span>
         <div className="ts-bar"><div style={{ width: `${Math.min(100, index)}%` }} /><i style={{ left: '70%' }} /></div>
         <small>Ponderado por los créditos de tu pensum · mínimo 70</small>
+        {left > 0 && <Projection left={left} projected={projected} />}
       </div>
       <div className="ts-risk">
         <span className="label"><Icon name="alert" size={15} />{risky.length ? 'Asignaturas a vigilar' : 'Sin riesgo'}</span>
@@ -75,6 +83,19 @@ function TermSummary({ courses, onPick }: { courses: Course[]; onPick: (id: numb
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** «¿Y si…?»: con cuánto terminarías el trimestre según lo que saques en las actividades que faltan. */
+function Projection({ left, projected }: { left: number; projected: (x: number) => number }) {
+  const [x, setX] = useState(85);
+  const end = projected(x);
+  return (
+    <div className="ts-proj">
+      <label htmlFor="proj">Si saco <b className="num">{x}</b> en {left === 1 ? 'la actividad que falta' : `las ${left} actividades que faltan`}…</label>
+      <input id="proj" type="range" min={50} max={100} step={1} value={x} onChange={(e) => { setX(Number(e.target.value)); haptic(3); }} className="range" style={{ ['--p' as string]: `${((x - 50) / 50) * 100}%` }} aria-valuetext={`${x}: terminarías con ${end.toFixed(1)}`} />
+      <span className="ts-proj-out">Terminarías el trimestre con <b className="num">{end.toFixed(1)}</b> {end >= 90 ? '🏅' : end >= 70 ? '✅' : '⚠️'}</span>
     </div>
   );
 }
