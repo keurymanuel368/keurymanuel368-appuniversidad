@@ -4,7 +4,7 @@ import { checkPassword, clearSessionCookie, createSessionCookie, hashPassword, r
 import { courseSummaries, dashboard, listTasks, payWindow, summaryShort, summaryText } from './data';
 import { DEFAULT_SETTINGS, activeUsers, forUser, getSettings, markSent, setSetting, userBySetting } from './db';
 import { classifyNews, cleanNewsText, syncEva } from './moodle';
-import { GRAPH, waServerReady, callmebotConfigured, logInbound, sendToMe, sendWhatsApp, waChatLink, waConfigured, waWindowOpen } from './notify';
+import { CALLMEBOT_ACTIVATE, CALLMEBOT_NUMBER, sendCallMeBot, GRAPH, waServerReady, callmebotConfigured, logInbound, sendToMe, sendWhatsApp, waChatLink, waConfigured, waWindowOpen } from './notify';
 import { sendPushAll, vapidPublicKey } from './push';
 import { transcribeAudio, transcribeWhatsAppAudio } from './voice';
 import { downloadTelegramFile, sendTelegram, setupTelegram, telegramReady, tgCall } from './telegram';
@@ -693,7 +693,7 @@ app.get('/api/settings', async (c) => {
     status: {
       eva: { configured: !!c.env.MOODLE_TOKEN, lastSync: Number(s.eva_last_sync || 0) || null, error: s.eva_last_error || '', user: s.eva_user || '' },
       whatsapp: { server: waServerReady(c.env), number: s.wa_number || (c.env.UID === 1 ? (c.env.WA_MY_NUMBER || '').replace(/\D/g, '') : ''), configured: waConfigured(c.env), windowOpen: await waWindowOpen(c.env), lastInbound: Number(s.wa_last_inbound || 0) || null, lastError: s.wa_last_error || '' },
-      callmebot: { configured: callmebotConfigured(c.env) },
+      callmebot: { configured: callmebotConfigured(c.env), number: callmebotConfigured(c.env) ? (c.env.WA_MY_NUMBER || '').replace(/\D/g, '') : '', bot: CALLMEBOT_NUMBER, activate: CALLMEBOT_ACTIVATE },
       mail: { connected: !!s.mail_token, lastAt: Number(s.mail_last_at || 0) || null },
       telegram: { configured: telegramReady(c.env), connected: !!s.tg_chat_id, username: s.tg_username || '' },
       ai: { engines: [...providers(c.env).map((p) => p.name), ...(c.env.AI ? ['Workers AI'] : [])] },
@@ -764,6 +764,30 @@ async function saveEvaToken(env: Env, token: string): Promise<{ ok: boolean; use
 
 app.post('/api/eva/disconnect', async (c) => {
   await setSetting(c.env, 'moodle_token', '');
+  return c.json({ ok: true });
+});
+
+// ---------- Avisos por WhatsApp con CallMeBot (cada quien el suyo) ----------
+// Se manda un mensaje de prueba ANTES de guardar: si no llega, no queda nada a medias.
+app.post('/api/callmebot/setup', async (c) => {
+  const b = await c.req.json<{ phone?: string; apikey?: string }>().catch(() => ({} as Record<string, string>));
+  let phone = String(b.phone || '').replace(/\D/g, '');
+  if (/^(809|829|849)\d{7}$/.test(phone)) phone = '1' + phone;
+  const apikey = String(b.apikey || '').trim();
+  if (phone.length < 10) return c.json({ error: 'Escribe tu número de WhatsApp con el código de área, por ejemplo 809 555 1234.' }, 400);
+  if (!/^[A-Za-z0-9]{4,32}$/.test(apikey)) return c.json({ error: 'La clave (apikey) son los números o letras que te mandó CallMeBot por WhatsApp.' }, 400);
+  const other = await userBySetting(c.env, 'wa_number', phone);
+  if (other && other !== c.env.UID) return c.json({ error: 'Ese número ya lo usa otra cuenta de Rumbo.' }, 409);
+  const name = (await getSettings(c.env)).student_name || '';
+  const r = await sendCallMeBot({ ...c.env, WA_MY_NUMBER: phone, CALLMEBOT_APIKEY: apikey }, `*✅ Rumbo conectado${name ? ', ' + name : ''}*\nDesde ahora te llegan aquí el resumen del día, las entregas, las notas nuevas, los pagos y los avisos.`);
+  if (!r.ok) return c.json({ error: `CallMeBot no lo envió: ${r.error || 'revisa el número y la clave'}. Si acabas de activarlo, espera un minuto y vuelve a intentar.` }, 400);
+  await setSetting(c.env, 'wa_number', phone);
+  await setSetting(c.env, 'callmebot_apikey', apikey);
+  return c.json({ ok: true, number: phone });
+});
+
+app.post('/api/callmebot/remove', async (c) => {
+  await setSetting(c.env, 'callmebot_apikey', '');
   return c.json({ ok: true });
 });
 

@@ -19,7 +19,7 @@ export function Conectar() {
   const steps: Step[] = [
     { id: 'eva', done: st.eva.configured && !st.eva.error },
     { id: 'push', done: push === 'on' },
-    ...(st.whatsapp.server ? [{ id: 'wa', done: !!st.whatsapp.number }] : []),
+    { id: 'wa', done: st.callmebot.configured },
     { id: 'carrera', done: !!st.career },
   ];
   const done = steps.filter((s) => s.done).length;
@@ -39,7 +39,7 @@ export function Conectar() {
       <ol className="conn-list" aria-label="Pasos para conectar Rumbo">
         <EvaStep n={n('eva')} st={st.eva} onChanged={q.reload} />
         <PushStep n={n('push')} state={push} onChanged={async () => setPush(await pushState())} />
-        {st.whatsapp.server && <WaStep n={n('wa')} number={st.whatsapp.number} link={st.waLink} onChanged={q.reload} />}
+        <WaStep n={n('wa')} cmb={st.callmebot} onChanged={q.reload} />
         <CareerStep n={n('carrera')} current={st.career} onChanged={q.reload} />
       </ol>
 
@@ -181,33 +181,67 @@ function PushStep({ n, state, onChanged }: { n: number; state: PushState | null;
   );
 }
 
-// ---------- 3. WhatsApp ----------
-function WaStep({ n, number, link, onChanged }: { n: number; number: string; link?: string; onChanged: () => void }) {
-  const [value, setValue] = useState(number ? `+${number}` : '');
+// ---------- 3. Avisos por WhatsApp (CallMeBot) ----------
+function WaStep({ n, cmb, onChanged }: { n: number; cmb: SettingsRes['status']['callmebot']; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [edit, setEdit] = useState(!number);
-  async function save(e: FormEvent) {
-    e.preventDefault(); setBusy(true);
-    try { await api('/settings', { method: 'PUT', body: { wa_number: value } }); toast('Número guardado ✅'); setEdit(false); onChanged(); }
-    catch (e2) { toast((e2 as Error).message, 'err'); }
+  async function test() {
+    setBusy(true); haptic(8);
+    try { const r = await api<{ ok: boolean; error?: string }>('/notify/test', { method: 'POST' }); toast(r.ok ? 'Te mandé tu resumen por WhatsApp ✅' : `No se pudo: ${r.error}`, r.ok ? 'ok' : 'err'); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  }
+  async function remove() {
+    try { await api('/callmebot/remove', { method: 'POST' }); toast('Avisos por WhatsApp apagados'); onChanged(); } catch (e) { toast((e as Error).message, 'err'); }
+  }
+  return (
+    <StepCard n={n} done={cmb.configured} icon="chat" tone="green" title="Avisos por WhatsApp"
+      text={cmb.configured ? `Te llegan a +${cmb.number}: resumen del día, entregas, notas, pagos y avisos.` : 'Recibe en tu WhatsApp el resumen del día y todos los avisos de Rumbo. Gratis, con CallMeBot.'}>
+      {cmb.configured ? (
+        <div className="conn-actions">
+          <button className="btn soft" onClick={test} disabled={busy}><Icon name="send" size={18} />{busy ? 'Enviando…' : 'Enviar prueba'}</button>
+          <button className="btn line" onClick={() => setOpen(true)}>Cambiar</button>
+          <button className="btn line" onClick={remove}>Apagar</button>
+        </div>
+      ) : (
+        <button className="btn primary lg block" onClick={() => { haptic(8); setOpen(true); }}><Icon name="chat" size={18} />Activar avisos por WhatsApp</button>
+      )}
+      {open && <CallMeBotModal cmb={cmb} onClose={() => setOpen(false)} onDone={() => { setOpen(false); onChanged(); }} />}
+    </StepCard>
+  );
+}
+
+function CallMeBotModal({ cmb, onClose, onDone }: { cmb: SettingsRes['status']['callmebot']; onClose: () => void; onDone: () => void }) {
+  const [phone, setPhone] = useState(cmb.number ? `+${cmb.number}` : '');
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const bot = `+${cmb.bot.slice(0, 2)} ${cmb.bot.slice(2, 5)} ${cmb.bot.slice(5, 8)} ${cmb.bot.slice(8)}`;
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setErr('');
+    try { await api('/callmebot/setup', { method: 'POST', body: { phone, apikey: key } }); haptic(12); toast('¡Listo! Revisa tu WhatsApp: te llegó un mensaje de prueba ✅'); onDone(); }
+    catch (e2) { setErr((e2 as Error).message); }
     setBusy(false);
   }
   return (
-    <StepCard n={n} done={!!number} icon="chat" tone="green" title="Asistente por WhatsApp"
-      text={number ? `Tu número: +${number}. Escríbele a Rumbo y te responde con tus tareas, notas y pagos (también notas de voz).` : 'Pon tu número y podrás preguntarle a Rumbo por WhatsApp: «¿qué tengo hoy?».'}>
-      {edit ? (
-        <form className="conn-inline" onSubmit={save}>
-          <label htmlFor="wa-n" className="sr-only">Tu número de WhatsApp</label>
-          <input id="wa-n" className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="809 555 1234" value={value} onChange={(e) => setValue(e.target.value)} required />
-          <button className="btn primary" type="submit" disabled={busy}>{busy ? '…' : 'Guardar'}</button>
-        </form>
-      ) : (
-        <div className="conn-actions">
-          {link && <a className="btn primary" href={link} target="_blank" rel="noopener"><Icon name="chat" size={18} />Escribirle a Rumbo</a>}
-          <button className="btn line" onClick={() => setEdit(true)}>Cambiar número</button>
-        </div>
-      )}
-    </StepCard>
+    <Modal title="Avisos por WhatsApp" onClose={onClose}>
+      <ol className="steps">
+        <li><b>Activa CallMeBot</b> (solo una vez): toca el botón y envía el mensaje que ya va escrito.
+          <a className="btn primary block" href={`https://wa.me/${cmb.bot}?text=${encodeURIComponent(cmb.activate)}`} target="_blank" rel="noopener"><Icon name="chat" size={18} />Abrir WhatsApp</a>
+          <span className="small muted">Si no abre, agrega el número <b className="num">{bot}</b> y mándale: «{cmb.activate}».</span></li>
+        <li>En uno o dos minutos CallMeBot te responde con tu <b>clave (apikey)</b>, unos números. Cópiala.</li>
+        <li>Escribe tu número y esa clave aquí abajo. Te mando un mensaje de prueba para confirmar.</li>
+      </ol>
+      <form className="form-stack" onSubmit={submit}>
+        <div className="field"><label htmlFor="cmb-p">Tu número de WhatsApp</label>
+          <input id="cmb-p" className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="809 555 1234" value={phone} onChange={(e) => setPhone(e.target.value)} required /></div>
+        <div className="field"><label htmlFor="cmb-k">Clave de CallMeBot (apikey)</label>
+          <input id="cmb-k" className="input num" inputMode="numeric" autoComplete="off" placeholder="1234567" value={key} onChange={(e) => setKey(e.target.value)} required /></div>
+        {err && <div className="auth-error" role="alert"><Icon name="alert" size={16} />{err}</div>}
+        <button className="btn primary lg block" type="submit" disabled={busy}>{busy ? 'Probando…' : 'Probar y guardar'}</button>
+      </form>
+      <p className="small muted">CallMeBot es un servicio gratis para uso personal. A veces tarda unos minutos en entregar; las notificaciones del teléfono siguen llegando igual.</p>
+    </Modal>
   );
 }
 

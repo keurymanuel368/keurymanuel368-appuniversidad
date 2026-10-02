@@ -9,6 +9,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 21,
+    date: '2026-10-02',
+    title: '💬 Avisos por WhatsApp',
+    items: [
+      'Ahora el resumen del día y todos los avisos de Rumbo (entregas, notas nuevas, pagos, avisos del EVA) también te llegan por WhatsApp.',
+      'Se activa en 2 minutos desde Más → Conexiones → «Activar avisos por WhatsApp», con CallMeBot (gratis). Cada quien pone su propio número.',
+      'Antes de guardar, Rumbo te manda un mensaje de prueba para confirmar que llega.',
+    ],
+  },
+  {
     version: 20,
     date: '2026-10-02',
     title: '👥 Rumbo para tus compañeros',

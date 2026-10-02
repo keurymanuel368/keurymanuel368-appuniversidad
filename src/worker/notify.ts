@@ -53,14 +53,21 @@ export async function sendWhatsApp(env: Env, text: string, to = env.WA_MY_NUMBER
   return { ok: true };
 }
 
+/** Número de CallMeBot al que cada quien le escribe para activar sus avisos (lo publica callmebot.com; si cambia, se actualiza aquí). */
+export const CALLMEBOT_NUMBER = '34694242562';
+export const CALLMEBOT_ACTIVATE = 'I allow callmebot to send me messages';
+
 /** Envía un mensaje a tu propio WhatsApp con CallMeBot (gratis para uso personal). */
 export async function sendCallMeBot(env: Env, text: string): Promise<{ ok: boolean; error?: string }> {
   if (!callmebotConfigured(env)) return { ok: false, error: 'CallMeBot no configurado' };
   const phone = '+' + (env.WA_MY_NUMBER || '').replace(/\D/g, '');
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(env.CALLMEBOT_APIKEY || '')}`;
-  const res = await fetch(url);
+  // Va en la dirección (GET): los mensajes muy largos se recortan para no pasar el límite.
+  const msg = text.length > 1500 ? text.slice(0, 1497) + '…' : text;
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(msg)}&apikey=${encodeURIComponent(env.CALLMEBOT_APIKEY || '')}`;
+  let res: Response;
+  try { res = await fetch(url); } catch (e) { return { ok: false, error: 'No pude comunicarme con CallMeBot: ' + (e as Error).message }; }
   const body = await res.text();
-  const failed = !res.ok || (/error/i.test(body) && !/(queued|sent)/i.test(body));
+  const failed = !res.ok || (/(error|invalid|not valid|no es v)/i.test(body) && !/(queued|sent|enviado)/i.test(body));
   if (failed) {
     return { ok: false, error: body.replace(/<[^>]+>/g, ' ').slice(0, 300) };
   }
@@ -110,18 +117,16 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
     if (t.ok) channels.push('telegram'); else errors.push('Telegram: ' + t.error);
   }
 
-  const waOpen = waConfigured(env) && (await waWindowOpen(env));
-  if (waOpen) {
-    const r = await sendWhatsApp(env, text);
-    if (r.ok) channels.push('whatsapp'); else errors.push('WhatsApp: ' + r.error);
-  } else if (callmebotConfigured(env)) {
+  // WhatsApp solo para avisos, con CallMeBot (cada quien pone su número y su clave en Conexiones).
+  // Llega siempre: no depende de la ventana de 24 h ni de la cuenta de Meta.
+  if (callmebotConfigured(env)) {
     const r = await sendCallMeBot(env, text);
-    if (r.ok) channels.push('callmebot'); else errors.push('CallMeBot: ' + r.error);
+    if (r.ok) channels.push('callmebot'); else errors.push('WhatsApp: ' + r.error);
   }
 
   // La notificación sale siempre, salvo que ya llegó por WhatsApp y prefieres no duplicar.
   const alsoPush = (await getSetting(env, 'push_also_wa', '1')) !== '0';
-  if (!channels.includes('whatsapp') || alsoPush) {
+  if (!channels.includes('callmebot') || alsoPush) {
     const lines = plain(text).split('\n');
     const title = opts.title || lines[0].slice(0, 80);
     const body = opts.pushBody || (opts.title ? lines : lines.slice(1)).join('\n').trim() || lines[0];
@@ -129,7 +134,7 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
     const cnt = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM announcements WHERE user_id = ?1 AND read = 0 AND (source IN ('avisos', 'correo') OR kind IN ('pago', 'evento'))
         AND id > COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key = ?2), 0))
       + (SELECT COUNT(*) FROM tasks WHERE user_id = ?1 AND status = 'pending' AND due_at IS NOT NULL AND due_at < ?3 AND due_at > ?4) AS n`).bind(env.UID, `u${env.UID}:news_seen_id`, nowSec() + 86400, nowSec() - 3 * 86400).first<{ n: number }>().catch(() => null);
-    const p = await sendPushAll(env, { title, body, tag: opts.tag, url: opts.url || '/#inicio', count: cnt?.n ?? 0, wa: waOpen ? undefined : await waChatLink(env).catch(() => undefined) });
+    const p = await sendPushAll(env, { title, body, tag: opts.tag, url: opts.url || '/#inicio', count: cnt?.n ?? 0 });
     if (p.sent) channels.push('push');
     else if (p.error) errors.push('Notificación: ' + p.error);
   }

@@ -72,9 +72,11 @@ export async function forUser(env: Env, uid: number, role?: 'admin' | 'user'): P
   u.ROLE = role;
   const s = await getSettings(u);
   const own = uid === 1;
+  // Si el ajuste existe (aunque esté vacío porque lo desconectaste), manda el ajuste.
+  const pick = (k: string, secret?: string) => (k in s ? s[k] || undefined : own ? secret : undefined);
   u.MOODLE_TOKEN = s.moodle_token || (own ? env.MOODLE_TOKEN : undefined);
   u.WA_MY_NUMBER = s.wa_number || (own ? env.WA_MY_NUMBER : undefined);
-  u.CALLMEBOT_APIKEY = s.callmebot_apikey || (own ? env.CALLMEBOT_APIKEY : undefined);
+  u.CALLMEBOT_APIKEY = pick('callmebot_apikey', env.CALLMEBOT_APIKEY);
   return u;
 }
 

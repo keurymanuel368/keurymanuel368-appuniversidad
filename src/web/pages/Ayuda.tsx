@@ -10,6 +10,7 @@ const FAQ: { tema: string; items: { q: string; a: string; go?: [string, string] 
     tema: 'Cuenta y compañeros',
     items: [
       { q: '¿Cómo invito a un compañero?', a: 'Quien administra Rumbo entra a Más → Compañeros, toca «Crear invitación» y la manda por WhatsApp. Cada enlace sirve para una persona y vence en 14 días.' },
+      { q: '¿Cómo recibo los avisos por WhatsApp?', a: 'Ve a Más → Conexiones → «Activar avisos por WhatsApp». Le mandas un mensaje a CallMeBot (ya va escrito), te responde con una clave y la pones en Rumbo. Desde ahí te llegan el resumen del día y todos los avisos. Es solo para avisos: para preguntarle cosas a Rumbo usa el Asistente de la app.', go: ['conectar', 'Ir a Conexiones'] },
       { q: '¿Mis compañeros ven mis notas o tareas?', a: 'No. Cada cuenta ve solo sus propios datos: tareas, notas, pagos, avisos y conversaciones con el asistente.' },
       { q: 'Olvidé mi contraseña', a: 'Pídele a quien te invitó una contraseña temporal (Más → Compañeros → Clave). Entra con ella y cámbiala en Ajustes → Mi cuenta.', go: ['ajustes', 'Ir a Ajustes'] },
     ],

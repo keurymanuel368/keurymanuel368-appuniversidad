@@ -12,7 +12,7 @@ export type SettingsRes = {
   status: {
     eva: { configured: boolean; lastSync: number | null; error: string; user: string };
     whatsapp: { server: boolean; number: string; configured: boolean; windowOpen: boolean; lastInbound: number | null; lastError: string };
-    callmebot: { configured: boolean };
+    callmebot: { configured: boolean; number: string; bot: string; activate: string };
     mail: { connected: boolean; lastAt: number | null };
     telegram: { configured: boolean; connected: boolean; username: string };
     calendar: { connected: boolean };
@@ -443,7 +443,7 @@ function PushCard({ devices, alsoWa, onSave, onChanged }: { devices: number; als
       </div>
       <div className="toggle">
         <span className="set-ic green"><Icon name="chat" size={18} /></span>
-        <div className="t"><b>Notificar también si llegó por WhatsApp</b><span>Si lo apagas, solo te notifica cuando WhatsApp no pudo entregarlo.</span></div>
+        <div className="t"><b>Notificar también si llegó por WhatsApp</b><span>Si lo apagas, el teléfono solo te avisa cuando el WhatsApp no se pudo enviar.</span></div>
         <button className={`switch ${alsoWa ? 'on' : ''}`} role="switch" aria-checked={alsoWa} aria-label="Notificar también por WhatsApp" onClick={() => { haptic(8); onSave('push_also_wa', alsoWa ? '0' : '1'); }} />
       </div>
       {on && <button className="btn soft" onClick={test} disabled={busy}><Icon name="bell" size={18} />Enviar notificación de prueba</button>}
@@ -591,8 +591,8 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
               </div>
               <div className="toggle">
                 <span className="set-ic green"><Icon name="chat" size={18} /></span>
-                <div className="t"><b>WhatsApp</b><span>{st.whatsapp.configured ? (st.whatsapp.windowOpen ? 'Ventana de 24 h abierta: tus resúmenes llegan por aquí' : 'Ventana cerrada: escríbele "hoy" al asistente para reabrirla') : st.whatsapp.server ? 'Falta tu número: ponlo en «Paso a paso».' : 'No disponible por ahora'}</span>{admin && st.whatsapp.lastError && <span className="t-err">Último error: {st.whatsapp.lastError}</span>}</div>
-                <Status ok={st.whatsapp.configured} text={st.whatsapp.configured ? (st.whatsapp.windowOpen ? 'Activo' : 'En espera') : 'Sin configurar'} />
+                <div className="t"><b>Avisos por WhatsApp</b><span>{st.callmebot.configured ? `Te llegan a +${st.callmebot.number}: resumen diario y todos los avisos.` : 'Apagados: actívalos en «Paso a paso» (toma 2 minutos).'}</span></div>
+                <Status ok={st.callmebot.configured} text={st.callmebot.configured ? 'Activo' : 'Apagado'} />
               </div>
               <div className="toggle">
                 <span className="set-ic orange"><Icon name="spark" size={18} /></span>
@@ -605,14 +605,6 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
               {admin && <AiEnginesCard engines={st.ai.engines} />}
               <TelegramCard st={st.telegram} onChanged={q.reload} />
               <CalendarCard connected={st.calendar.connected} onChanged={q.reload} />
-              {st.callmebot.configured && (
-                <div className="toggle">
-                  <span className="set-ic gray"><Icon name="send" size={18} /></span>
-                  <div className="t"><b>CallMeBot</b><span>Respaldo opcional cuando la ventana de WhatsApp está cerrada</span></div>
-                  <Status ok text="Listo" />
-                </div>
-              )}
-              {st.waLink && <a className="btn soft" href={st.waLink} target="_blank" rel="noopener"><Icon name="chat" size={18} />Abrir el chat con Rumbo</a>}
             </div>
           </div>
           <div className="section">
@@ -620,7 +612,6 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
             <div className="card actions-list">
               <button className="action-row" disabled={!!busy} onClick={() => action('test', '/notify/test')}><span className="set-ic blue"><Icon name="send" size={18} /></span><b>{busy === 'test' ? 'Enviando…' : 'Enviar mensaje de prueba'}</b><Icon name="chevron" size={18} /></button>
               <button className={`action-row ${busy === 'sync' ? 'spinning' : ''}`} disabled={!!busy} onClick={() => action('sync', '/sync')}><span className="set-ic violet"><Icon name="sync" size={18} /></span><b>{busy === 'sync' ? 'Sincronizando…' : 'Sincronizar EVA ahora'}</b><Icon name="chevron" size={18} /></button>
-              {admin && st.whatsapp.configured && <button className={`action-row ${busy === 'repair' ? 'spinning' : ''}`} disabled={!!busy} onClick={repair}><span className="set-ic green"><Icon name="sync" size={18} /></span><b>{busy === 'repair' ? 'Revisando WhatsApp…' : 'Revisar y reparar WhatsApp'}</b><Icon name="chevron" size={18} /></button>}
               {admin && <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>}
               <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
               <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>
