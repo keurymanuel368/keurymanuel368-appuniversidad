@@ -9,6 +9,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 25,
+    date: '2026-10-02',
+    title: '🗓️ Tu plan de la semana por WhatsApp',
+    items: [
+      'Cada domingo a las 6 p. m. te llega por WhatsApp (y al teléfono) tu semana organizada: lo que vence cada día, el día más cargado, lo atrasado primero y en qué orden hacerlo.',
+      'También te avisa si esa semana abre o cierra la ventana de pago.',
+      'En Ajustes → Plan de la semana puedes ver cómo llega, mandártelo ahora y cambiar la hora del domingo.',
+    ],
+  },
+  {
     version: 24,
     date: '2026-10-02',
     title: 'Comentarios y más control',

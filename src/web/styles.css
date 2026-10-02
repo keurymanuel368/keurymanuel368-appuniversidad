@@ -1757,3 +1757,5 @@ button.card:active, .stat:not(.static):active, .course:active, .tile:active, .gf
 .person-tags i.off { background: var(--red-soft); color: var(--red); }
 .person .who small.fb-text { color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 textarea.input { resize: vertical; min-height: 84px; font: inherit; line-height: 1.45; }
+/* Vista previa de un mensaje de WhatsApp */
+.wa-preview { background: var(--green-soft); border: 1px solid color-mix(in srgb, var(--green-2) 30%, transparent); border-radius: 16px 16px 16px 4px; padding: 14px; font-size: 14.5px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }

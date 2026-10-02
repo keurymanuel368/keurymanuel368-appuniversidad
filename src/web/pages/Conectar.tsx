@@ -268,7 +268,7 @@ function CallMeBotModal({ cmb, onClose, onDone }: { cmb: SettingsRes['status']['
 
 const WA_TYPES: { key: string; label: string }[] = [
   { key: 'resumen', label: 'Resumen del día' }, { key: 'tareas', label: 'Entregas' }, { key: 'notas', label: 'Notas' },
-  { key: 'pagos', label: 'Pagos' }, { key: 'avisos', label: 'Avisos del EVA' }, { key: 'novedades', label: 'Novedades' },
+  { key: 'plan', label: 'Plan del domingo' }, { key: 'pagos', label: 'Pagos' }, { key: 'avisos', label: 'Avisos del EVA' }, { key: 'novedades', label: 'Novedades' },
 ];
 
 /** Qué llega por WhatsApp y horario de descanso (lo demás sigue llegando al teléfono). */

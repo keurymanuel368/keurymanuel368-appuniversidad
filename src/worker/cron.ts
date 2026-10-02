@@ -4,6 +4,7 @@ import { activeUsers, forUser, getSettings, markSent, unmarkSent, wasSent } from
 import { payWindow, periodLabel, summaryShort, summaryText } from './data';
 import { syncEva } from './moodle';
 import { flushWhatsApp, sendToMe } from './notify';
+import { weeklyPlan } from './plan';
 import { announceRelease } from './changelog';
 import { backupDue, makeBackup } from './backup';
 import { checkHealth } from './health';
@@ -134,6 +135,14 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
       const r = await sendToMe(env, `*📚 Hora de estudiar*\n${lines.join('\n')}\n\nTip: abre la tarea y toca «Estudiar con IA».`, { title: `📚 Hora de estudiar: ${todo.length === 1 ? todo[0].title : todo.length + ' tareas'}`, pushBody: lines.join('\n'), tag: 'study', url: todo.length === 1 ? `/#tareas/${todo[0].id}` : '/#tareas', type: 'tareas' });
       log.push(`Hora de estudio: ${r.ok ? 'avisada' : r.error}`);
     }
+  }
+
+  // Plan de la semana: los domingos a la hora elegida (6 p. m. si no la cambiaste).
+  if (local.getUTCDay() === 0 && s.notify_plan !== '0' && local.getUTCHours() >= Number(s.plan_hour || 18) && await markSent(env, `plan:${today}`)) {
+    const p = await weeklyPlan(env);
+    const r = await sendToMe(env, p.text, { title: '🗓️ Tu plan de la semana', pushBody: p.short, tag: 'plan', url: '/#tareas', type: 'plan' });
+    if (!r.ok) await unmarkSent(env, `plan:${today}`);
+    log.push(`Plan semanal: ${r.ok ? 'enviado' : r.error}`);
   }
 
   // Logros nuevos

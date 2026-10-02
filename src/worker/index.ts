@@ -19,6 +19,7 @@ import { handleCommand } from './assistant';
 import { aiStream, getMemory, setMemory } from './ai';
 import { providers, testEngines } from './llm';
 import { runScheduled } from './cron';
+import { weeklyPlan } from './plan';
 import { nowSec } from './time';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -746,7 +747,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
+const EDITABLE = ['notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);
@@ -918,6 +919,13 @@ app.post('/api/push/unsubscribe', async (c) => {
 app.post('/api/push/test', async (c) => {
   const r = await sendPushAll(c.env, { title: '🔔 Notificaciones activadas', body: 'Así te llegarán tus resúmenes, entregas y pagos.', tag: 'test', url: '/#inicio', wa: await waChatLink(c.env).catch(() => undefined) });
   return c.json(r.sent ? { ok: true, ...r } : { ok: false, ...r, error: r.error || 'No hay dispositivos suscritos.' });
+});
+
+// Plan de la semana: ver cómo llega y mandarlo ya (sale solo los domingos).
+app.get('/api/plan/preview', async (c) => c.json(await weeklyPlan(c.env)));
+app.post('/api/plan/send', async (c) => {
+  const p = await weeklyPlan(c.env);
+  return c.json(await sendToMe(c.env, p.text, { title: '🗓️ Tu plan de la semana', pushBody: p.short, tag: 'plan', url: '/#tareas' }));
 });
 
 app.get('/api/summary-preview', async (c) => c.json({ text: await summaryText(c.env) }));

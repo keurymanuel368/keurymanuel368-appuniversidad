@@ -137,7 +137,7 @@ function plain(text: string): string {
 }
 
 /** Tipos de aviso que puedes encender o apagar en Ajustes. */
-export type NotifyType = 'tareas' | 'notas' | 'pagos' | 'avisos' | 'resumen' | 'novedades';
+export type NotifyType = 'tareas' | 'notas' | 'pagos' | 'avisos' | 'resumen' | 'novedades' | 'plan';
 export type SendOptions = { title?: string; tag?: string; url?: string; pushBody?: string; type?: NotifyType };
 
 /** Envía un aviso por todos los canales gratis disponibles. */
@@ -158,7 +158,8 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
   // Cada quien elige qué tipos le llegan por WhatsApp y si respeta su horario de descanso
   // (de 10 p. m. a 7 a. m. solo llega al teléfono, que no hace ruido si está en silencio).
   const waTypes = (await getSetting(env, 'wa_tipos', '')).split(',').filter(Boolean);
-  const typeOk = !opts.type || !waTypes.length || waTypes.includes(opts.type);
+  // (El plan del domingo es nuevo: a quien ya había elegido tipos, le llega si tenía el resumen.)
+  const typeOk = !opts.type || !waTypes.length || waTypes.includes(opts.type) || (opts.type === 'plan' && waTypes.includes('resumen'));
   const h = localDate(env).getUTCHours();
   const quiet = (await getSetting(env, 'wa_quiet', '1')) !== '0' && (h >= 22 || h < 7) && opts.tag !== 'security';
   if (callmebotConfigured(env) && typeOk && !quiet) {

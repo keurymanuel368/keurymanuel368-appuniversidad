@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   pay_open_day: '25', pay_close_day: '5', pay_remind_days: '25,30,4,5', pay_amount: '',
   term_start: '', term_end: '', eva_sync_hours: '2', term_unit: 'trimestre', push_also_wa: '1',
   notify_tareas: '1', notify_notas: '1', notify_pagos: '1', notify_avisos: '1', notify_resumen: '1', notify_novedades: '1',
-  study_hour: '19', study_enabled: '1', achievements_seen: '',
+  study_hour: '19', study_enabled: '1', achievements_seen: '', notify_plan: '1', plan_hour: '18',
 };
 
 export async function getSettings(env: Env): Promise<Record<string, string>> {

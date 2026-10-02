@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, channelsLabel, dateLabel, type SendResult } from '../api';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
 import { applyTheme } from '../theme';
-import { Modal, PageHead, Skeleton, haptic, toast, useLoad } from '../components';
+import { Modal, PageHead, RichText, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { me } from '../me';
@@ -113,6 +113,7 @@ const TYPES: { key: string; icon: string; tone: string; label: string; hint: str
   { key: 'pagos', icon: 'wallet', tone: 'orange', label: 'Pagos', hint: 'Ventana de pago y correos de cobro' },
   { key: 'avisos', icon: 'bell', tone: 'violet', label: 'Avisos y eventos', hint: 'Foro de avisos, correos y eventos' },
   { key: 'resumen', icon: 'calendar', tone: 'blue', label: 'Resumen diario', hint: 'Tu día a la hora que elijas' },
+  { key: 'plan', icon: 'tasks', tone: 'green', label: 'Plan de la semana', hint: 'Los domingos: lo que vence y en qué orden hacerlo' },
   { key: 'novedades', icon: 'spark', tone: 'violet', label: 'Novedades de Rumbo', hint: 'Cuando la app trae algo nuevo' },
 ];
 
@@ -484,6 +485,46 @@ function AccountCard() {
   );
 }
 
+/** Plan de la semana: ver cómo llega y mandarlo ahora (sale solo los domingos). */
+function PlanCard() {
+  const [plan, setPlan] = useState<string | null>(null);
+  const [busy, setBusy] = useState('');
+  async function preview() {
+    setBusy('ver');
+    try { setPlan((await api<{ text: string }>('/plan/preview')).text); } catch (e) { toast((e as Error).message, 'err'); }
+    setBusy('');
+  }
+  async function send() {
+    setBusy('enviar'); haptic(8);
+    try {
+      const r = await api<{ ok: boolean; channels: string[]; error?: string }>('/plan/send', { method: 'POST' });
+      toast(r.channels?.includes('callmebot') ? 'Te mandé el plan por WhatsApp ✅' : r.ok ? 'Plan enviado al teléfono ✅' : `No se pudo: ${r.error}`, r.ok ? 'ok' : 'err');
+    } catch (e) { toast((e as Error).message, 'err'); }
+    setBusy('');
+  }
+  return (
+    <div className="section">
+      <div className="section-head"><h3>Plan de la semana</h3></div>
+      <div className="card">
+        <div className="toggle">
+          <span className="set-ic green" aria-hidden="true"><Icon name="tasks" size={18} /></span>
+          <div className="t"><b>Cada domingo, tu semana organizada</b><span>Lo que vence de lunes a domingo, el día más cargado y en qué orden hacerlo. Llega por WhatsApp y al teléfono.</span></div>
+        </div>
+        <div className="conn-actions">
+          <button className="btn soft" onClick={preview} disabled={!!busy}><Icon name="calendar" size={18} />{busy === 'ver' ? 'Armando…' : 'Ver cómo llega'}</button>
+          <button className="btn line" onClick={send} disabled={!!busy}><Icon name="send" size={18} />{busy === 'enviar' ? 'Enviando…' : 'Enviármelo ahora'}</button>
+        </div>
+      </div>
+      {plan && (
+        <Modal title="Tu plan de la semana" onClose={() => setPlan(null)}>
+          <div className="wa-preview"><RichText text={plan} /></div>
+          <button className="btn primary block" onClick={() => { setPlan(null); void send(); }}><Icon name="send" size={18} />Enviármelo ahora</button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 /** Mandar un comentario o reportar un problema (le llega al administrador). */
 function FeedbackCard() {
   const [text, setText] = useState('');
@@ -622,10 +663,15 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                   <select id="sth" className="input" value={s.study_hour || '19'} onChange={(e) => save('study_hour', e.target.value)}>
                     {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
                   </select></div>
+                <div className="field"><label htmlFor="ph">Plan de la semana (domingo)</label>
+                  <select id="ph" className="input" value={s.plan_hour || '18'} onChange={(e) => save('plan_hour', e.target.value)}>
+                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
+                  </select></div>
                 <div className="field"><label htmlFor="nm">Cómo te saludo</label><input id="nm" className="input" defaultValue={s.student_name} onBlur={(e) => save('student_name', e.target.value)} /></div>
               </div>
             </div>
           </div>
+          <PlanCard />
           <div className="section">
             <div className="section-head"><h3>Trimestre</h3></div>
             <div className="card">
