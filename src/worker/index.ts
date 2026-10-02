@@ -321,6 +321,59 @@ app.post('/api/me/password', async (c) => {
 });
 
 // ---------- Administración (solo el administrador): compañeros e invitaciones ----------
+// ---------- Tope diario de IA por compañero ----------
+// Los motores gratis tienen una cuota al día para TODOS: cada compañero tiene un tope para que nadie la agote.
+// El administrador no tiene tope.
+const AI_DAILY_LIMIT = 60;
+const AI_PATHS = /^\/api\/(assistant(\/(stream|voice|voice-stream|transcribe))?|study\/\d+)$/;
+app.use('/api/*', async (c, next) => {
+  if (c.req.method !== 'POST' || c.env.ROLE === 'admin' || !AI_PATHS.test(new URL(c.req.url).pathname)) return next();
+  const today = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
+  const s = await getSettings(c.env);
+  const used = s.ai_day === today ? Number(s.ai_count || 0) : 0;
+  if (used >= AI_DAILY_LIMIT) {
+    const msg = `Llegaste al tope de hoy (${AI_DAILY_LIMIT} preguntas) 😅. Los motores de IA son gratis y se comparten entre todos; mañana a las 12 a. m. vuelves a tener. Mientras tanto, todo lo demás de Rumbo funciona igual.`;
+    if (/stream/.test(c.req.path)) return new Response(`data: ${JSON.stringify({ t: 'done', text: msg, say: '', done: [] })}\n\n`, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' } });
+    if (c.req.path === '/api/assistant') return c.json({ reply: msg });
+    return c.json({ error: msg }, 429);
+  }
+  await setSetting(c.env, 'ai_day', today);
+  await setSetting(c.env, 'ai_count', String(used + 1));
+  await next();
+});
+
+// ---------- Comentarios y problemas (llegan al administrador) ----------
+app.post('/api/feedback', async (c) => {
+  const { text } = await c.req.json<{ text?: string }>().catch(() => ({ text: '' }));
+  const t = (text || '').trim().slice(0, 1500);
+  if (t.length < 4) return c.json({ error: 'Cuéntame un poco más (al menos unas palabras).' }, 400);
+  await c.env.DB.prepare('INSERT INTO feedback (user_id, text, created_at) VALUES (?, ?, ?)').bind(c.env.UID, t, nowSec()).run();
+  const who = await c.env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(c.env.UID).first<{ name: string }>();
+  if (c.env.ROLE !== 'admin') {
+    c.executionCtx.waitUntil(forUser(c.env, 1, 'admin').then((a) => sendToMe(a, `*💬 ${who?.name || 'Un compañero'} escribió en Rumbo*\n${t.slice(0, 600)}`, { title: `💬 ${who?.name || 'Comentario'}`, pushBody: t.slice(0, 180), tag: 'feedback', url: '/#companeros' })).catch(() => undefined));
+  }
+  return c.json({ ok: true });
+});
+
+// Borrar mi cuenta y todos mis datos (pide la contraseña). El administrador no puede borrarse.
+app.post('/api/me/delete', async (c) => {
+  if (c.env.ROLE === 'admin') return c.json({ error: 'La cuenta del administrador no se puede borrar.' }, 400);
+  const { password } = await c.req.json<{ password?: string }>().catch(() => ({ password: '' }));
+  const u = await c.env.DB.prepare('SELECT id, pass_hash, pass_salt FROM users WHERE id = ?').bind(c.env.UID).first<{ id: number; pass_hash: string | null; pass_salt: string | null }>();
+  if (!u || !(await checkPassword(c.env, u, password || ''))) return c.json({ error: 'La contraseña no coincide.' }, 400);
+  const uid = c.env.UID;
+  const p = `u${uid}:`;
+  await c.env.DB.batch([
+    // Hijas primero (notas y avisos apuntan a asignaturas; la caché de estudio se va con las tareas).
+    ...['grades', 'announcements', 'tasks', 'courses', 'payments', 'pensum', 'reminders', 'messages', 'push_subs', 'feedback'].map((t) => c.env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(uid)),
+    c.env.DB.prepare('DELETE FROM settings WHERE substr(key, 1, ?) = ?').bind(p.length, p),
+    c.env.DB.prepare('DELETE FROM sent_log WHERE substr(key, 1, ?) = ?').bind(p.length, p),
+    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid),
+  ]);
+  c.header('Set-Cookie', clearSessionCookie());
+  return c.json({ ok: true });
+});
+
 app.use('/api/admin/*', async (c, next) => {
   if (c.env.ROLE !== 'admin') return c.json({ error: 'Solo el administrador puede hacer esto.' }, 403);
   await next();
@@ -329,10 +382,14 @@ app.use('/api/admin/*', async (c, next) => {
 app.get('/api/admin/users', async (c) => {
   const { results: users } = await c.env.DB.prepare(`SELECT u.id, u.login, u.name, u.role, u.active, u.created_at, u.last_seen,
       (SELECT value FROM settings WHERE key = 'u' || u.id || ':eva_last_sync') AS eva_last_sync,
-      (SELECT COUNT(*) FROM tasks t WHERE t.user_id = u.id) AS tasks
+      (SELECT COUNT(*) FROM tasks t WHERE t.user_id = u.id) AS tasks,
+      (SELECT value FROM settings WHERE key = 'u' || u.id || ':callmebot_apikey') IS NOT NULL
+        AND (SELECT value FROM settings WHERE key = 'u' || u.id || ':callmebot_apikey') != '' AS whatsapp,
+      (SELECT value FROM settings WHERE key = 'u' || u.id || ':ai_count' AND (SELECT value FROM settings WHERE key = 'u' || u.id || ':ai_day') = date('now', '-4 hours')) AS ai_today
     FROM users u ORDER BY u.id`).all();
+  const { results: feedback } = await c.env.DB.prepare(`SELECT f.id, f.text, f.created_at, u.name FROM feedback f LEFT JOIN users u ON u.id = f.user_id ORDER BY f.id DESC LIMIT 20`).all();
   const { results: invites } = await c.env.DB.prepare('SELECT code, note, created_at, expires_at FROM invites WHERE used_by IS NULL AND expires_at > ? ORDER BY created_at DESC').bind(nowSec()).all();
-  return c.json({ users, invites });
+  return c.json({ users, invites, feedback, aiLimit: AI_DAILY_LIMIT });
 });
 
 app.post('/api/admin/invites', async (c) => {

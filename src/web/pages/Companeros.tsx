@@ -4,14 +4,15 @@ import { api, dateLabel } from '../api';
 import { Empty, Modal, PageHead, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 
-type Person = { id: number; login: string; name: string; role: string; active: number; created_at: number; last_seen: number | null; eva_last_sync: string | null; tasks: number };
+type Person = { id: number; login: string; name: string; role: string; active: number; created_at: number; last_seen: number | null; eva_last_sync: string | null; tasks: number; whatsapp: number; ai_today: string | null };
+type Feedback = { id: number; text: string; created_at: number; name: string | null };
 type Invite = { code: string; note: string | null; created_at: number; expires_at: number };
 
 const inviteText = (link: string, note?: string | null) =>
   `${note ? `¡Klk, ${note}! ` : '¡Klk! '}Te invito a Rumbo, la app que junta tus tareas, notas y avisos de la UAPA y te avisa antes de cada entrega 📚\n\nEntra aquí y crea tu cuenta (el enlace es solo para ti):\n${link}`;
 
 export function Companeros() {
-  const q = useLoad(() => api<{ users: Person[]; invites: Invite[] }>('/admin/users'));
+  const q = useLoad(() => api<{ users: Person[]; invites: Invite[]; feedback: Feedback[]; aiLimit: number }>('/admin/users'));
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [made, setMade] = useState<{ link: string; note: string } | null>(null);
@@ -84,7 +85,13 @@ export function Companeros() {
                 <span className="av" aria-hidden="true">{p.name.charAt(0).toUpperCase()}</span>
                 <span className="who">
                   <b>{p.name}{p.role === 'admin' ? ' (tú)' : ''}</b>
-                  <small>{p.login} · entró {ago(p.last_seen)} · EVA {p.eva_last_sync ? 'conectado' : 'sin conectar'}{p.active ? '' : ' · en pausa'}</small>
+                  <small>{p.login} · entró {ago(p.last_seen)}</small>
+                  <span className="person-tags">
+                    <i className={p.eva_last_sync ? 'ok' : ''}>EVA {p.eva_last_sync ? '✓' : '—'}</i>
+                    <i className={p.whatsapp ? 'ok' : ''}>WhatsApp {p.whatsapp ? '✓' : '—'}</i>
+                    {p.role !== 'admin' && <i>IA hoy {Number(p.ai_today || 0)}/{q.data!.aiLimit}</i>}
+                    {!p.active && <i className="off">En pausa</i>}
+                  </span>
                 </span>
                 {p.role !== 'admin' && (
                   <>
@@ -97,6 +104,22 @@ export function Companeros() {
           </ul>
         </div>
       </div>
+
+      {q.data.feedback.length > 0 && (
+        <div className="section">
+          <div className="section-head"><h3>Comentarios recibidos</h3></div>
+          <div className="card">
+            <ul className="people">
+              {q.data.feedback.map((f) => (
+                <li key={f.id} className="person">
+                  <span className="av" aria-hidden="true">{(f.name || '?').charAt(0).toUpperCase()}</span>
+                  <span className="who"><b>{f.name || 'Cuenta borrada'}</b><small className="fb-text">{f.text}</small><small>{dateLabel(f.created_at)}</small></span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {made && (
         <Modal title="Invitación lista" onClose={() => setMade(null)}>

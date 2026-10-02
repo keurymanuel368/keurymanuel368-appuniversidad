@@ -1751,3 +1751,9 @@ button.card:active, .stat:not(.static):active, .course:active, .tile:active, .gf
 .cmb-help summary { cursor: pointer; color: var(--blue); font-weight: 700; min-height: 32px; display: flex; align-items: center; }
 .cmb-help p { margin: 8px 0; font-size: 14px; color: var(--muted); }
 :root[data-mode="dark"] .cmb-help summary { color: var(--blue-dark); }
+.person-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.person-tags i { font-style: normal; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+.person-tags i.ok { background: var(--green-soft, #E3F5EC); color: var(--green); }
+.person-tags i.off { background: var(--red-soft); color: var(--red); }
+.person .who small.fb-text { color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+textarea.input { resize: vertical; min-height: 84px; font: inherit; line-height: 1.45; }

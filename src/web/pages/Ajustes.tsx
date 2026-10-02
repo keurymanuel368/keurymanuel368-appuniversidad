@@ -484,6 +484,59 @@ function AccountCard() {
   );
 }
 
+/** Mandar un comentario o reportar un problema (le llega al administrador). */
+function FeedbackCard() {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const admin = me()?.role === 'admin';
+  async function send(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true);
+    try { await api('/feedback', { method: 'POST', body: { text } }); setText(''); toast(admin ? 'Nota guardada' : '¡Gracias! Ya le llegó a quien administra Rumbo'); }
+    catch (e2) { toast((e2 as Error).message, 'err'); }
+    setBusy(false);
+  }
+  return (
+    <form className="card form-stack" onSubmit={send}>
+      <div className="field"><label htmlFor="fb">{admin ? 'Notas para ti (ideas, pendientes)' : '¿Algo no funciona o tienes una idea?'}</label>
+        <textarea id="fb" className="input" rows={3} maxLength={1500} value={text} onChange={(e) => setText(e.target.value)} placeholder={admin ? 'Ej.: agregar el pensum de Contabilidad' : 'Ej.: no me aparecen las notas de Matemática'} /></div>
+      <button className="btn soft" type="submit" disabled={busy || text.trim().length < 4}><Icon name="send" size={18} />{busy ? 'Enviando…' : 'Enviar'}</button>
+    </form>
+  );
+}
+
+/** Borrar mi cuenta y todos mis datos (solo compañeros; pide la contraseña). */
+function DeleteAccount() {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (me()?.role === 'admin') return null;
+  async function del(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true);
+    try {
+      await api('/me/delete', { method: 'POST', body: { password: pw } });
+      navigator.serviceWorker?.controller?.postMessage('clear-api');
+      try { localStorage.removeItem('rumbo-login'); } catch { /* sin almacenamiento */ }
+      toast('Tu cuenta y tus datos se borraron');
+      setTimeout(() => { location.hash = ''; location.reload(); }, 1200);
+    } catch (e2) { toast((e2 as Error).message, 'err'); setBusy(false); }
+  }
+  return (
+    <>
+      <button className="action-row danger" onClick={() => setOpen(true)}><span className="set-ic red"><Icon name="trash" size={18} /></span><b>Borrar mi cuenta</b><Icon name="chevron" size={18} /></button>
+      {open && (
+        <Modal title="Borrar mi cuenta" onClose={() => setOpen(false)}>
+          <p className="hint"><Icon name="alert" size={16} />Se borran para siempre tus tareas, notas, pagos, avisos, conversaciones con el asistente y tus conexiones. Tu EVA no se toca. Esto no se puede deshacer.</p>
+          <form className="form-stack" onSubmit={del}>
+            <div className="field"><label htmlFor="del-pw">Escribe tu contraseña de Rumbo para confirmar</label>
+              <input id="del-pw" className="input" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></div>
+            <button className="btn danger lg block" type="submit" disabled={busy || !pw}>{busy ? 'Borrando…' : 'Sí, borrar todo'}</button>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 export function Ajustes({ onLogout }: { onLogout: () => void }) {
   const q = useLoad(() => api<SettingsRes>('/settings'));
   const [busy, setBusy] = useState('');
@@ -531,6 +584,10 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
           <div className="section">
             <div className="section-head"><h3>Mi cuenta</h3></div>
             <AccountCard />
+          </div>
+          <div className="section">
+            <div className="section-head"><h3>Comentarios</h3></div>
+            <FeedbackCard />
           </div>
           <div className="section">
             <div className="section-head"><h3>Notificaciones</h3></div>
@@ -615,6 +672,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
               {admin && <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>}
               <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
               <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>
+              <DeleteAccount />
             </div>
             {report && (
               <div className="card">

@@ -9,6 +9,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 24,
+    date: '2026-10-02',
+    title: 'Comentarios y más control',
+    items: [
+      'Ajustes → Comentarios: cuéntanos si algo falla o tienes una idea. Le llega al momento a quien administra Rumbo.',
+      'Cada compañero puede borrar su cuenta y todos sus datos desde Ajustes, cuando quiera.',
+      'Tope diario de preguntas al asistente por compañero, para que la IA gratis alcance para todos.',
+      'Compañeros muestra quién tiene el EVA y el WhatsApp conectados, cuánto usó la IA hoy y sus comentarios.',
+    ],
+  },
+  {
     version: 23,
     date: '2026-10-02',
     title: 'WhatsApp más confiable',
