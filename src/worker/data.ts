@@ -21,8 +21,8 @@ export type PayWindow = {
 };
 
 export async function listTasks(env: Env, opts: { status?: string; from?: number; to?: number; limit?: number; id?: number } = {}): Promise<Task[]> {
-  const where: string[] = [];
-  const binds: unknown[] = [];
+  const where: string[] = ['t.user_id = ?'];
+  const binds: unknown[] = [env.UID];
   if (opts.status) { where.push('t.status = ?'); binds.push(opts.status); }
   if (opts.id !== undefined) { where.push('t.id = ?'); binds.push(opts.id); }
   if (opts.from !== undefined) { where.push('(t.due_at IS NULL OR t.due_at >= ?)'); binds.push(opts.from); }
@@ -32,8 +32,8 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
       COALESCE(NULLIF(c.facilitator, ''), c.facilitator_eva) AS facilitator,
       g.grade AS grade, g.grade_max AS grade_max, g.feedback AS grade_feedback
     FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-    LEFT JOIN grades g ON g.moodle_key IS NOT NULL AND g.moodle_key = t.moodle_key
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    LEFT JOIN grades g ON g.moodle_key IS NOT NULL AND g.user_id = t.user_id AND g.moodle_key = t.moodle_key
+    WHERE ${where.join(' AND ')}
     ORDER BY ${opts.status === 'done' ? 'COALESCE(t.due_at, t.submitted_at, t.updated_at) DESC' : 't.due_at IS NULL, t.due_at ASC'} LIMIT ?`;
   binds.push(opts.limit ?? 200);
   const { results } = await env.DB.prepare(sql).bind(...binds).all<Task>();
@@ -47,7 +47,7 @@ export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
       (SELECT COUNT(*) FROM grades g WHERE g.course_id = c.id) AS total,
       (SELECT AVG(g.grade * 100.0 / g.grade_max) FROM grades g WHERE g.course_id = c.id AND g.grade IS NOT NULL AND g.grade_max > 0) AS average,
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
-    FROM courses c WHERE c.active = 1 ORDER BY c.name`).all<CourseSummary>();
+    FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
   return results.map((r) => ({ ...r, average: r.average === null ? null : Math.round(r.average * 10) / 10 }));
 }
 
@@ -57,7 +57,7 @@ export async function allGrades(env: Env): Promise<GradeMatch[]> {
   const { results } = await env.DB.prepare(`
     SELECT c.name AS course, g.item_name AS item, g.grade AS grade, g.grade_max AS grade_max, g.updated_at AS updated_at
     FROM grades g JOIN courses c ON c.id = g.course_id
-    WHERE c.active = 1 ORDER BY g.updated_at DESC`).all<GradeMatch>();
+    WHERE c.user_id = ? AND c.active = 1 ORDER BY g.updated_at DESC`).bind(env.UID).all<GradeMatch>();
   return results;
 }
 
@@ -90,7 +90,7 @@ export async function payWindow(env: Env, settings?: Record<string, string>): Pr
   const cm = crosses ? (pm === 12 ? 1 : pm + 1) : pm;
   const closesAt = localToUnix(env, cy, cm, closeDay, 23, 59);
   const period = `${py}-${String(pm).padStart(2, '0')}`;
-  const paid = !!(await env.DB.prepare('SELECT 1 AS x FROM payments WHERE period = ?').bind(period).first());
+  const paid = !!(await env.DB.prepare('SELECT 1 AS x FROM payments WHERE user_id = ? AND period = ?').bind(env.UID, period).first());
   const now_ = nowSec();
   return {
     state: open ? 'open' : 'closed', period, opensAt, closesAt,
@@ -124,19 +124,19 @@ export async function dashboard(env: Env) {
   const courses = await courseSummaries(env);
   const pay = await payWindow(env, s);
   // Últimas notas de tus entregas (las más recientes primero).
-  const { results: recentGrades } = await env.DB.prepare(`SELECT t.id FROM tasks t JOIN grades g ON g.moodle_key = t.moodle_key
-    WHERE g.grade IS NOT NULL ORDER BY g.updated_at DESC, t.due_at DESC LIMIT 5`).all<{ id: number }>();
+  const { results: recentGrades } = await env.DB.prepare(`SELECT t.id FROM tasks t JOIN grades g ON g.user_id = t.user_id AND g.moodle_key = t.moodle_key
+    WHERE t.user_id = ? AND g.grade IS NOT NULL ORDER BY g.updated_at DESC, t.due_at DESC LIMIT 5`).bind(env.UID).all<{ id: number }>();
   const graded = recentGrades.length ? (await listTasks(env, { limit: 400 })).filter((t) => recentGrades.some((r) => r.id === t.id))
     .sort((a, b) => recentGrades.findIndex((r) => r.id === a.id) - recentGrades.findIndex((r) => r.id === b.id)) : [];
   // Progreso de la semana (lunes a domingo): cuántas entregas con fecha esta semana ya están listas.
   const ld = localDate(env);
   const dow = (ld.getUTCDay() + 6) % 7; // 0 = lunes
   const weekStart = localToUnix(env, ld.getUTCFullYear(), ld.getUTCMonth() + 1, ld.getUTCDate() - dow, 0, 0);
-  const wk = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done FROM tasks WHERE due_at >= ? AND due_at < ?`)
-    .bind(weekStart, weekStart + 7 * 86400).first<{ total: number; done: number | null }>();
+  const wk = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done FROM tasks WHERE user_id = ? AND due_at >= ? AND due_at < ?`)
+    .bind(env.UID, weekStart, weekStart + 7 * 86400).first<{ total: number; done: number | null }>();
   const { results: news } = await env.DB.prepare(`SELECT a.id, a.title, a.kind, a.created_at, a.read, c.name AS course_name FROM announcements a LEFT JOIN courses c ON c.id = a.course_id
-    WHERE a.source = 'avisos' OR a.kind IN ('pago', 'evento') OR a.source = 'correo' ORDER BY a.created_at DESC LIMIT 3`).all();
-  const unread = await env.DB.prepare(`SELECT COUNT(*) AS n FROM announcements WHERE read = 0 AND (source = 'avisos' OR kind IN ('pago', 'evento') OR source = 'correo')`).first<{ n: number }>();
+    WHERE a.user_id = ? AND (a.source = 'avisos' OR a.kind IN ('pago', 'evento') OR a.source = 'correo') ORDER BY a.created_at DESC LIMIT 3`).bind(env.UID).all();
+  const unread = await env.DB.prepare(`SELECT COUNT(*) AS n FROM announcements WHERE user_id = ? AND read = 0 AND (source = 'avisos' OR kind IN ('pago', 'evento') OR source = 'correo')`).bind(env.UID).first<{ n: number }>();
   return {
     news, unreadNews: unread?.n ?? 0,
     weekProgress: { total: wk?.total ?? 0, done: wk?.done ?? 0 },

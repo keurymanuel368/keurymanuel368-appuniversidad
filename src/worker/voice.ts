@@ -34,7 +34,7 @@ export async function transcribeWhatsAppAudio(env: Env, mediaId: string): Promis
 export async function transcribeAudio(env: Env, audio: Uint8Array, mime = 'audio/webm'): Promise<string> {
   if (audio.length > MAX_BYTES) throw new Error('El audio es muy largo. Prueba con uno de menos de un minuto.');
   // Los nombres de tus asignaturas ayudan a Whisper a escribirlos bien.
-  const { results } = await env.DB.prepare('SELECT name FROM courses WHERE active = 1').all<{ name: string }>();
+  const { results } = await env.DB.prepare('SELECT name FROM courses WHERE user_id = ? AND active = 1').bind(env.UID).all<{ name: string }>();
   const prompt = `Preguntas a Rumbo sobre la universidad UAPA: notas, tareas, foros, pagos, EVA. Asignaturas: ${results.map((r) => r.name).join(', ')}.`;
   // 1) Groq Whisper (gratis y rápido, no gasta la cuota de Cloudflare)
   const groq = await groqTranscribe(env, audio, mime, prompt).catch(() => null);

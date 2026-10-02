@@ -7,10 +7,19 @@ import { APP_VERSION } from '../updater';
 
 const FAQ: { tema: string; items: { q: string; a: string; go?: [string, string] }[] }[] = [
   {
+    tema: 'Cuenta y compañeros',
+    items: [
+      { q: '¿Cómo invito a un compañero?', a: 'Quien administra Rumbo entra a Más → Compañeros, toca «Crear invitación» y la manda por WhatsApp. Cada enlace sirve para una persona y vence en 14 días.' },
+      { q: '¿Mis compañeros ven mis notas o tareas?', a: 'No. Cada cuenta ve solo sus propios datos: tareas, notas, pagos, avisos y conversaciones con el asistente.' },
+      { q: 'Olvidé mi contraseña', a: 'Pídele a quien te invitó una contraseña temporal (Más → Compañeros → Clave). Entra con ella y cámbiala en Ajustes → Mi cuenta.', go: ['ajustes', 'Ir a Ajustes'] },
+    ],
+  },
+  {
     tema: 'EVA y tareas',
     items: [
       { q: '¿Cada cuánto se actualizan mis tareas y notas?', a: 'Rumbo revisa el EVA solo cada 2 horas (puedes cambiarlo en Ajustes → «Sincronizar el EVA cada»). Si quieres verlo ya, toca Sincronizar en Inicio o desliza hacia abajo en Tareas.', go: ['ajustes', 'Ir a Ajustes'] },
-      { q: 'Me llegó «El EVA dejó de conectar»', a: 'El token del EVA venció. No es tu contraseña: hay que generar un token nuevo desde la computadora con tu asistente de código (Claude) y guardarlo con «npx wrangler secret put MOODLE_TOKEN». Tus datos no se pierden.' },
+      { q: '¿Cómo conecto mi EVA?', a: 'Ve a Más → Conexiones y toca «Conectar mi EVA». Escribe tu matrícula y tu contraseña del EVA: se usan una sola vez para crear la conexión y Rumbo no guarda la contraseña. Si no funciona, usa la opción «Con el enlace del EVA».', go: ['conectar', 'Ir a Conexiones'] },
+      { q: 'Me llegó «El EVA dejó de conectar»', a: 'La conexión con el EVA venció. Ve a Más → Conexiones y toca «Reconectar»: toma un minuto y tus datos no se pierden.', go: ['conectar', 'Ir a Conexiones'] },
       { q: 'Una tarea que ya entregué sale pendiente', a: 'El EVA a veces tarda en marcarla. Desliza la tarea a la derecha para marcarla como hecha, o espera la próxima sincronización.' },
       { q: '¿Cómo me entero cuando me califican?', a: 'Te llega una notificación con la nota y el comentario del facilitador. También queda en Avisos y en la ficha de la tarea.' },
     ],

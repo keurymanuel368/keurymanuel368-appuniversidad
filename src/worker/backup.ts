@@ -10,15 +10,29 @@ const SECRET_SETTING = /token|secret|vapid|private|password|apikey|api_key/i;
 
 export type BackupInfo = { key: string; at: number; bytes: number; rows: number };
 
-/** Lee todas las tablas de la base de datos como JSON. */
-export async function dumpData(env: Env): Promise<{ version: 1; at: number; tables: Record<string, unknown[]> }> {
+// Tablas con datos de cada usuario (las demás son del sistema).
+const USER_TABLES = ['courses', 'tasks', 'grades', 'announcements', 'payments', 'pensum', 'reminders', 'messages', 'push_subs'];
+
+/**
+ * Lee la base de datos como JSON. Con `onlyMine`, solo los datos del usuario de `env` (lo que descarga
+ * cada compañero); sin él, todo (la copia semanal del sistema).
+ */
+export async function dumpData(env: Env, onlyMine = false): Promise<{ version: 1; at: number; tables: Record<string, unknown[]> }> {
+  if (onlyMine) {
+    const mine: Record<string, unknown[]> = {};
+    for (const t of USER_TABLES) mine[t] = (await env.DB.prepare(`SELECT * FROM ${t} WHERE user_id = ?`).bind(env.UID).all<Record<string, unknown>>()).results;
+    const p = `u${env.UID}:`;
+    mine.settings = (await env.DB.prepare('SELECT key, value FROM settings WHERE substr(key, 1, ?) = ?').bind(p.length, p).all<{ key: string; value: string }>()).results
+      .filter((r) => !SECRET_SETTING.test(r.key)).map((r) => ({ key: r.key.slice(p.length), value: r.value }));
+    return { version: 1, at: Date.now(), tables: mine };
+  }
   const { results: tables } = await env.DB.prepare(
     `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations' ORDER BY name`,
   ).all<{ name: string }>();
   const out: Record<string, unknown[]> = {};
   for (const { name } of tables) {
     const { results } = await env.DB.prepare(`SELECT * FROM "${name.replace(/"/g, '')}"`).all<Record<string, unknown>>();
-    out[name] = name === 'settings' ? results.filter((r) => !SECRET_SETTING.test(String(r.key))) : results;
+    out[name] = name === 'settings' ? results.filter((r) => !SECRET_SETTING.test(String(r.key))) : name === 'users' ? results.map(({ pass_hash: _h, pass_salt: _s, ...r }) => r) : results;
   }
   return { version: 1, at: Date.now(), tables: out };
 }

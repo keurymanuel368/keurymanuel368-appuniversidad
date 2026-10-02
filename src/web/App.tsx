@@ -4,6 +4,7 @@ import { api, ApiError, type Course } from './api';
 import { Icon } from './icons';
 import { Modal, TaskModal, Toaster, haptic } from './components';
 import { Welcome } from './Welcome';
+import { isAdmin, setMe, type Me } from './me';
 
 // Cada pantalla se descarga solo cuando la abres: la app arranca más rápido.
 const Inicio = lazy(() => import('./pages/Inicio').then((m) => ({ default: m.Inicio })));
@@ -15,9 +16,11 @@ const Asistente = lazy(() => import('./pages/Asistente').then((m) => ({ default:
 const Ajustes = lazy(() => import('./pages/Ajustes').then((m) => ({ default: m.Ajustes })));
 const Ayuda = lazy(() => import('./pages/Ayuda').then((m) => ({ default: m.Ayuda })));
 const Avisos = lazy(() => import('./pages/Avisos').then((m) => ({ default: m.Avisos })));
+const Conectar = lazy(() => import('./pages/Conectar').then((m) => ({ default: m.Conectar })));
+const Companeros = lazy(() => import('./pages/Companeros').then((m) => ({ default: m.Companeros })));
 import { Buddy } from './Buddy';
 
-const PAGES = [
+const PAGES: { id: string; label: string; icon: string; hint: string; admin?: boolean }[] = [
   { id: 'inicio', label: 'Inicio', icon: 'home', hint: 'Tu día de un vistazo' },
   { id: 'tareas', label: 'Tareas', icon: 'tasks', hint: 'Entregas y pendientes' },
   { id: 'asignaturas', label: 'Notas', icon: 'book', hint: 'Asignaturas y calificaciones' },
@@ -25,7 +28,9 @@ const PAGES = [
   { id: 'pagos', label: 'Pagos', icon: 'wallet', hint: 'Cuotas y ventana de pago' },
   { id: 'avisos', label: 'Avisos', icon: 'bell', hint: 'Novedades, pagos y eventos' },
   { id: 'asistente', label: 'Asistente', icon: 'spark', hint: 'Pregúntale lo que quieras' },
-  { id: 'ajustes', label: 'Ajustes', icon: 'gear', hint: 'Conexiones y avisos' },
+  { id: 'conectar', label: 'Conexiones', icon: 'plug', hint: 'EVA, WhatsApp y notificaciones' },
+  { id: 'ajustes', label: 'Ajustes', icon: 'gear', hint: 'Tu cuenta y tus avisos' },
+  { id: 'companeros', label: 'Compañeros', icon: 'users', hint: 'Invita y administra', admin: true },
   { id: 'ayuda', label: 'Ayuda', icon: 'help', hint: 'Preguntas frecuentes' },
 ];
 // Barra inferior en móvil: dos a cada lado del botón central del asistente.
@@ -37,6 +42,10 @@ function currentPage() {
   const h = location.hash.replace('#', '').split('/')[0];
   return PAGES.some((p) => p.id === h) ? h : 'inicio';
 }
+/** Código de invitación si se abrió un enlace #unirme/CÓDIGO. */
+const inviteCode = () => location.hash.match(/^#unirme\/([a-f0-9]+)/)?.[1] || '';
+/** Páginas visibles para este usuario (Compañeros solo para el administrador). */
+const visiblePages = () => PAGES.filter((p) => !p.admin || isAdmin());
 
 export function App() {
   const [auth, setAuth] = useState<'checking' | 'in' | 'out'>('checking');
@@ -98,7 +107,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    api('/me').then(() => setAuth('in')).catch((e) => setAuth(e instanceof ApiError && e.status === 401 ? 'out' : 'in'));
+    api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch((e) => setAuth(e instanceof ApiError && e.status === 401 ? 'out' : 'in'));
     const onHash = () => {
       const apply = () => { setPage(currentPage()); setMore(false); window.scrollTo({ top: 0 }); };
       // Transición suave entre pantallas donde el navegador la soporta (Chrome/Android, Safari 18+).
@@ -114,6 +123,9 @@ export function App() {
   async function logout() {
     await api('/logout', { method: 'POST' });
     navigator.serviceWorker?.controller?.postMessage('clear-api'); // borra los datos guardados del teléfono
+    // El siguiente que entre (puede ser otra persona en este teléfono) empieza limpio en Inicio.
+    setMore(false); setMe(null);
+    history.replaceState(null, '', '#inicio'); setPage('inicio');
     setAuth('out');
   }
   // Después de abrir, descarga en silencio las demás pantallas: cambiar de sección es instantáneo y funcionan sin internet.
@@ -142,7 +154,11 @@ export function App() {
   }
 
   if (auth === 'checking') return <div className="splash"><div className="brand-mark xl"><Icon name="compass" size={34} style={{ strokeWidth: 2.1 }} /></div></div>;
-  if (auth === 'out') return <><Login onIn={() => setAuth('in')} /><Toaster /></>;
+  const signedIn = () => api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch(() => setAuth('in'));
+  if (auth === 'out') {
+    const code = inviteCode();
+    return <>{code ? <Signup code={code} onIn={() => { location.hash = 'conectar'; void signedIn(); }} /> : <Login onIn={() => { void signedIn(); }} />}<Toaster /></>;
+  }
 
   const tab = (id: string) => {
     const p = PAGES.find((x) => x.id === id)!;
@@ -163,7 +179,7 @@ export function App() {
         </div>
         <button className="btn primary block" onClick={openNew}><Icon name="plus" size={18} />Nueva tarea</button>
         <nav className="nav" aria-label="Navegación principal">
-          {PAGES.map((p) => <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => go(p.id)} aria-current={page === p.id ? 'page' : undefined}><Icon name={p.icon} />{p.label}{badgeFor(p.id) > 0 && <span className="nav-count num">{badgeFor(p.id)}</span>}</button>)}
+          {visiblePages().map((p) => <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => go(p.id)} aria-current={page === p.id ? 'page' : undefined}><Icon name={p.icon} />{p.label}{badgeFor(p.id) > 0 && <span className="nav-count num">{badgeFor(p.id)}</span>}</button>)}
         </nav>
         <div className="side-card">
           <span className="side-ic"><Icon name="spark" size={18} /></span>
@@ -185,6 +201,8 @@ export function App() {
           {page === 'asistente' && <Asistente />}
           {page === 'ajustes' && <Ajustes onLogout={logout} />}
           {page === 'ayuda' && <Ayuda go={go} />}
+          {page === 'conectar' && <Conectar />}
+          {page === 'companeros' && (isAdmin() ? <Companeros /> : null)}
           </Suspense>
         </div>
       </main>
@@ -204,7 +222,7 @@ export function App() {
       {more && (
         <Modal title="Más" onClose={() => setMore(false)}>
           <div className="more-grid">
-            {PAGES.filter((p) => !IN_TABS.includes(p.id)).map((p) => (
+            {visiblePages().filter((p) => !IN_TABS.includes(p.id)).map((p) => (
               <button key={p.id} className={`tile ${page === p.id ? 'on' : ''}`} onClick={() => go(p.id)}>
                 <span className="tile-ic"><Icon name={p.icon} size={22} /><Badge n={badgeFor(p.id)} /></span>
                 <b>{p.label}</b><span>{p.hint}</span>
@@ -224,6 +242,8 @@ export function App() {
 }
 
 function Login({ onIn }: { onIn: () => void }) {
+  // La matrícula se recuerda en este dispositivo para no escribirla cada vez.
+  const [login, setLogin] = useState(() => { try { return localStorage.getItem('rumbo-login') || ''; } catch { return ''; } });
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [err, setErr] = useState('');
@@ -231,7 +251,11 @@ function Login({ onIn }: { onIn: () => void }) {
   const [shake, setShake] = useState(0);
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr('');
-    try { await api('/login', { method: 'POST', body: { password } }); haptic(12); onIn(); }
+    try {
+      await api('/login', { method: 'POST', body: { login, password } });
+      try { localStorage.setItem('rumbo-login', login.trim()); } catch { /* sin almacenamiento */ }
+      haptic(12); onIn();
+    }
     catch (e) { setErr((e as Error).message); haptic(40); setShake((n) => n + 1); }
     setBusy(false);
   }
@@ -254,7 +278,12 @@ function Login({ onIn }: { onIn: () => void }) {
         <span className="lg2-grab" aria-hidden="true" />
         <div className="lg2-copy">
           <h2>{hello} 👋</h2>
-          <p>Entra con tu contraseña para ver tu día.</p>
+          <p>Entra con tu matrícula y tu contraseña de Rumbo.</p>
+        </div>
+        <label htmlFor="lg" className="sr-only">Matrícula o usuario</label>
+        <div className="lg2-field">
+          <span className="lg2-key"><Icon name="users" size={18} /></span>
+          <input id="lg" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Matrícula o usuario" enterKeyHint="next" />
         </div>
         <label htmlFor="pw" className="sr-only">Contraseña</label>
         <div className="lg2-field">
@@ -271,7 +300,68 @@ function Login({ onIn }: { onIn: () => void }) {
         <ul className="lg2-perks">
           <li><Icon name="tasks" size={14} />Entregas</li><li><Icon name="trend" size={14} />Notas</li><li><Icon name="wallet" size={14} />Pagos</li><li><Icon name="bell" size={14} />Avisos</li>
         </ul>
-        <span className="auth-foot">Privado y solo tuyo · BY DEXA · UAPA</span>
+        <span className="auth-foot">¿Te invitaron? Abre el enlace que te mandaron · BY DEXA · UAPA</span>
+      </form>
+    </div>
+  );
+}
+
+/** Registro con invitación (#unirme/CÓDIGO): nombre, matrícula y contraseña; luego va directo a Conexiones. */
+function Signup({ code, onIn }: { code: string; onIn: () => void }) {
+  const [info, setInfo] = useState<{ from?: string; error?: string } | null>(null);
+  const [name, setName] = useState('');
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ from: string }>(`/invite/${code}`).then((r) => setInfo({ from: r.from })).catch((e) => setInfo({ error: (e as Error).message })); }, [code]);
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setErr('');
+    try {
+      await api('/signup', { method: 'POST', body: { code, name, login, password } });
+      try { localStorage.setItem('rumbo-login', login.trim()); } catch { /* sin almacenamiento */ }
+      haptic(12); onIn();
+    } catch (e2) { setErr((e2 as Error).message); haptic(40); }
+    setBusy(false);
+  }
+  return (
+    <div className="lg2">
+      <section className="lg2-hero">
+        <div className="lg2-sky" aria-hidden="true"><i /><i /><i /></div>
+        <div className="lg2-brand">
+          <div className="lg2-logo"><span className="lg2-halo" /><span className="lg2-halo h2" /><div className="lg2-mark"><Icon name="compass" size={42} style={{ strokeWidth: 2 }} /></div></div>
+          <h1>Rumbo</h1>
+          <p>{info?.from ? `${info.from} te invitó 🎉` : 'Tu universidad, bajo control.'}</p>
+        </div>
+      </section>
+      <form className="lg2-sheet" onSubmit={submit}>
+        <span className="lg2-grab" aria-hidden="true" />
+        <div className="lg2-copy">
+          <h2>Crea tu cuenta</h2>
+          <p>{info?.error || 'Tus tareas, notas y avisos de la UAPA en un solo lugar. Solo tú ves tus datos.'}</p>
+        </div>
+        {!info?.error && (
+          <>
+            <label htmlFor="su-n" className="sr-only">Tu nombre</label>
+            <div className="lg2-field"><span className="lg2-key"><Icon name="spark" size={18} /></span>
+              <input id="su-n" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Tu nombre" required /></div>
+            <label htmlFor="su-l" className="sr-only">Matrícula</label>
+            <div className="lg2-field"><span className="lg2-key"><Icon name="users" size={18} /></span>
+              <input id="su-l" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" inputMode="numeric" placeholder="Matrícula (con ella entras)" required /></div>
+            <label htmlFor="su-p" className="sr-only">Contraseña nueva</label>
+            <div className="lg2-field"><span className="lg2-key"><Icon name="gear" size={18} /></span>
+              <input id="su-p" type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="Contraseña nueva (8 o más)" minLength={8} required aria-describedby="su-hint" />
+              <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? 'Ocultar contraseña' : 'Ver contraseña'}>{show ? 'Ocultar' : 'Ver'}</button></div>
+            <span id="su-hint" className="auth-foot">Usa una contraseña nueva para Rumbo, no la del EVA.</span>
+            {err && <div className="auth-error" role="alert"><Icon name="alert" size={16} />{err}</div>}
+            <button className="lg2-btn" type="submit" disabled={busy || !info}>
+              {busy && <span className="auth-spinner" aria-hidden="true" />}{busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}
+              {!busy && <span className="lg2-arrow"><Icon name="chevron" size={18} style={{ strokeWidth: 2.6 }} /></span>}
+            </button>
+          </>
+        )}
+        <button type="button" className="link-btn center-self" onClick={() => { location.hash = ''; location.reload(); }}>Ya tengo cuenta: entrar</button>
       </form>
     </div>
   );

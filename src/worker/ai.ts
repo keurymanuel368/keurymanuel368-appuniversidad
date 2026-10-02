@@ -48,27 +48,27 @@ async function buildContext(env: Env, compact = false): Promise<string> {
     for (const t of done) L.push(`- #${t.id} | ${t.title} | ${t.course_name || 'Personal'} | ${t.grade !== null && t.grade !== undefined ? `${fmt(t.grade)}/${fmt(t.grade_max || 100)}` : t.notes === 'Plazo cerrado en el EVA' ? 'plazo cerrado, sin nota' : 'sin calificar'}`);
   }
 
-  const { results: grades } = compact ? { results: [] as { course: string; item: string; grade: number | null; grade_max: number }[] } : await env.DB.prepare(`SELECT c.name AS course, g.item_name AS item, g.grade, g.grade_max FROM grades g JOIN courses c ON c.id = g.course_id WHERE c.active = 1 ORDER BY c.name, g.id LIMIT 60`)
-    .all<{ course: string; item: string; grade: number | null; grade_max: number }>();
+  const { results: grades } = compact ? { results: [] as { course: string; item: string; grade: number | null; grade_max: number }[] } : await env.DB.prepare(`SELECT c.name AS course, g.item_name AS item, g.grade, g.grade_max FROM grades g JOIN courses c ON c.id = g.course_id WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name, g.id LIMIT 60`)
+    .bind(env.UID).all<{ course: string; item: string; grade: number | null; grade_max: number }>();
   if (grades.length) {
     L.push('', 'LIBRO DE CALIFICACIONES (asignatura | actividad | nota):');
     for (const g of grades) L.push(`- ${g.course} | ${g.item} | ${g.grade === null ? 'pendiente' : `${fmt(g.grade)}/${fmt(g.grade_max)}`}`);
   }
 
   const { results: news } = await env.DB.prepare(`SELECT a.title, a.body, a.kind, a.source, a.created_at, a.read, c.name AS course FROM announcements a LEFT JOIN courses c ON c.id = a.course_id
-    ORDER BY a.created_at DESC LIMIT ${compact ? 3 : 10}`).all<{ title: string; body: string | null; kind: string; source: string; created_at: number; read: number; course: string | null }>();
+    WHERE a.user_id = ? ORDER BY a.created_at DESC LIMIT ${compact ? 3 : 10}`).bind(env.UID).all<{ title: string; body: string | null; kind: string; source: string; created_at: number; read: number; course: string | null }>();
   if (news.length) {
     L.push('', 'AVISOS RECIENTES (fecha | origen | tipo | leído | título: resumen):');
     for (const n of news) L.push(`- ${fechaLarga(localDate(env, n.created_at))} | ${n.course || (n.source === 'correo' ? 'correo UAPA' : n.source === 'rumbo' ? 'Rumbo' : 'EVA')} | ${n.kind} | ${n.read ? 'sí' : 'no'} | ${n.title}: ${(n.body || '').replace(/\s+/g, ' ').slice(0, 200)}`);
   }
 
-  const { results: rem } = await env.DB.prepare('SELECT id, text, remind_at FROM reminders WHERE sent = 0 ORDER BY remind_at LIMIT 10').all<{ id: number; text: string; remind_at: number }>();
+  const { results: rem } = await env.DB.prepare('SELECT id, text, remind_at FROM reminders WHERE user_id = ? AND sent = 0 ORDER BY remind_at LIMIT 10').bind(env.UID).all<{ id: number; text: string; remind_at: number }>();
   if (rem.length) { L.push('', 'RECORDATORIOS PROGRAMADOS:'); for (const r of rem) L.push(`- ${r.text} | ${cuandoTexto(env, r.remind_at)}`); }
 
   const p = await payWindow(env, s);
   L.push('', `PAGO: cuota de ${periodLabel(p.period)}${p.amount ? ` (RD$ ${p.amount})` : ''}: ${p.paid ? 'PAGADA' : p.state === 'open' ? `ventana ABIERTA, cierra en ${p.daysToClose} día(s) (día ${p.closeDay})` : `la ventana abre en ${p.daysToOpen} día(s) (día ${p.openDay})`}.`);
 
-  const { results: pen } = await env.DB.prepare(`SELECT term, code, name, credits, status, grade FROM pensum ORDER BY term, id`).all<{ term: number; code: string | null; name: string; credits: number; status: string; grade: number | null }>();
+  const { results: pen } = await env.DB.prepare(`SELECT term, code, name, credits, status, grade FROM pensum WHERE user_id = ? ORDER BY term, id`).bind(env.UID).all<{ term: number; code: string | null; name: string; credits: number; status: string; grade: number | null }>();
   if (pen.length && !compact) {
     const tot = pen.reduce((a, r) => a + r.credits, 0), ok = pen.filter((r) => r.status === 'aprobada').reduce((a, r) => a + r.credits, 0);
     L.push('', `PENSUM: ${ok}/${tot} créditos aprobados. Mínimo para graduarse: índice 70.`);
@@ -147,7 +147,7 @@ function parseLocal(env: Env, v: unknown): number | null {
 async function findCourseId(env: Env, name: unknown): Promise<number | null> {
   const q = fold(String(name || ''));
   if (!q) return null;
-  const { results } = await env.DB.prepare('SELECT id, name, code, short_name FROM courses WHERE active = 1').all<{ id: number; name: string; code: string | null; short_name: string | null }>();
+  const { results } = await env.DB.prepare('SELECT id, name, code, short_name FROM courses WHERE user_id = ? AND active = 1').bind(env.UID).all<{ id: number; name: string; code: string | null; short_name: string | null }>();
   const hit = results.find((c) => [c.name, c.code, c.short_name].filter(Boolean).some((x) => { const f = fold(x!); return f === q || f.includes(q) || q.includes(f); }))
     || results.find((c) => q.split(' ').some((w) => w.length > 3 && fold(c.name).includes(w)));
   return hit?.id ?? null;
@@ -156,10 +156,10 @@ async function findCourseId(env: Env, name: unknown): Promise<number | null> {
 /** Encuentra la tarea por #id o, si la IA mandó el nombre, por parecido del título. */
 async function resolveTask(env: Env, a: Action): Promise<{ id: number; title: string } | null> {
   const n = Number(String(a.id ?? '').replace(/\D/g, ''));
-  if (n) { const t = await env.DB.prepare('SELECT id, title FROM tasks WHERE id = ?').bind(n).first<{ id: number; title: string }>(); if (t) return t; }
+  if (n) { const t = await env.DB.prepare('SELECT id, title FROM tasks WHERE id = ? AND user_id = ?').bind(n, env.UID).first<{ id: number; title: string }>(); if (t) return t; }
   const q = fold([a.match, a.task, a.name, a.type !== 'update_task' ? a.title : '', typeof a.id === 'string' && /[a-z]/i.test(a.id) ? a.id : ''].filter(Boolean).join(' '));
   if (!q) return null;
-  const { results } = await env.DB.prepare(`SELECT id, title, status FROM tasks ORDER BY status = 'pending' DESC, COALESCE(due_at, 9999999999) LIMIT 300`).all<{ id: number; title: string }>();
+  const { results } = await env.DB.prepare(`SELECT id, title, status FROM tasks WHERE user_id = ? ORDER BY status = 'pending' DESC, COALESCE(due_at, 9999999999) LIMIT 300`).bind(env.UID).all<{ id: number; title: string }>();
   const words = q.split(' ').filter((w) => w.length > 2);
   const scored = results.map((t) => ({ t, s: words.filter((w) => fold(t.title).includes(w) || fold(t.title).includes(w.slice(0, 5))).length })).filter((x) => x.s > 0).sort((x, y) => y.s - x.s);
   return scored[0]?.t ?? null;
@@ -177,7 +177,7 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
           if (!title) break;
           const due = parseLocal(env, a.due);
           const course = await findCourseId(env, a.course);
-          await env.DB.prepare(`INSERT INTO tasks (title, due_at, course_id, source, status) VALUES (?, ?, ?, 'manual', 'pending')`).bind(title, due, course).run();
+          await env.DB.prepare(`INSERT INTO tasks (user_id, title, due_at, course_id, source, status) VALUES (?, ?, ?, ?, 'manual', 'pending')`).bind(env.UID, title, due, course).run();
           out.push(`✅ Tarea creada: ${title}${due ? ` · ${cuandoTexto(env, due)}` : ''}`);
           break;
         }
@@ -186,7 +186,7 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
           const done = a.type === 'complete_task';
           const t = await resolveTask(env, a);
           if (!t) { out.push('⚠️ No encontré esa tarea. Dime el nombre como sale en tu lista.'); break; }
-          await env.DB.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').bind(done ? 'done' : 'pending', now, t.id).run();
+          await env.DB.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(done ? 'done' : 'pending', now, t.id, env.UID).run();
           out.push(`✅ ${done ? 'Marcada como hecha' : 'Reabierta'}: ${t.title}`);
           break;
         }
@@ -195,15 +195,15 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
           if (!t) { out.push('⚠️ No encontré esa tarea. Dime el nombre como sale en tu lista.'); break; }
           const due = a.due !== undefined ? parseLocal(env, a.due) : undefined;
           const course = a.course !== undefined ? await findCourseId(env, a.course) : undefined;
-          await env.DB.prepare(`UPDATE tasks SET title = COALESCE(?, title), due_at = CASE WHEN ? THEN ? ELSE due_at END, course_id = CASE WHEN ? THEN ? ELSE course_id END, updated_at = ? WHERE id = ?`)
-            .bind(a.title ? String(a.title) : null, due !== undefined ? 1 : 0, due ?? null, course !== undefined ? 1 : 0, course ?? null, now, t.id).run();
+          await env.DB.prepare(`UPDATE tasks SET title = COALESCE(?, title), due_at = CASE WHEN ? THEN ? ELSE due_at END, course_id = CASE WHEN ? THEN ? ELSE course_id END, updated_at = ? WHERE id = ? AND user_id = ?`)
+            .bind(a.title ? String(a.title) : null, due !== undefined ? 1 : 0, due ?? null, course !== undefined ? 1 : 0, course ?? null, now, t.id, env.UID).run();
           out.push(`✅ Tarea actualizada: ${a.title ? String(a.title) : t.title}${due ? ` · ${cuandoTexto(env, due)}` : ''}`);
           break;
         }
         case 'delete_task': {
           const t = await resolveTask(env, a);
           if (!t) { out.push('⚠️ No encontré esa tarea.'); break; }
-          await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(t.id).run();
+          await env.DB.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').bind(t.id, env.UID).run();
           out.push(`✅ Tarea eliminada: ${t.title}`);
           break;
         }
@@ -211,14 +211,14 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
           const at = parseLocal(env, a.at);
           const text = String(a.text || '').trim();
           if (!at || !text) { out.push('⚠️ Me faltó la hora del recordatorio'); break; }
-          await env.DB.prepare('INSERT INTO reminders (text, remind_at) VALUES (?, ?)').bind(text, at).run();
+          await env.DB.prepare('INSERT INTO reminders (user_id, text, remind_at) VALUES (?, ?, ?)').bind(env.UID, text, at).run();
           out.push(`✅ Recordatorio: ${text} · ${cuandoTexto(env, at)}`);
           break;
         }
         case 'update_reminder': {
           const at = parseLocal(env, a.at);
           const q = fold(String(a.match || a.text || ''));
-          const { results } = await env.DB.prepare('SELECT id, text FROM reminders WHERE sent = 0 ORDER BY id DESC').all<{ id: number; text: string }>();
+          const { results } = await env.DB.prepare('SELECT id, text FROM reminders WHERE user_id = ? AND sent = 0 ORDER BY id DESC').bind(env.UID).all<{ id: number; text: string }>();
           const r = results.find((x) => q && q.split(' ').some((w) => w.length > 3 && fold(x.text).includes(w))) || results[0];
           if (!r || !at) { out.push('⚠️ No encontré ese recordatorio'); break; }
           await env.DB.prepare('UPDATE reminders SET remind_at = ?, text = COALESCE(?, text) WHERE id = ?').bind(at, a.new_text ? String(a.new_text) : null, r.id).run();
@@ -228,7 +228,7 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
         case 'register_payment': {
           const p = await payWindow(env);
           const amount = Number(a.amount) || (p.amount ? Number(p.amount) : null);
-          await env.DB.prepare('INSERT INTO payments (period, amount, paid_at, note) VALUES (?, ?, ?, ?)').bind(p.period, amount, now, 'Registrado por el asistente').run();
+          await env.DB.prepare('INSERT INTO payments (user_id, period, amount, paid_at, note) VALUES (?, ?, ?, ?, ?)').bind(env.UID, p.period, amount, now, 'Registrado por el asistente').run();
           out.push(`✅ Pago registrado: cuota de ${periodLabel(p.period)}${amount ? ` · RD$ ${amount.toLocaleString('es-DO')}` : ''}`);
           break;
         }
@@ -238,7 +238,7 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
           break;
         }
         case 'mark_news_read': {
-          await env.DB.prepare('UPDATE announcements SET read = 1 WHERE read = 0').run();
+          await env.DB.prepare('UPDATE announcements SET read = 1 WHERE user_id = ? AND read = 0').bind(env.UID).run();
           out.push('✅ Avisos marcados como leídos');
           break;
         }
@@ -259,7 +259,7 @@ async function runActions(env: Env, actions: Action[]): Promise<string[]> {
           const code = String(a.code || '').toUpperCase();
           const st = String(a.status || '');
           if (!['aprobada', 'en_curso', 'pendiente'].includes(st)) break;
-          const r = await env.DB.prepare('UPDATE pensum SET status = ?, grade = COALESCE(?, grade) WHERE code = ?').bind(st, a.grade !== undefined ? Number(a.grade) : null, code).run();
+          const r = await env.DB.prepare('UPDATE pensum SET status = ?, grade = COALESCE(?, grade) WHERE user_id = ? AND code = ?').bind(st, a.grade !== undefined ? Number(a.grade) : null, env.UID, code).run();
           out.push(r.meta.changes ? `✅ Pensum: ${code} → ${st.replace('_', ' ')}` : `⚠️ No encontré ${code} en tu pensum`);
           break;
         }
@@ -299,8 +299,8 @@ export function splitOutput(full: string): { visible: string; say: string; actio
 // ----- Memoria -----
 /** Conversación reciente del canal (sin límite de tiempo): los últimos mensajes. */
 async function history(env: Env, channel: string, limit = 12): Promise<Turn[]> {
-  const { results } = await env.DB.prepare(`SELECT direction, body FROM messages WHERE channel = ? ORDER BY id DESC LIMIT ?`)
-    .bind(channel, limit).all<{ direction: string; body: string }>();
+  const { results } = await env.DB.prepare(`SELECT direction, body FROM messages WHERE user_id = ? AND channel = ? ORDER BY id DESC LIMIT ?`)
+    .bind(env.UID, channel, limit).all<{ direction: string; body: string }>();
   return results.reverse().map((m) => ({ role: m.direction === 'in' ? 'user' : 'assistant', content: m.body.slice(0, 600) }));
 }
 
@@ -397,7 +397,7 @@ export function aiStream(env: Env, question: string, channel: string, onDone: (t
           question = (await transcribeAudio(env, opts.audio, opts.mime)).trim();
           send({ t: 'heard', d: question });
           if (!question) { send({ t: 'done', text: '', say: '', done: [], empty: true }); ctrl.close(); return; }
-          await env.DB.prepare('INSERT INTO messages (direction, channel, body) VALUES (?, ?, ?)').bind('in', channel, `🎤 ${question}`).run();
+          await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, 'in', channel, `🎤 ${question}`).run();
         }
         const messages = await preparePrompt(env, question, channel, !!opts.voice);
         const { engine, deltas } = await llmStream(env, messages, { maxTokens: opts.voice ? 260 : 700, temperature: 0.4 });

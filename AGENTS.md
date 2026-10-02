@@ -3,7 +3,7 @@
 > Lee esto completo antes de tocar el código. Está escrito para que cualquier IA (Claude, Codex, Cursor, Gemini, Copilot…) entienda el proyecto en minutos.
 
 ## 1. Qué es Rumbo
-App personal (PWA) de **Manuel**, estudiante de **Ingeniería en Software en la UAPA** (Universidad Abierta Para Adultos, República Dominicana). La UAPA organiza las carreras en **trimestres** (no cuatrimestres).
+App (PWA) de **Manuel** y sus compañeros (multiusuario por invitación; ver 6e). Manuel (el administrador) es estudiante de **Ingeniería en Software en la UAPA** (Universidad Abierta Para Adultos, República Dominicana). La UAPA organiza las carreras en **trimestres** (no cuatrimestres).
 
 Rumbo junta en un solo lugar:
 - **Tareas** del EVA (Moodle de la UAPA): pendientes, entregadas, instrucciones, plan semanal, modo enfoque (Pomodoro).
@@ -107,6 +107,18 @@ Para probar con datos de ejemplo, carga filas en la D1 **local**; nunca en la re
 - **Proyección del índice**: componente `Projection` en `pages/Asignaturas.tsx` (ponderado por créditos).
 - **Seguridad**: `login_attempts` (5 fallos = 15 min de bloqueo), aviso de cada inicio de sesión, `settings.session_version` para cerrar todas las sesiones (`POST /api/logout-all`).
 - **Ayuda**: `pages/Ayuda.tsx` (FAQ con buscador). Si agregas una función visible, agrega su pregunta aquí.
+
+## 6e. Multiusuario (migración 0009)
+- **Tabla `users`** (id, login = matrícula en minúsculas, name, pass_hash/pass_salt PBKDF2, role admin|user, active). El usuario 1 es Manuel (admin); mientras no tenga contraseña propia entra con el secreto `APP_PASSWORD`. Login vacío = usuario 1.
+- **Invitaciones** (`invites`): el admin las crea en Más → Compañeros (`POST /api/admin/invites`), el enlace es `/#unirme/<código>`, sirve una vez y vence en 14 días. `POST /api/signup` crea la cuenta y copia `DEFAULT_SETTINGS`.
+- **Toda fila de datos lleva `user_id`** (courses, tasks, grades, announcements, payments, pensum, reminders, messages, push_subs). `study_cache` va por `task_id` (se valida que la tarea sea del usuario). **Cada consulta nueva DEBE filtrar por `user_id = env.UID`** y cada INSERT debe poner `user_id`.
+- **`env.UID`**: el middleware de sesión reemplaza `c.env` por `forUser(env, uid)` (src/worker/db.ts). `UID = 0` es el sistema (webhooks antes de saber de quién son, cron global). `forUser` también pone los secretos personales: `MOODLE_TOKEN` ← ajuste `moodle_token`, `WA_MY_NUMBER` ← `wa_number`, `CALLMEBOT_APIKEY` ← `callmebot_apikey` (el usuario 1 conserva los secretos de Cloudflare como respaldo).
+- **Ajustes**: en la tabla `settings` los personales se guardan como `u<id>:clave`; `getSetting/setSetting` lo hacen solos. Los globales (sin prefijo) están en `GLOBAL` de db.ts (`vapid_keys`, `llm_*`, `tg_secret`…). `sent_log` también va con prefijo por usuario.
+- **Webhooks y enlaces públicos** buscan al dueño con `userBySetting()`: calendario (`calendar_token`), widget (`widget_token`), correo (`mail_token`), Telegram (`tg_link_code` / `tg_chat_id`), WhatsApp (`wa_number`).
+- **EVA de cada quien**: `POST /api/eva/connect` (matrícula + contraseña → `login/token.php`, la contraseña no se guarda) o `POST /api/eva/token` (enlace `moodlemobile://token=…` del flujo oficial `launch.php`). El token se prueba antes de guardarlo.
+- **Cron**: recorre los usuarios activos; el EVA se sincroniza a UN usuario por vuelta (el más atrasado) por el límite de ~50 llamadas externas del plan gratis. Alertas de IA y copias completas solo al admin.
+- **Pantallas**: `pages/Conectar.tsx` (Conexiones paso a paso), `pages/Companeros.tsx` (solo admin), registro `Signup` en App.tsx. `src/web/me.ts` guarda el usuario actual (`isAdmin()`).
+- Prueba de aislamiento rápida: entra como dos usuarios y verifica que `/api/tasks`, `/api/courses`, `/api/announcements` del segundo vengan vacíos y que no pueda editar ids del primero.
 
 ## 7. Convenciones de código
 - TypeScript estricto, componentes funcionales, sin librerías nuevas salvo que sea imprescindible.

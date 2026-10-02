@@ -1,4 +1,7 @@
 export interface Env {
+  // Usuario de esta petición o de esta vuelta del cron (0 = el sistema, sin usuario). Lo pone forUser().
+  UID: number;
+  ROLE?: 'admin' | 'user';
   DB: D1Database;
   ASSETS: Fetcher;
   AI: Ai;

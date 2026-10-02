@@ -5,12 +5,13 @@ import { applyTheme } from '../theme';
 import { Modal, PageHead, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
+import { me } from '../me';
 
-type SettingsRes = {
+export type SettingsRes = {
   settings: Record<string, string>;
   status: {
     eva: { configured: boolean; lastSync: number | null; error: string; user: string };
-    whatsapp: { configured: boolean; windowOpen: boolean; lastInbound: number | null; lastError: string };
+    whatsapp: { server: boolean; number: string; configured: boolean; windowOpen: boolean; lastInbound: number | null; lastError: string };
     callmebot: { configured: boolean };
     mail: { connected: boolean; lastAt: number | null };
     telegram: { configured: boolean; connected: boolean; username: string };
@@ -19,6 +20,8 @@ type SettingsRes = {
     push: { devices: number };
     voice: { ready: boolean };
     waLink?: string;
+    career: string;
+    role?: 'admin' | 'user';
   };
 };
 
@@ -61,7 +64,7 @@ function instalar() {
 }
 `;
 
-function MailCard({ connected, lastAt, onChanged }: { connected: boolean; lastAt: number | null; onChanged: () => void }) {
+export function MailCard({ connected, lastAt, onChanged }: { connected: boolean; lastAt: number | null; onChanged: () => void }) {
   const [setup, setSetup] = useState<{ token: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
   async function open() {
@@ -186,7 +189,7 @@ function ThemeCard() {
 }
 
 /** Telegram: conversa con Rumbo y recibe todo sin límite de 24 h. */
-function TelegramCard({ st, onChanged }: { st: { configured: boolean; connected: boolean; username: string }; onChanged: () => void }) {
+export function TelegramCard({ st, onChanged }: { st: { configured: boolean; connected: boolean; username: string }; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
@@ -227,7 +230,7 @@ function TelegramCard({ st, onChanged }: { st: { configured: boolean; connected:
 }
 
 /** Calendario: tus entregas en Google Calendar o en el calendario del iPhone. */
-function CalendarCard({ connected, onChanged }: { connected: boolean; onChanged: () => void }) {
+export function CalendarCard({ connected, onChanged }: { connected: boolean; onChanged: () => void }) {
   const [links, setLinks] = useState<{ url: string; webcal: string; google: string } | null>(null);
   async function open() {
     try { setLinks(await api<{ url: string; webcal: string; google: string }>('/calendar/setup', { method: 'POST' })); onChanged(); }
@@ -257,7 +260,7 @@ function CalendarCard({ connected, onChanged }: { connected: boolean; onChanged:
 
 type WidgetInfo = { link: string; apk: string; preview: { mood: string; headline: string; sub: string; streak: number; pending: number; tasks: { title: string; when: string; urgent: boolean }[]; updated: string } };
 /** Widget para la pantalla de inicio del teléfono (estilo Duolingo). */
-function WidgetCard() {
+export function WidgetCard() {
   const [info, setInfo] = useState<WidgetInfo | null>(null);
   async function open() {
     haptic(8);
@@ -317,13 +320,13 @@ function BackupCard() {
     <>
       <div className="toggle">
         <span className="set-ic green"><Icon name="check" size={18} /></span>
-        <div className="t"><b>Copias de seguridad</b><span>{!data ? 'Revisando…' : last ? `Última: ${when(last.at)} · se hace sola cada semana` : 'Todavía no hay copias: se hará sola esta semana'}</span></div>
+        <div className="t"><b>Copias de seguridad</b><span>{!data ? 'Revisando…' : !data.enabled ? 'Se hace sola cada semana · descarga tus datos cuando quieras' : last ? `Última: ${when(last.at)} · se hace sola cada semana` : 'Todavía no hay copias: se hará sola esta semana'}</span></div>
         <button className="btn soft sm" onClick={() => { haptic(6); setOpen(true); }}>Ver</button>
       </div>
       {open && (
         <Modal title="Copias de seguridad" onClose={() => setOpen(false)}>
-          <p className="hint"><Icon name="alert" size={16} />Rumbo guarda una copia de todos tus datos (tareas, notas, pagos, avisos y lo que la IA recuerda) cada semana. Se conservan las últimas 8. Tu código también se respalda solo en GitHub cada vez que se publica algo nuevo.</p>
-          <button className="btn primary lg block" onClick={now} disabled={busy || !data?.enabled}><Icon name="sync" size={18} />{busy ? 'Haciendo la copia…' : 'Hacer una copia ahora'}</button>
+          <p className="hint"><Icon name="alert" size={16} />Rumbo guarda una copia de todos tus datos (tareas, notas, pagos, avisos y lo que la IA recuerda) cada semana. Se conservan las últimas 8.</p>
+          {data?.enabled && <button className="btn primary lg block" onClick={now} disabled={busy}><Icon name="sync" size={18} />{busy ? 'Haciendo la copia…' : 'Hacer una copia ahora'}</button>}
           <a className="btn line block" href="/api/backups/download" download><Icon name="download" size={18} />Descargar mis datos de hoy</a>
           {data && data.list.length > 0 && (
             <div className="backup-list" role="list" aria-label="Copias guardadas">
@@ -448,6 +451,39 @@ function PushCard({ devices, alsoWa, onSave, onChanged }: { devices: number; als
   );
 }
 
+/** Mi cuenta: quién soy y cambiar la contraseña de Rumbo. */
+function AccountCard() {
+  const u = me();
+  const [open, setOpen] = useState(false);
+  const [cur, setCur] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true);
+    try { await api('/me/password', { method: 'POST', body: { current: cur, password: pw } }); toast('Contraseña cambiada ✅'); setOpen(false); setCur(''); setPw(''); }
+    catch (e2) { toast((e2 as Error).message, 'err'); }
+    setBusy(false);
+  }
+  return (
+    <div className="card">
+      <div className="toggle">
+        <span className="set-ic blue" aria-hidden="true"><Icon name="users" size={18} /></span>
+        <div className="t"><b>{u?.name || 'Tu cuenta'}</b><span>Entras con: {u?.login || '—'}</span></div>
+        <button className="btn soft sm" onClick={() => setOpen(true)}>Cambiar contraseña</button>
+      </div>
+      {open && (
+        <Modal title="Cambiar contraseña" onClose={() => setOpen(false)}>
+          <form className="form-stack" onSubmit={save}>
+            <div className="field"><label htmlFor="pw-c">Contraseña actual</label><input id="pw-c" className="input" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} required /></div>
+            <div className="field"><label htmlFor="pw-n">Contraseña nueva (8 o más)</label><input id="pw-n" className="input" type="password" autoComplete="new-password" minLength={8} value={pw} onChange={(e) => setPw(e.target.value)} required /></div>
+            <button className="btn primary lg block" type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar'}</button>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 export function Ajustes({ onLogout }: { onLogout: () => void }) {
   const q = useLoad(() => api<SettingsRes>('/settings'));
   const [busy, setBusy] = useState('');
@@ -483,6 +519,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
   }
   const Status = ({ ok, text }: { ok: boolean; text: string }) => <span className={`pill ${ok ? 'green' : 'gray'}`}><i className={`led ${ok ? 'on' : ''}`} />{text}</span>;
   const summaryOn = s.summary_enabled !== '0';
+  const admin = st.role === 'admin';
 
   return (
     <>
@@ -491,6 +528,10 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
       </PageHead>
       <section className="grid2 stagger">
         <div className="col">
+          <div className="section">
+            <div className="section-head"><h3>Mi cuenta</h3></div>
+            <AccountCard />
+          </div>
           <div className="section">
             <div className="section-head"><h3>Notificaciones</h3></div>
             <PushCard devices={st.push.devices} alsoWa={s.push_also_wa !== '0'} onSave={save} onChanged={q.reload} />
@@ -541,16 +582,16 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
 
         <div className="col">
           <div className="section">
-            <div className="section-head"><h3>Conexiones</h3></div>
+            <div className="section-head"><h3>Conexiones</h3><a className="link-btn" href="#conectar">Paso a paso</a></div>
             <div className="card">
               <div className="toggle">
                 <span className="set-ic violet"><Icon name="book" size={18} /></span>
-                <div className="t"><b>EVA UAPA (Moodle)</b><span>{st.eva.configured ? (st.eva.lastSync ? `Última sincronización: ${dateLabel(st.eva.lastSync)}${st.eva.user ? ' · ' + st.eva.user : ''}` : 'Configurado, sin sincronizar aún') : 'Falta el secreto MOODLE_TOKEN'}</span>{st.eva.error && <span className="t-err">{st.eva.error}</span>}</div>
+                <div className="t"><b>EVA UAPA (Moodle)</b><span>{st.eva.configured ? (st.eva.lastSync ? `Última sincronización: ${dateLabel(st.eva.lastSync)}${st.eva.user ? ' · ' + st.eva.user : ''}` : 'Configurado, sin sincronizar aún') : 'Sin conectar: toca «Paso a paso» arriba.'}</span>{st.eva.error && <span className="t-err">{st.eva.error}</span>}</div>
                 <Status ok={st.eva.configured && !st.eva.error} text={st.eva.configured ? (st.eva.error ? 'Con error' : 'Conectado') : 'Sin configurar'} />
               </div>
               <div className="toggle">
                 <span className="set-ic green"><Icon name="chat" size={18} /></span>
-                <div className="t"><b>WhatsApp (Meta)</b><span>{st.whatsapp.configured ? (st.whatsapp.windowOpen ? 'Ventana de 24 h abierta: tus resúmenes llegan por aquí' : 'Ventana cerrada: escríbele "hoy" al asistente para reabrirla') : 'Faltan los secretos WA_*'}</span>{st.whatsapp.lastError && <span className="t-err">Último error: {st.whatsapp.lastError}</span>}</div>
+                <div className="t"><b>WhatsApp</b><span>{st.whatsapp.configured ? (st.whatsapp.windowOpen ? 'Ventana de 24 h abierta: tus resúmenes llegan por aquí' : 'Ventana cerrada: escríbele "hoy" al asistente para reabrirla') : st.whatsapp.server ? 'Falta tu número: ponlo en «Paso a paso».' : 'No disponible por ahora'}</span>{admin && st.whatsapp.lastError && <span className="t-err">Último error: {st.whatsapp.lastError}</span>}</div>
                 <Status ok={st.whatsapp.configured} text={st.whatsapp.configured ? (st.whatsapp.windowOpen ? 'Activo' : 'En espera') : 'Sin configurar'} />
               </div>
               <div className="toggle">
@@ -561,7 +602,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
               <WidgetCard />
               <BackupCard />
               <MailCard connected={st.mail.connected} lastAt={st.mail.lastAt} onChanged={q.reload} />
-              <AiEnginesCard engines={st.ai.engines} />
+              {admin && <AiEnginesCard engines={st.ai.engines} />}
               <TelegramCard st={st.telegram} onChanged={q.reload} />
               <CalendarCard connected={st.calendar.connected} onChanged={q.reload} />
               {st.callmebot.configured && (
@@ -579,8 +620,8 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
             <div className="card actions-list">
               <button className="action-row" disabled={!!busy} onClick={() => action('test', '/notify/test')}><span className="set-ic blue"><Icon name="send" size={18} /></span><b>{busy === 'test' ? 'Enviando…' : 'Enviar mensaje de prueba'}</b><Icon name="chevron" size={18} /></button>
               <button className={`action-row ${busy === 'sync' ? 'spinning' : ''}`} disabled={!!busy} onClick={() => action('sync', '/sync')}><span className="set-ic violet"><Icon name="sync" size={18} /></span><b>{busy === 'sync' ? 'Sincronizando…' : 'Sincronizar EVA ahora'}</b><Icon name="chevron" size={18} /></button>
-              {st.whatsapp.configured && <button className={`action-row ${busy === 'repair' ? 'spinning' : ''}`} disabled={!!busy} onClick={repair}><span className="set-ic green"><Icon name="sync" size={18} /></span><b>{busy === 'repair' ? 'Revisando WhatsApp…' : 'Revisar y reparar WhatsApp'}</b><Icon name="chevron" size={18} /></button>}
-              <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>
+              {admin && st.whatsapp.configured && <button className={`action-row ${busy === 'repair' ? 'spinning' : ''}`} disabled={!!busy} onClick={repair}><span className="set-ic green"><Icon name="sync" size={18} /></span><b>{busy === 'repair' ? 'Revisando WhatsApp…' : 'Revisar y reparar WhatsApp'}</b><Icon name="chevron" size={18} /></button>}
+              {admin && <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>}
               <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
               <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>
             </div>

@@ -36,8 +36,8 @@ const FRASES = [
 
 /** Racha: días seguidos (hasta hoy o ayer) en los que entregaste o completaste algo. */
 export async function streak(env: Env): Promise<number> {
-  const { results } = await env.DB.prepare(`SELECT COALESCE(submitted_at, updated_at) AS t FROM tasks WHERE status = 'done' AND COALESCE(submitted_at, updated_at) > ?`)
-    .bind(nowSec() - 120 * 86400).all<{ t: number }>();
+  const { results } = await env.DB.prepare(`SELECT COALESCE(submitted_at, updated_at) AS t FROM tasks WHERE user_id = ? AND status = 'done' AND COALESCE(submitted_at, updated_at) > ?`)
+    .bind(env.UID, nowSec() - 120 * 86400).all<{ t: number }>();
   const days = new Set(results.map((r) => dayKey(localDate(env, r.t))));
   let n = 0;
   let d = localDate(env);
@@ -57,9 +57,9 @@ export async function widgetData(env: Env): Promise<WidgetData> {
   const dueToday = pending.filter((t) => t.due_at! >= now && t.due_at! <= endOfToday);
   const soon = pending.filter((t) => t.due_at! >= now && t.due_at! <= now + 3 * 86400);
   const racha = await streak(env);
-  const { results: rem } = await env.DB.prepare('SELECT text, remind_at FROM reminders WHERE sent = 0 AND remind_at >= ? ORDER BY remind_at LIMIT 3')
-    .bind(now - 3600).all<{ text: string; remind_at: number }>();
-  const doneWeek = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND COALESCE(submitted_at, updated_at) >= ?`).bind(now - 7 * 86400).first<{ n: number }>())?.n || 0;
+  const { results: rem } = await env.DB.prepare('SELECT text, remind_at FROM reminders WHERE user_id = ? AND sent = 0 AND remind_at >= ? ORDER BY remind_at LIMIT 3')
+    .bind(env.UID, now - 3600).all<{ text: string; remind_at: number }>();
+  const doneWeek = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'done' AND COALESCE(submitted_at, updated_at) >= ?`).bind(env.UID, now - 7 * 86400).first<{ n: number }>())?.n || 0;
   const seed = today.getUTCDate() + today.getUTCHours();
   const hi = name ? `, ${name}` : '';
 

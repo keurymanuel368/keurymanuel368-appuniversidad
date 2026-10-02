@@ -12,18 +12,19 @@ type Stats = { done: number; streak: number; perfect: number; honorCourses: numb
 
 async function stats(env: Env): Promise<Stats> {
   const now = nowSec();
-  const one = async (sql: string, ...b: unknown[]) => Number((await env.DB.prepare(sql).bind(...b).first<{ n: number }>())?.n || 0);
+  // Cada consulta lleva «user_id = ?» como primer filtro: el id va primero en los parámetros.
+  const one = async (sql: string, ...b: unknown[]) => Number((await env.DB.prepare(sql).bind(env.UID, ...b).first<{ n: number }>())?.n || 0);
   return {
-    done: await one(`SELECT COUNT(*) AS n FROM tasks WHERE status = 'done'`),
+    done: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'done'`),
     streak: await streak(env),
-    perfect: await one(`SELECT COUNT(*) AS n FROM grades WHERE grade IS NOT NULL AND grade_max > 0 AND grade >= grade_max`),
-    honorCourses: await one(`SELECT COUNT(*) AS n FROM (SELECT AVG(g.grade * 100.0 / g.grade_max) AS a FROM grades g JOIN courses c ON c.id = g.course_id WHERE g.grade IS NOT NULL AND g.grade_max > 0 GROUP BY g.course_id HAVING COUNT(*) >= 2 AND a >= 90)`),
-    early: await one(`SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND due_at IS NOT NULL AND submitted_at IS NOT NULL AND submitted_at <= due_at - 86400`),
-    weekDone: await one(`SELECT COUNT(*) AS n FROM tasks WHERE due_at BETWEEN ? AND ? AND status = 'done'`, now - 7 * 86400, now),
-    weekTotal: await one(`SELECT COUNT(*) AS n FROM tasks WHERE due_at BETWEEN ? AND ?`, now - 7 * 86400, now),
-    chats: await one(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'in' AND channel = 'app'`),
-    focus: await one(`SELECT COALESCE(SUM(focus_minutes), 0) AS n FROM tasks`),
-    high: await one(`SELECT COUNT(*) AS n FROM grades WHERE grade IS NOT NULL AND grade_max > 0 AND grade * 100.0 / grade_max >= 90`),
+    perfect: await one(`SELECT COUNT(*) AS n FROM grades WHERE user_id = ? AND grade IS NOT NULL AND grade_max > 0 AND grade >= grade_max`),
+    honorCourses: await one(`SELECT COUNT(*) AS n FROM (SELECT AVG(g.grade * 100.0 / g.grade_max) AS a FROM grades g JOIN courses c ON c.id = g.course_id WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.grade_max > 0 GROUP BY g.course_id HAVING COUNT(*) >= 2 AND a >= 90)`),
+    early: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'done' AND due_at IS NOT NULL AND submitted_at IS NOT NULL AND submitted_at <= due_at - 86400`),
+    weekDone: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND due_at BETWEEN ? AND ? AND status = 'done'`, now - 7 * 86400, now),
+    weekTotal: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND due_at BETWEEN ? AND ?`, now - 7 * 86400, now),
+    chats: await one(`SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND direction = 'in' AND channel = 'app'`),
+    focus: await one(`SELECT COALESCE(SUM(focus_minutes), 0) AS n FROM tasks WHERE user_id = ?`),
+    high: await one(`SELECT COUNT(*) AS n FROM grades WHERE user_id = ? AND grade IS NOT NULL AND grade_max > 0 AND grade * 100.0 / grade_max >= 90`),
   };
 }
 

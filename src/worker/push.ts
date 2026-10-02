@@ -88,7 +88,7 @@ export type PushResult = { devices: number; sent: number; error?: string };
 
 /** Envía la notificación a todos los dispositivos suscritos. Borra los que el navegador dio de baja. */
 export async function sendPushAll(env: Env, msg: PushMessage): Promise<PushResult> {
-  const { results } = await env.DB.prepare('SELECT id, endpoint, p256dh, auth FROM push_subs').all<{ id: number; endpoint: string; p256dh: string; auth: string }>();
+  const { results } = await env.DB.prepare('SELECT id, endpoint, p256dh, auth FROM push_subs WHERE user_id = ?').bind(env.UID).all<{ id: number; endpoint: string; p256dh: string; auth: string }>();
   // El servicio de push acepta como máximo ~4 KB; recortamos el cuerpo con margen.
   const payload = enc.encode(JSON.stringify({ ...msg, body: msg.body.length > 1200 ? msg.body.slice(0, 1197) + '…' : msg.body }));
   let sent = 0;

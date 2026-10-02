@@ -18,12 +18,17 @@ export function waConfigured(env: Env): boolean {
   return !!(env.WA_PHONE_NUMBER_ID && env.WA_TOKEN && env.WA_MY_NUMBER);
 }
 
+/** El número del asistente (de Rumbo, compartido por todos) está listo para recibir mensajes. */
+export function waServerReady(env: Env): boolean {
+  return !!(env.WA_PHONE_NUMBER_ID && env.WA_TOKEN);
+}
+
 export function callmebotConfigured(env: Env): boolean {
   return !!(env.CALLMEBOT_APIKEY && env.WA_MY_NUMBER);
 }
 
 async function log(env: Env, direction: 'in' | 'out', channel: string, body: string) {
-  await env.DB.prepare('INSERT INTO messages (direction, channel, body) VALUES (?, ?, ?)').bind(direction, channel, body.slice(0, 4000)).run();
+  await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, direction, channel, body.slice(0, 4000)).run();
 }
 
 export async function logInbound(env: Env, body: string) {
@@ -71,7 +76,7 @@ export async function waWindowOpen(env: Env): Promise<boolean> {
 
 /** Enlace wa.me al número del asistente con "hoy" ya escrito (para reabrir la ventana de 24 h de un toque). */
 export async function waChatLink(env: Env, text = 'hoy'): Promise<string | undefined> {
-  if (!waConfigured(env)) return undefined;
+  if (!waServerReady(env)) return undefined;
   let num = await getSetting(env, 'wa_display_number');
   if (!num) {
     const res = await fetch(`${GRAPH}/${env.WA_PHONE_NUMBER_ID}?fields=display_phone_number`, { headers: { Authorization: `Bearer ${env.WA_TOKEN}` } });
@@ -121,14 +126,14 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
     const title = opts.title || lines[0].slice(0, 80);
     const body = opts.pushBody || (opts.title ? lines : lines.slice(1)).join('\n').trim() || lines[0];
     // Número para el icono de la app (avisos sin leer + tareas de hoy o vencidas).
-    const cnt = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM announcements WHERE read = 0 AND (source IN ('avisos', 'correo') OR kind IN ('pago', 'evento'))
-        AND id > COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'news_seen_id'), 0))
-      + (SELECT COUNT(*) FROM tasks WHERE status = 'pending' AND due_at IS NOT NULL AND due_at < ? AND due_at > ?) AS n`).bind(nowSec() + 86400, nowSec() - 3 * 86400).first<{ n: number }>().catch(() => null);
+    const cnt = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM announcements WHERE user_id = ?1 AND read = 0 AND (source IN ('avisos', 'correo') OR kind IN ('pago', 'evento'))
+        AND id > COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key = ?2), 0))
+      + (SELECT COUNT(*) FROM tasks WHERE user_id = ?1 AND status = 'pending' AND due_at IS NOT NULL AND due_at < ?3 AND due_at > ?4) AS n`).bind(env.UID, `u${env.UID}:news_seen_id`, nowSec() + 86400, nowSec() - 3 * 86400).first<{ n: number }>().catch(() => null);
     const p = await sendPushAll(env, { title, body, tag: opts.tag, url: opts.url || '/#inicio', count: cnt?.n ?? 0, wa: waOpen ? undefined : await waChatLink(env).catch(() => undefined) });
     if (p.sent) channels.push('push');
     else if (p.error) errors.push('Notificación: ' + p.error);
   }
 
   if (channels.length) return { ok: true, channels };
-  return { ok: false, channels, error: errors.join(' · ') || 'No hay ningún canal activo: activa las notificaciones en Ajustes o escríbele al asistente por WhatsApp.' };
+  return { ok: false, channels, error: errors.join(' · ') || 'No hay ningún canal activo: activa las notificaciones en Ajustes → Conexiones.' };
 }

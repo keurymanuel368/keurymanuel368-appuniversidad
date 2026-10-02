@@ -1,6 +1,6 @@
 // Tareas programadas: se ejecutan cada 30 minutos (un solo Cron Trigger, gratis).
 import type { Env } from './env';
-import { getSettings, markSent, unmarkSent, wasSent } from './db';
+import { activeUsers, forUser, getSettings, markSent, unmarkSent, wasSent } from './db';
 import { payWindow, periodLabel, summaryShort, summaryText } from './data';
 import { syncEva } from './moodle';
 import { sendToMe } from './notify';
@@ -10,7 +10,38 @@ import { checkHealth } from './health';
 import { checkAchievements } from './achievements';
 import { cuandoTexto, localDate, nowSec, ymd } from './time';
 
+/**
+ * Una vuelta del cron para todos los usuarios. El plan gratis de Cloudflare permite ~50 llamadas externas
+ * por ejecución: la sincronización del EVA (la que más llamadas hace) se da a UN usuario por vuelta, el que
+ * más tiempo lleva esperando; los avisos (resumen, entregas, pagos) se revisan para todos.
+ */
 export async function runScheduled(env: Env): Promise<string[]> {
+  const log: string[] = [];
+  const users = await activeUsers(env);
+  const envs = await Promise.all(users.map((u) => forUser(env, u.id, u.role)));
+  // A quién le toca el EVA: con token y más atrasado respecto a su intervalo.
+  let syncUid = 0, worst = 0;
+  for (const ue of envs) {
+    if (!ue.MOODLE_TOKEN) continue;
+    const s = await getSettings(ue);
+    const late = nowSec() - Number(s.eva_last_sync || 0) - Math.max(1, Number(s.eva_sync_hours || 2)) * 3600;
+    if (late >= -300 && late + 301 > worst) { worst = late + 301; syncUid = ue.UID; }
+  }
+  let backupError: string | undefined;
+  try { if (await backupDue(env)) { const b = await makeBackup(env); log.push(`Copia de seguridad: ${b.rows} filas`); } }
+  catch (e) { backupError = (e as Error).message; log.push('Copia de seguridad: ' + backupError); }
+  for (const ue of envs) {
+    try {
+      const l = await runForUser(ue, ue.UID === syncUid, ue.ROLE === 'admin' ? backupError : undefined);
+      if (l.length) log.push(`[${ue.UID}] ${l.join(' · ')}`);
+    } catch (e) { log.push(`[${ue.UID}] error: ${(e as Error).message}`); }
+  }
+  // Limpieza: registros de envío de más de 90 días
+  await env.DB.prepare('DELETE FROM sent_log WHERE sent_at < ?').bind(nowSec() - 90 * 86400).run();
+  return log;
+}
+
+async function runForUser(env: Env, syncNow: boolean, backupError?: string): Promise<string[]> {
   const log: string[] = [];
   const s = await getSettings(env);
   const now = nowSec();
@@ -18,8 +49,7 @@ export async function runScheduled(env: Env): Promise<string[]> {
   const today = ymd(local);
 
   // 1) Sincronizar el EVA cada N horas
-  const every = Math.max(1, Number(s.eva_sync_hours || 2)) * 3600;
-  if (env.MOODLE_TOKEN && now - Number(s.eva_last_sync || 0) >= every - 300) {
+  if (syncNow && env.MOODLE_TOKEN) {
     try {
       const r = await syncEva(env);
       log.push(`EVA: ${r.tasksNew} nuevas, ${r.tasksUpdated} actualizadas`);
@@ -49,7 +79,7 @@ export async function runScheduled(env: Env): Promise<string[]> {
   if (thresholds.length) {
     const maxH = thresholds[thresholds.length - 1];
     const { results } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-      WHERE t.status = 'pending' AND t.due_at > ? AND t.due_at <= ?`).bind(now, now + maxH * 3600).all<{ id: number; title: string; due_at: number; course: string | null }>();
+      WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at > ? AND t.due_at <= ?`).bind(env.UID, now, now + maxH * 3600).all<{ id: number; title: string; due_at: number; course: string | null }>();
     for (const t of results) {
       const left = t.due_at - now;
       const h = thresholds.find((x) => left <= x * 3600);
@@ -82,7 +112,7 @@ export async function runScheduled(env: Env): Promise<string[]> {
   }
 
   // 5) Recordatorios personales ("recuérdame…")
-  const { results: rem } = await env.DB.prepare('SELECT id, text FROM reminders WHERE sent = 0 AND remind_at <= ? ORDER BY remind_at LIMIT 10').bind(now + 60).all<{ id: number; text: string }>();
+  const { results: rem } = await env.DB.prepare('SELECT id, text FROM reminders WHERE user_id = ? AND sent = 0 AND remind_at <= ? ORDER BY remind_at LIMIT 10').bind(env.UID, now + 60).all<{ id: number; text: string }>();
   for (const r0 of rem) {
     const r = await sendToMe(env, `*Recordatorio:* ${r0.text}`, { title: '⏰ Recordatorio', tag: `rem-${r0.id}`, type: 'tareas' });
     if (r.ok) await env.DB.prepare('UPDATE reminders SET sent = 1 WHERE id = ?').bind(r0.id).run();
@@ -96,7 +126,7 @@ export async function runScheduled(env: Env): Promise<string[]> {
   const studyHour = Number(s.study_hour || 19);
   if (s.study_enabled !== '0' && local.getUTCHours() >= studyHour && local.getUTCHours() < 23 && await markSent(env, `study:${today}`)) {
     const { results: todo } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-      WHERE t.status = 'pending' AND t.due_at IS NOT NULL AND t.due_at > ? AND t.due_at <= ? ORDER BY t.due_at LIMIT 3`).bind(now - 3 * 86400, now + 2 * 86400).all<{ id: number; title: string; due_at: number; course: string | null }>();
+      WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at IS NOT NULL AND t.due_at > ? AND t.due_at <= ? ORDER BY t.due_at LIMIT 3`).bind(env.UID, now - 3 * 86400, now + 2 * 86400).all<{ id: number; title: string; due_at: number; course: string | null }>();
     if (todo.length) {
       const lines = todo.map((t) => `• ${t.title}${t.course ? ' (' + t.course + ')' : ''} · ${t.due_at < now ? 'atrasada' : 'vence ' + cuandoTexto(env, t.due_at)}`);
       const r = await sendToMe(env, `*📚 Hora de estudiar*\n${lines.join('\n')}\n\nTip: abre la tarea y toca «Estudiar con IA».`, { title: `📚 Hora de estudiar: ${todo.length === 1 ? todo[0].title : todo.length + ' tareas'}`, pushBody: lines.join('\n'), tag: 'study', url: todo.length === 1 ? `/#tareas/${todo[0].id}` : '/#tareas', type: 'tareas' });
@@ -107,15 +137,8 @@ export async function runScheduled(env: Env): Promise<string[]> {
   // Logros nuevos
   try { const got = await checkAchievements(env); if (got.length) log.push('Logros: ' + got.join(', ')); } catch (e) { log.push('Logros: ' + (e as Error).message); }
 
-  // Copia de seguridad semanal de tus datos
-  let backupError: string | undefined;
-  try { if (await backupDue(env)) { const b = await makeBackup(env); log.push(`Copia de seguridad: ${b.rows} filas`); } }
-  catch (e) { backupError = (e as Error).message; log.push('Copia de seguridad: ' + backupError); }
-
   // Alertas si algo dejó de funcionar (EVA, IA, copias)
   try { log.push(...(await checkHealth(env, { backupError }))); } catch (e) { log.push('Salud: ' + (e as Error).message); }
 
-  // Limpieza: registros de envío de más de 90 días
-  await env.DB.prepare('DELETE FROM sent_log WHERE sent_at < ?').bind(now - 90 * 86400).run();
   return log;
 }

@@ -48,12 +48,13 @@ export function normalizeStudy(mode: StudyMode, j: Record<string, unknown> | nul
 }
 
 export async function study(env: Env, taskId: number, mode: StudyMode, fresh = false): Promise<StudyResult> {
+  // Primero se comprueba que la tarea sea tuya (la caché va por tarea).
+  const [t] = await listTasks(env, { id: taskId, limit: 1 });
+  if (!t) throw new Error('Tarea no encontrada');
   if (!fresh) {
     const hit = await env.DB.prepare('SELECT content FROM study_cache WHERE task_id = ? AND mode = ?').bind(taskId, mode).first<{ content: string }>();
     if (hit) return JSON.parse(hit.content) as StudyResult;
   }
-  const [t] = await listTasks(env, { id: taskId, limit: 1 });
-  if (!t) throw new Error('Tarea no encontrada');
   const desc = ((t as { description?: string | null }).description || '').slice(0, 3000);
   const ctx = `Asignatura: ${t.course_name || 'Personal'}\nTarea: ${t.title}\n${desc ? `Instrucciones del facilitador:\n${desc}` : 'No hay instrucciones: dedúcelo del título.'}`;
   let result: StudyResult | null = null;

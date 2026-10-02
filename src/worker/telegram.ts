@@ -25,7 +25,7 @@ export async function sendTelegram(env: Env, text: string, chatId?: string | num
   if (!telegramReady(env) || !chat) return { ok: false, error: 'Telegram no está conectado' };
   try {
     await tgCall(env, 'sendMessage', { chat_id: chat, text: toHtml(text).slice(0, 4000), parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
-    await env.DB.prepare('INSERT INTO messages (direction, channel, body) VALUES (?, ?, ?)').bind('out', 'telegram', text.slice(0, 4000)).run();
+    await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, 'out', 'telegram', text.slice(0, 4000)).run();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

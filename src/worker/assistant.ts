@@ -195,25 +195,25 @@ export async function handleCommand(env: Env, input: string, channel = 'app', op
   if (/^(ya )?pague\b/.test(text)) {
     const p = await payWindow(env);
     const monto = text.match(/(\d[\d,.]*)/);
-    await env.DB.prepare('INSERT INTO payments (period, amount, paid_at, note) VALUES (?, ?, ?, ?)')
-      .bind(p.period, monto ? Number(monto[1].replace(/,/g, '')) : (p.amount ? Number(p.amount) : null), now, 'Registrado por WhatsApp').run();
+    await env.DB.prepare('INSERT INTO payments (user_id, period, amount, paid_at, note) VALUES (?, ?, ?, ?, ?)')
+      .bind(env.UID, p.period, monto ? Number(monto[1].replace(/,/g, '')) : (p.amount ? Number(p.amount) : null), now, 'Registrado por WhatsApp').run();
     return `Listo. Registré el pago de la cuota de ${periodLabel(p.period)}. No te enviaré más avisos de este mes.`;
   }
 
   let mt: RegExpMatchArray | null;
   if ((mt = text.match(/^(listo|lista|hecha|hecho|entregada|entregado|terminada|terminado)\s*#?(\d+)$/))) {
     const id = Number(mt[2]);
-    const r = await env.DB.prepare(`UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ? AND status = 'pending'`).bind(now, id).run();
+    const r = await env.DB.prepare(`UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ? AND user_id = ? AND status = 'pending'`).bind(now, id, env.UID).run();
     if (!r.meta.changes) return `No encontré una tarea pendiente con el número #${id}. Escribe "tareas" para ver la lista.`;
-    const t = await env.DB.prepare('SELECT title FROM tasks WHERE id = ?').bind(id).first<{ title: string }>();
+    const t = await env.DB.prepare('SELECT title FROM tasks WHERE id = ? AND user_id = ?').bind(id, env.UID).first<{ title: string }>();
     return `Hecho. Marqué "${t?.title}" como terminada.`;
   }
 
   if (!env.AI && (mt = raw.match(/^\s*(nueva|nueva tarea|agregar|anotar)\s+(.+)$/i))) {
     const when = parseWhen(env, mt[2]);
     const title = when ? when.rest : mt[2].trim();
-    const r = await env.DB.prepare(`INSERT INTO tasks (title, due_at, source, status) VALUES (?, ?, 'manual', 'pending') RETURNING id`)
-      .bind(capitalize(title), when?.at ?? null).first<{ id: number }>();
+    const r = await env.DB.prepare(`INSERT INTO tasks (user_id, title, due_at, source, status) VALUES (?, ?, ?, 'manual', 'pending') RETURNING id`)
+      .bind(env.UID, capitalize(title), when?.at ?? null).first<{ id: number }>();
     return `Agregué la tarea #${r?.id}: "${capitalize(title)}"${when ? ' (' + cuandoTexto(env, when.at) + ')' : ''}.`;
   }
 
@@ -221,7 +221,7 @@ export async function handleCommand(env: Env, input: string, channel = 'app', op
     const when = parseWhen(env, mt[2]);
     if (!when) return 'Dime cuándo. Por ejemplo: "recuérdame mañana 6pm entregar el video".';
     const what = when.rest.replace(/^(que |de )/i, '') || 'tu recordatorio';
-    await env.DB.prepare('INSERT INTO reminders (text, remind_at) VALUES (?, ?)').bind(capitalize(what), when.at).run();
+    await env.DB.prepare('INSERT INTO reminders (user_id, text, remind_at) VALUES (?, ?, ?)').bind(env.UID, capitalize(what), when.at).run();
     const d = localDate(env, when.at);
     return `Listo. Te recordaré "${capitalize(what)}" el ${fechaCorta(d)}, ${horaTexto(d)}`;
   }
