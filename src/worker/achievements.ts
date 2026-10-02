@@ -1,6 +1,7 @@
 // Logros (estilo Duolingo): se calculan con tus datos reales y, una vez ganados, se quedan para siempre.
 // El cron avisa cuando ganas uno nuevo; la app lo celebra con la mascota.
 import type { Env } from './env';
+import { blocks } from './wa';
 import { getSettings, setSetting } from './db';
 import { sendToMe } from './notify';
 import { nowSec } from './time';
@@ -69,7 +70,7 @@ export async function checkAchievements(env: Env): Promise<string[]> {
   // La primera vez se guardan en silencio (no te llega una avalancha por lo que ya tenías).
   if (!firstRun) {
     for (const a of fresh.slice(0, 3)) {
-      await sendToMe(env, `*🏆 ¡Logro desbloqueado!*\n${a.icon} ${a.title}: ${a.desc}`, { title: `🏆 ¡Logro desbloqueado! ${a.icon} ${a.title}`, pushBody: a.desc, tag: `logro-${a.id}`, url: '/#inicio' });
+      await sendToMe(env, blocks('🏆 *¡Logro desbloqueado!*', `${a.icon} *${a.title}*\n_${a.desc}_`, '¡Sigue así! 💪'), { title: `🏆 ¡Logro desbloqueado! ${a.icon} ${a.title}`, pushBody: a.desc, tag: `logro-${a.id}`, url: '/#inicio' });
     }
   }
   return fresh.map((a) => a.id);

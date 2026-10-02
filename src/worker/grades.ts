@@ -4,6 +4,7 @@ import type { Env } from './env';
 import type { SyncResult } from './moodle';
 import { sendToMe } from './notify';
 import { nowSec } from './time';
+import { blocks, courseLabel } from './wa';
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
@@ -35,8 +36,14 @@ export async function notifyGrades(env: Env, grades: SyncResult['newGrades']): P
 
 ` : ''}${g.feedback ? `Comentario del facilitador:
 ${g.feedback}` : 'Sin comentario del facilitador.'}`, nowSec()).run();
-    const r = await sendToMe(env, `*${title}*
-${body}`, {
+    // WhatsApp: la nota grande, el comentario como cita (con «> » WhatsApp lo muestra con la barrita al lado).
+    const quote = g.feedback ? `💬 _Comentario del facilitador:_\n${g.feedback.slice(0, 500).split('\n').filter((l) => l.trim()).map((l) => `> ${l}`).join('\n')}` : '';
+    const r = await sendToMe(env, blocks(
+      `${icon} *${changed ? 'Te cambiaron una nota' : '¡Te calificaron!'}*`,
+      [`*${g.item}*`, `📚 ${courseLabel(g.course)}`, `📊 Nota: *${fmt(g.grade)}/${fmt(g.max)}*${changed ? ` _(antes ${fmt(g.prev!)})_` : ''}`].join('\n'),
+      quote,
+      cheer,
+    ), {
       title, tag: `grade-${g.courseId}-${g.itemId}`, url: task ? `/#tareas/${task.id}` : '/#asignaturas',
       pushBody: `${head}${g.feedback ? ' · 💬 ' + g.feedback.slice(0, 120) : ' · ' + cheer}`, type: 'notas',
     });

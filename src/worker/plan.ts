@@ -3,6 +3,7 @@
 import type { Env } from './env';
 import { getSettings } from './db';
 import { listTasks, payWindow, periodLabel } from './data';
+import { courseLabel } from './wa';
 import { MESES_CORTO, fechaCorta, horaTexto, localDate, localToUnix, nowSec, ymd } from './time';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -30,7 +31,8 @@ export async function weeklyPlan(env: Env): Promise<WeekPlan> {
   const overdue = pending.filter((t) => t.due_at !== null && t.due_at < now && t.due_at > now - 7 * 86400);
   const week = pending.filter((t) => t.due_at !== null && t.due_at >= now && t.due_at <= to).sort((a, b) => a.due_at! - b.due_at!);
   const name = (s.student_name || '').split(' ')[0];
-  const L: string[] = [`*🗓️ Tu plan de la semana${name ? ', ' + name : ''}* (${label})`];
+  const L: string[] = [`🗓️ *Tu plan de la semana${name ? ', ' + name : ''}*`, `_${label}_`];
+  const curso = (t: { course_name: string | null; course_short: string | null }) => { const c = courseLabel(t.course_name, t.course_short); return c ? ` _(${c})_` : ''; };
 
   if (!week.length && !overdue.length) {
     L.push('', 'No tienes entregas esta semana 🎉. Buen momento para adelantar lecturas o repasar.');
@@ -43,15 +45,15 @@ export async function weeklyPlan(env: Env): Promise<WeekPlan> {
       byDay.set(k, [...(byDay.get(k) || []), t]);
     }
     const heavy = [...byDay].sort((a, b) => b[1].length - a[1].length)[0];
-    L.push(`_${week.length} entrega${week.length === 1 ? '' : 's'}${heavy && heavy[1].length > 1 ? ` · el día más cargado es el ${heavy[0].toLowerCase()} (${heavy[1].length})` : ''}_`);
+    L.push('', `📚 *${week.length} entrega${week.length === 1 ? '' : 's'}*${heavy && heavy[1].length > 1 ? ` · el día más cargado es el ${heavy[0].toLowerCase()} (${heavy[1].length})` : ''}`);
 
     if (overdue.length) {
-      L.push('', '*⚠️ Primero, lo atrasado:*');
-      for (const t of overdue.slice(0, 4)) L.push(`• ${t.title}${t.course_short ? ` (${t.course_short})` : ''}`);
+      L.push('', '⚠️ *Primero, lo atrasado*');
+      for (const t of overdue.slice(0, 4)) L.push(`• ${t.title}${curso(t)}`);
     }
     for (const [day, list] of byDay) {
-      L.push('', `*${day}*`);
-      for (const t of list) L.push(`• ${t.title}${t.course_short ? ` (${t.course_short})` : ''} · ${horaTexto(localDate(env, t.due_at!))}`);
+      L.push('', `📍 *${day}*`);
+      for (const t of list) L.push(`• ${t.title}${curso(t)} · ${horaTexto(localDate(env, t.due_at!))}`);
     }
     // Cuándo empezar: dos días antes de cada entrega; si eso ya pasó, lo antes posible.
     const today = ymd(localDate(env, now)), tomorrow = ymd(localDate(env, now + 86400));
@@ -61,8 +63,8 @@ export async function weeklyPlan(env: Env): Promise<WeekPlan> {
       const day = ymd(localDate(env, Math.max(t.due_at! - 2 * 86400, earliest)));
       return { t, when: day === today ? 'hoy' : day === tomorrow ? 'mañana' : fechaCorta(localDate(env, t.due_at! - 2 * 86400)) };
     });
-    L.push('', '*Orden sugerido:*');
-    starts.forEach(({ t, when }, i) => L.push(`${i + 1}. ${t.title} → ${when === 'hoy' ? 'hazla hoy' : 'empieza ' + when}`));
+    L.push('', '✅ *Orden sugerido*');
+    starts.forEach(({ t, when }, i) => L.push(`${i + 1}. ${t.title} → _${when === 'hoy' ? 'hazla hoy' : 'empieza ' + when}_`));
   }
 
   // Pagos que caen esta semana
@@ -70,7 +72,6 @@ export async function weeklyPlan(env: Env): Promise<WeekPlan> {
   if (!p.paid && p.state === 'open' && p.closesAt <= to) L.push('', `💳 La ventana de pago de ${periodLabel(p.period)} cierra el ${fechaCorta(localDate(env, p.closesAt))}.`);
   else if (!p.paid && p.state === 'closed' && p.opensAt <= to) L.push('', `💳 La ventana de pago abre el ${fechaCorta(localDate(env, p.opensAt))}.`);
 
-  L.push('', 'Tip: abre Rumbo → Tareas → Plan para verlo día por día.');
   const short = week.length ? `${week.length} entrega${week.length === 1 ? '' : 's'}${overdue.length ? ` y ${overdue.length} atrasada${overdue.length === 1 ? '' : 's'}` : ''}. Empieza por: ${week[0].title}` : overdue.length ? `${overdue.length} atrasada${overdue.length === 1 ? '' : 's'} por resolver` : 'Semana libre 🎉';
   return { text: L.join('\n'), short, count: week.length };
 }

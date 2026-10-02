@@ -4,7 +4,7 @@ import type { Env } from '../src/worker/env';
 
 const SUN = Date.UTC(2026, 9, 4, 22, 0) ; // domingo 4 oct 2026, 6:00 p. m. en RD
 const t = (id: number, title: string, dueLocal: [number, number, number], course = 'Tecno') => ({
-  id, title, course_short: course, status: 'pending',
+  id, title, course_short: course, course_name: null, status: 'pending',
   due_at: Math.floor(Date.UTC(2026, 9, dueLocal[0], dueLocal[1], dueLocal[2]) / 1000) + 4 * 3600,
 });
 
@@ -25,13 +25,13 @@ describe('weeklyPlan', () => {
     vi.useFakeTimers(); vi.setSystemTime(SUN);
     const { weeklyPlan } = await import('../src/worker/plan');
     const p = await weeklyPlan({ TZ_OFFSET_HOURS: '-4', UID: 2 } as unknown as Env);
-    expect(p.text).toContain('Tu plan de la semana, Ana* (5–11 oct)');
+    expect(p.text).toContain('🗓️ *Tu plan de la semana, Ana*\n_5–11 oct_');
     expect(p.count).toBe(3); // la de la otra semana no entra
-    expect(p.text).toContain('*⚠️ Primero, lo atrasado:*\n• Atrasada (Tecno)');
+    expect(p.text).toContain('⚠️ *Primero, lo atrasado*\n• Atrasada _(Tecno)_');
     expect(p.text).toContain('el día más cargado es el jueves 8 (2)');
     // Orden por fecha, y el quiz de las 8 p. m. antes que la tarea de las 11:59 p. m.
     expect(p.text.indexOf('Quiz 3 →')).toBeLessThan(p.text.indexOf('Tarea 2 →'));
-    expect(p.text).toContain('1. Foro 1 → empieza mañana');
+    expect(p.text).toContain('1. Foro 1 → _empieza mañana_');
     expect(p.text).not.toContain('Para otra semana');
   });
 });

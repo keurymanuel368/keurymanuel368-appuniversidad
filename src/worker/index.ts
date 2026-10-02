@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Env } from './env';
 import { checkPassword, clearSessionCookie, createSessionCookie, hashPassword, randomHex, safeEqual, sessionUser, verifyMetaSignature } from './auth';
-import { courseSummaries, dashboard, listTasks, payWindow, summaryShort, summaryText } from './data';
+import { courseSummaries, dashboard, listTasks, payWindow, summaryAlert, summaryShort, summaryText } from './data';
+import { blocks } from './wa';
 import { DEFAULT_SETTINGS, activeUsers, forUser, getSettings, markSent, setSetting, userBySetting } from './db';
 import { classifyNews, cleanNewsText, syncEva } from './moodle';
 import { CALLMEBOT_ACTIVATE, CALLMEBOT_NUMBER, sendCallMeBot, GRAPH, waServerReady, callmebotConfigured, logInbound, sendToMe, sendWhatsApp, waChatLink, waConfigured, waWindowOpen } from './notify';
@@ -43,7 +44,7 @@ app.post('/api/login', async (c) => {
     .first<{ id: number; role: 'admin' | 'user'; active: number; pass_hash: string | null; pass_salt: string | null }>();
   if (!user || !user.active || !(await checkPassword(c.env, user, password || ''))) {
     await c.env.DB.prepare('INSERT INTO login_attempts (ip, at) VALUES (?, ?)').bind(ip, nowSec()).run().catch(() => {});
-    if (user && fails + 1 >= 5) await sendToMe(await forUser(c.env, user.id, user.role), '*🔐 Bloqueé intentos de entrar a Rumbo*\nAlguien falló la contraseña 5 veces. Si no fuiste tú, no pasa nada: quedó bloqueado 15 minutos.', { title: '🔐 Intentos fallidos de entrar', tag: 'security' }).catch(() => {});
+    if (user && fails + 1 >= 5) await sendToMe(await forUser(c.env, user.id, user.role), blocks('🔐 *Bloqueé intentos de entrar a tu cuenta*', 'Alguien escribió mal tu contraseña *5 veces*. Quedó bloqueado 15 minutos.', '_Si fuiste tú, espera un rato. Si no, cambia tu contraseña en Ajustes → Mi cuenta._'), { title: '🔐 Intentos fallidos de entrar', tag: 'security', url: '/#ajustes' }).catch(() => {});
     const what = user ? 'Contraseña incorrecta' : 'No encontré ese usuario o la contraseña no coincide';
     return c.json({ error: fails + 1 >= 5 ? 'Demasiados intentos. Espera 15 minutos e inténtalo otra vez.' : `${what}. Te quedan ${4 - fails} intento${4 - fails === 1 ? '' : 's'}.` }, 401);
   }
@@ -53,7 +54,7 @@ app.post('/api/login', async (c) => {
   // Aviso de seguridad: alguien (tú) entró desde un dispositivo.
   const ua = c.req.header('user-agent') || '';
   const device = `${/Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iPhone' : /Windows/i.test(ua) ? 'Windows' : /Mac/i.test(ua) ? 'Mac' : 'otro dispositivo'} · ${/Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : 'navegador'}`;
-  c.executionCtx.waitUntil(sendToMe(uenv, `*🔐 Nuevo inicio de sesión en Rumbo*\n${device}. Si no fuiste tú, ve a Ajustes → Cerrar sesión en todos los dispositivos.`, { title: '🔐 Nuevo inicio de sesión', pushBody: `${device}. Si no fuiste tú, cierra todas las sesiones en Ajustes.`, tag: 'security', url: '/#ajustes' }).catch(() => undefined));
+  c.executionCtx.waitUntil(sendToMe(uenv, blocks('🔐 *Nuevo inicio de sesión*', `📱 ${device}`, '_Si no fuiste tú, entra a Ajustes → «Cerrar sesión en todos los dispositivos» y cambia tu contraseña._'), { title: '🔐 Nuevo inicio de sesión', pushBody: `${device}. Si no fuiste tú, cierra todas las sesiones en Ajustes.`, tag: 'security', url: '/#ajustes' }).catch(() => undefined));
   return c.json({ ok: true });
 });
 
@@ -103,7 +104,7 @@ app.post('/api/signup', async (c) => {
   await setSetting(uenv, 'changelog_seen', String(CHANGELOG[0].version)); // las novedades viejas no le importan
   // Avisa a quien invitó: "Ana ya está en Rumbo".
   const inviter = await c.env.DB.prepare('SELECT created_by FROM invites WHERE code = ?').bind(inv.code).first<{ created_by: number }>();
-  if (inviter) c.executionCtx.waitUntil(forUser(c.env, inviter.created_by).then((ie) => sendToMe(ie, `*🎉 ${name} ya está en Rumbo*\nAceptó tu invitación.`, { title: `🎉 ${name} ya está en Rumbo`, tag: 'invite', url: '/#ajustes' })).catch(() => undefined));
+  if (inviter) c.executionCtx.waitUntil(forUser(c.env, inviter.created_by).then((ie) => sendToMe(ie, blocks(`🎉 *${name} ya está en Rumbo*`, 'Aceptó tu invitación y está conectando su EVA.'), { title: `🎉 ${name} ya está en Rumbo`, tag: 'invite', url: '/#companeros' })).catch(() => undefined));
   c.header('Set-Cookie', await createSessionCookie(c.env, row.id));
   return c.json({ ok: true });
 });
@@ -217,7 +218,7 @@ app.post('/api/mail/ingest', async (c) => {
   // Notifica los correos nuevos sobre pagos o eventos (los demás quedan en Avisos sin molestar).
   for (const f of fresh.filter((x) => x.kind === 'pago' || x.kind === 'evento').slice(0, 5)) {
     const icon = f.kind === 'pago' ? '💳' : '🎉';
-    c.executionCtx.waitUntil(sendToMe(c.env, `*${icon} ${f.title}*\n_${f.from}_\n\n${f.body.slice(0, 600)}`,
+    c.executionCtx.waitUntil(sendToMe(c.env, blocks(`${icon} *${f.kind === 'pago' ? 'Correo sobre pagos' : 'Correo sobre un evento'}*${f.from ? ` · _${f.from}_` : ''}`, `*${f.title}*`, f.body.length > 600 ? f.body.slice(0, 600).replace(/\s+\S*$/, '') + '…' : f.body),
       { type: f.kind === 'pago' ? 'pagos' : 'avisos', title: `${icon} ${f.title}`.slice(0, 90), tag: `mail-${f.kind}`, url: `/#avisos/${f.id}`, pushBody: `${f.from ? f.from + ' · ' : ''}${f.body.slice(0, 180)}` }));
   }
   return c.json({ ok: true, received: msgs.length, saved });
@@ -351,7 +352,7 @@ app.post('/api/feedback', async (c) => {
   await c.env.DB.prepare('INSERT INTO feedback (user_id, text, created_at) VALUES (?, ?, ?)').bind(c.env.UID, t, nowSec()).run();
   const who = await c.env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(c.env.UID).first<{ name: string }>();
   if (c.env.ROLE !== 'admin') {
-    c.executionCtx.waitUntil(forUser(c.env, 1, 'admin').then((a) => sendToMe(a, `*💬 ${who?.name || 'Un compañero'} escribió en Rumbo*\n${t.slice(0, 600)}`, { title: `💬 ${who?.name || 'Comentario'}`, pushBody: t.slice(0, 180), tag: 'feedback', url: '/#companeros' })).catch(() => undefined));
+    c.executionCtx.waitUntil(forUser(c.env, 1, 'admin').then((a) => sendToMe(a, blocks(`💬 *${who?.name || 'Un compañero'} te escribió*`, t.slice(0, 600).split('\n').map((l) => `> ${l}`).join('\n')), { title: `💬 ${who?.name || 'Comentario'}`, pushBody: t.slice(0, 180), tag: 'feedback', url: '/#companeros' })).catch(() => undefined));
   }
   return c.json({ ok: true });
 });
@@ -863,7 +864,7 @@ app.post('/api/sync', async (c) => {
   catch (e) { return c.json({ error: (e as Error).message }, 502); }
 });
 
-app.post('/api/notify/test', async (c) => c.json(await sendToMe(c.env, await summaryText(c.env), { title: '☀️ Tu resumen de hoy', tag: 'summary', pushBody: await summaryShort(c.env) })));
+app.post('/api/notify/test', async (c) => c.json(await sendToMe(c.env, await summaryAlert(c.env), { title: '☀️ Tu resumen de hoy', tag: 'summary', url: '/#inicio', pushBody: await summaryShort(c.env) })));
 
 // Diagnóstico y reparación de WhatsApp: suscribe la app a la cuenta de WhatsApp Business para que Meta
 // reenvíe tus mensajes al webhook, y muestra el estado del número (usa el token guardado en el servidor).
@@ -928,7 +929,7 @@ app.post('/api/plan/send', async (c) => {
   return c.json(await sendToMe(c.env, p.text, { title: '🗓️ Tu plan de la semana', pushBody: p.short, tag: 'plan', url: '/#tareas' }));
 });
 
-app.get('/api/summary-preview', async (c) => c.json({ text: await summaryText(c.env) }));
+app.get('/api/summary-preview', async (c) => c.json({ text: await summaryAlert(c.env) }));
 
 // Asistente en la app: guarda la conversación (memoria corta) y responde.
 async function chatApp(env: Env, text: string): Promise<string> {

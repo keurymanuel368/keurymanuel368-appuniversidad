@@ -1,6 +1,7 @@
 // Novedades de Rumbo. Cada vez que se publica algo nuevo, se agrega una entrada ARRIBA con un número
 // de versión mayor: Rumbo lo detecta solo, te manda una notificación "✨ Nuevo en Rumbo" y lo deja en Avisos.
 import type { Env } from './env';
+import { blocks } from './wa';
 import { getSetting, setSetting } from './db';
 import { sendToMe } from './notify';
 import { nowSec } from './time';
@@ -8,6 +9,18 @@ import { nowSec } from './time';
 export type Release = { version: number; date: string; title: string; items: string[] };
 
 export const CHANGELOG: Release[] = [
+  {
+    version: 26,
+    date: '2026-10-02',
+    title: 'WhatsApp con mejor formato',
+    items: [
+      'Todos los avisos por WhatsApp tienen ahora el mismo estilo: título con emoji y negrita, datos en líneas cortas y fáciles de leer.',
+      'Cada aviso trae al final un enlace que abre justo esa tarea, nota o pantalla en Rumbo.',
+      'El resumen del día viene por secciones: lo de hoy, lo atrasado, lo que viene, el pago y tu promedio.',
+      'Los recordatorios dicen cuánto falta, las notas muestran el comentario del facilitador como cita y los montos salen como RD$ 6,500.',
+      'Las asignaturas salen con su nombre, no con el código del EVA.',
+    ],
+  },
   {
     version: 25,
     date: '2026-10-02',
@@ -296,7 +309,7 @@ export async function announceRelease(env: Env): Promise<void> {
     const row = await env.DB.prepare(`INSERT OR IGNORE INTO announcements (user_id, source, ext_id, title, body, author, kind, created_at) VALUES (?, 'rumbo', ?, ?, ?, 'Rumbo', 'novedad', ?) RETURNING id`)
       .bind(env.UID, `v${r.version}`, `✨ ${r.title}`, body, nowSec()).first<{ id: number }>();
     if (r.version === latest.version && row) {
-      await sendToMe(env, `*✨ Nuevo en Rumbo*\n${r.title}\n\n${body}`, { title: '✨ Nuevo en Rumbo', tag: 'release', url: `/#avisos/${row.id}`, pushBody: r.title, type: 'novedades' });
+      await sendToMe(env, blocks('✨ *Nuevo en Rumbo*', `*${r.title}*`, body), { title: '✨ Nuevo en Rumbo', tag: 'release', url: `/#avisos/${row.id}`, pushBody: r.title, type: 'novedades' });
     }
   }
 }

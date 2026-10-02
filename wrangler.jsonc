@@ -28,7 +28,9 @@
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
     "TZ_OFFSET_HOURS": "-4",
-    "MOODLE_URL": "https://eva.uapa.edu.do"
+    "MOODLE_URL": "https://eva.uapa.edu.do",
+    // Dirección pública de la app: va en los enlaces de los avisos por WhatsApp.
+    "APP_URL": "https://rumbo.gestori.workers.dev"
   }
   // Secretos (NO van aquí). Créalos con: npx wrangler secret put NOMBRE
   // APP_PASSWORD, SESSION_SECRET, MOODLE_TOKEN,

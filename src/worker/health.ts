@@ -1,13 +1,14 @@
 // Alertas de salud: te avisa (máximo una vez al día por tipo) cuando algo importante deja de funcionar,
 // para que no te enteres tarde. Las revisa el cron cada 30 minutos.
 import type { Env } from './env';
+import { blocks } from './wa';
 import { getSettings, markSent, setSetting } from './db';
 import { sendToMe } from './notify';
 import { localDate, nowSec, ymd } from './time';
 
 async function alertOnce(env: Env, kind: string, title: string, body: string, url = '/#ajustes') {
   if (!(await markSent(env, `alert:${kind}:${ymd(localDate(env))}`))) return false;
-  await sendToMe(env, `*${title}*\n${body}`, { title, pushBody: body, tag: `alert-${kind}`, url });
+  await sendToMe(env, blocks(`*${title}*`, body), { title, pushBody: body, tag: `alert-${kind}`, url });
   return true;
 }
 

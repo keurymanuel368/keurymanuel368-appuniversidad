@@ -1,7 +1,8 @@
 // Tareas programadas: se ejecutan cada 30 minutos (un solo Cron Trigger, gratis).
 import type { Env } from './env';
 import { activeUsers, forUser, getSettings, markSent, unmarkSent, wasSent } from './db';
-import { payWindow, periodLabel, summaryShort, summaryText } from './data';
+import { payWindow, periodLabel, summaryAlert, summaryShort } from './data';
+import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
 import { flushWhatsApp, sendToMe } from './notify';
 import { weeklyPlan } from './plan';
@@ -60,7 +61,9 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
       // Avisos nuevos: los del foro de avisos siempre; los del sistema solo si hablan de pagos o eventos.
       for (const n of r.newNews.filter((x) => x.source === 'avisos' || x.kind === 'pago' || x.kind === 'evento').slice(0, 5)) {
         const icon = n.kind === 'pago' ? '💳' : n.kind === 'evento' ? '🎉' : '📣';
-        await sendToMe(env, `*${icon} ${n.title}*${n.course ? `\n_${n.course}_` : ''}\n\n${n.body.slice(0, 700)}`,
+        const label = n.kind === 'pago' ? 'Aviso de pago' : n.kind === 'evento' ? 'Evento' : 'Aviso nuevo';
+        const body = n.body.length > 650 ? n.body.slice(0, 650).replace(/\s+\S*$/, '') + '…' : n.body;
+        await sendToMe(env, blocks(`${icon} *${label}*${n.course ? ` · _${courseLabel(n.course)}_` : ''}`, `*${n.title}*`, body),
           { title: `${icon} ${n.title}`.slice(0, 90), tag: `news-${n.kind}`, url: `/#avisos/${n.id}`, pushBody: `${n.course ? n.course + ' · ' : ''}${n.body.slice(0, 180)}`, type: n.kind === 'pago' ? 'pagos' : 'avisos' });
       }
     } catch (e) {
@@ -72,7 +75,7 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   const hour = Number(s.summary_hour || 7);
   if (s.summary_enabled !== '0' && local.getUTCHours() >= hour && !(await wasSent(env, `summary:${today}`))) {
     await markSent(env, `summary:${today}`);
-    const r = await sendToMe(env, await summaryText(env), { title: '☀️ Tu resumen de hoy', tag: 'summary', pushBody: await summaryShort(env), type: 'resumen' });
+    const r = await sendToMe(env, await summaryAlert(env), { title: '☀️ Tu resumen de hoy', tag: 'summary', url: '/#inicio', pushBody: await summaryShort(env), type: 'resumen' });
     if (!r.ok) await unmarkSent(env, `summary:${today}`);
     log.push(`Resumen: ${r.ok ? 'enviado por ' + r.channels.join(' + ') : r.error}`);
   }
@@ -81,8 +84,8 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   const thresholds = (s.task_reminders || '72,24,3').split(',').map(Number).filter((n) => n > 0).sort((a, b) => a - b);
   if (thresholds.length) {
     const maxH = thresholds[thresholds.length - 1];
-    const { results } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-      WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at > ? AND t.due_at <= ?`).bind(env.UID, now, now + maxH * 3600).all<{ id: number; title: string; due_at: number; course: string | null }>();
+    const { results } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course, c.name AS course_name FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
+      WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at > ? AND t.due_at <= ?`).bind(env.UID, now, now + maxH * 3600).all<{ id: number; title: string; due_at: number; course: string | null; course_name: string | null }>();
     for (const t of results) {
       const left = t.due_at - now;
       const h = thresholds.find((x) => left <= x * 3600);
@@ -91,7 +94,13 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
       if (await wasSent(env, key)) continue;
       // Marca este umbral y los mayores para no repetir avisos de una tarea creada tarde
       for (const x of thresholds.filter((x) => x >= h)) await markSent(env, `task:${t.id}:${x}`);
-      const r = await sendToMe(env, `*Recordatorio:* ${t.title}${t.course ? ' (' + t.course + ')' : ''} vence ${cuandoTexto(env, t.due_at)}.\nResponde "listo ${t.id}" cuando la entregues.`, { title: `📌 ${t.title}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: 'tareas' });
+      const curso = courseLabel(t.course_name, t.course);
+      const urgent = t.due_at - now <= 6 * 3600;
+      const r = await sendToMe(env, blocks(
+        `${urgent ? '🚨' : '📌'} *${urgent ? '¡Vence pronto!' : 'Recordatorio de entrega'}*`,
+        [`*${t.title}*`, curso && `📚 ${curso}`, `⏰ Vence *${cuandoTexto(env, t.due_at)}*`, `⏳ ${timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase())}`].filter(Boolean).join('\n'),
+        '_Cuando la entregues, márcala como hecha en Rumbo._',
+      ), { title: `📌 ${t.title}`, pushBody: `${curso ? curso + ' · ' : ''}vence ${cuandoTexto(env, t.due_at)}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: 'tareas' });
       if (!r.ok) for (const x of thresholds.filter((x) => x >= h)) await unmarkSent(env, `task:${t.id}:${x}`);
       log.push(`Tarea ${t.id} (${h} h): ${r.ok ? 'ok' : r.error}`);
     }
@@ -103,12 +112,14 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   if (!pay.paid && pay.state === 'open' && payDays.includes(local.getUTCDate()) && local.getUTCHours() >= hour) {
     const key = `pay:${pay.period}:${local.getUTCDate()}`;
     if (await markSent(env, key)) {
-      const texto = local.getUTCDate() === pay.closeDay
-        ? `*Último día de pago.* Hoy cierra la ventana de la cuota de ${periodLabel(pay.period)}.`
-        : local.getUTCDate() === pay.openDay
-          ? `*Hoy abre la ventana de pago* de la cuota de ${periodLabel(pay.period)}. Cierra en ${pay.daysToClose} días.`
-          : `*Recordatorio de pago:* la ventana de ${periodLabel(pay.period)} cierra en ${pay.daysToClose} día(s).`;
-      const r = await sendToMe(env, `${texto}${pay.amount ? '\nMonto: RD$ ' + pay.amount : ''}\nCuando pagues, responde "pagué".`, { title: '💳 Ventana de pago', tag: 'pay', url: '/#pagos', type: 'pagos' });
+      const last = local.getUTCDate() === pay.closeDay, first = local.getUTCDate() === pay.openDay;
+      const head = last ? '🚨 *Último día de pago*' : first ? '💳 *Abrió la ventana de pago*' : '💳 *Recordatorio de pago*';
+      const when = last ? 'Cierra *hoy* a las 11:59 p. m.' : `Cierra en *${pay.daysToClose} día${pay.daysToClose === 1 ? '' : 's'}* (el día ${pay.closeDay})`;
+      const r = await sendToMe(env, blocks(
+        head,
+        [`🗓️ Cuota de *${periodLabel(pay.period)}*`, `⏰ ${when}`, pay.amount && `💰 Monto: *${money(pay.amount)}*`].filter(Boolean).join('\n'),
+        '_Cuando pagues, regístralo en Rumbo → Pagos y no te vuelvo a avisar este mes._',
+      ), { title: last ? '🚨 Último día de pago' : '💳 Ventana de pago', pushBody: `Cuota de ${periodLabel(pay.period)} · ${last ? 'cierra hoy' : `cierra en ${pay.daysToClose} días`}`, tag: 'pay', url: '/#pagos', type: 'pagos' });
       if (!r.ok) await unmarkSent(env, key);
       log.push(`Pago: ${r.ok ? 'ok' : r.error}`);
     }
@@ -117,7 +128,7 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   // 5) Recordatorios personales ("recuérdame…")
   const { results: rem } = await env.DB.prepare('SELECT id, text FROM reminders WHERE user_id = ? AND sent = 0 AND remind_at <= ? ORDER BY remind_at LIMIT 10').bind(env.UID, now + 60).all<{ id: number; text: string }>();
   for (const r0 of rem) {
-    const r = await sendToMe(env, `*Recordatorio:* ${r0.text}`, { title: '⏰ Recordatorio', tag: `rem-${r0.id}`, type: 'tareas' });
+    const r = await sendToMe(env, blocks('⏰ *Recordatorio*', r0.text), { title: '⏰ Recordatorio', pushBody: r0.text, tag: `rem-${r0.id}`, url: '/#inicio', type: 'tareas' });
     if (r.ok) await env.DB.prepare('UPDATE reminders SET sent = 1 WHERE id = ?').bind(r0.id).run();
     log.push(`Recordatorio ${r0.id}: ${r.ok ? 'ok' : r.error}`);
   }
@@ -128,11 +139,11 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   // Hora de estudio: a la hora que elegiste, lo que te toca estudiar hoy (lo que vence pronto).
   const studyHour = Number(s.study_hour || 19);
   if (s.study_enabled !== '0' && local.getUTCHours() >= studyHour && local.getUTCHours() < 23 && await markSent(env, `study:${today}`)) {
-    const { results: todo } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-      WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at IS NOT NULL AND t.due_at > ? AND t.due_at <= ? ORDER BY t.due_at LIMIT 3`).bind(env.UID, now - 3 * 86400, now + 2 * 86400).all<{ id: number; title: string; due_at: number; course: string | null }>();
+    const { results: todo } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, c.short_name AS course, c.name AS course_name FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
+      WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at IS NOT NULL AND t.due_at > ? AND t.due_at <= ? ORDER BY t.due_at LIMIT 3`).bind(env.UID, now - 3 * 86400, now + 2 * 86400).all<{ id: number; title: string; due_at: number; course: string | null; course_name: string | null }>();
     if (todo.length) {
-      const lines = todo.map((t) => `• ${t.title}${t.course ? ' (' + t.course + ')' : ''} · ${t.due_at < now ? 'atrasada' : 'vence ' + cuandoTexto(env, t.due_at)}`);
-      const r = await sendToMe(env, `*📚 Hora de estudiar*\n${lines.join('\n')}\n\nTip: abre la tarea y toca «Estudiar con IA».`, { title: `📚 Hora de estudiar: ${todo.length === 1 ? todo[0].title : todo.length + ' tareas'}`, pushBody: lines.join('\n'), tag: 'study', url: todo.length === 1 ? `/#tareas/${todo[0].id}` : '/#tareas', type: 'tareas' });
+      const lines = todo.map((t) => { const c = courseLabel(t.course_name, t.course); return `• *${t.title}*${c ? ` _(${c})_` : ''}\n   ${t.due_at < now ? '⚠️ atrasada' : '⏰ vence ' + cuandoTexto(env, t.due_at)}`; });
+      const r = await sendToMe(env, blocks('📚 *Hora de estudiar*', 'Esto es lo que vence pronto:', lines.join('\n'), '💡 _Abre la tarea y toca «Estudiar con IA»: te arma un plan y tarjetas para repasar._'), { title: `📚 Hora de estudiar: ${todo.length === 1 ? todo[0].title : todo.length + ' tareas'}`, pushBody: todo.map((t) => `• ${t.title} · ${t.due_at < now ? 'atrasada' : 'vence ' + cuandoTexto(env, t.due_at)}`).join('\n'), tag: 'study', url: todo.length === 1 ? `/#tareas/${todo[0].id}` : '/#tareas', type: 'tareas' });
       log.push(`Hora de estudio: ${r.ok ? 'avisada' : r.error}`);
     }
   }

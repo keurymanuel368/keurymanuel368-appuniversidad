@@ -163,7 +163,10 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
   const h = localDate(env).getUTCHours();
   const quiet = (await getSetting(env, 'wa_quiet', '1')) !== '0' && (h >= 22 || h < 7) && opts.tag !== 'security';
   if (callmebotConfigured(env) && typeOk && !quiet) {
-    const r = await sendCallMeBot(env, text);
+    // Al final, un enlace que abre justo eso en Rumbo (WhatsApp lo vuelve tocable).
+    const origin = (env.APP_URL || (await getSetting(env, 'app_origin'))).replace(/\/$/, '');
+    const link = opts.url && origin ? `\n\n👉 Ábrelo en Rumbo:\n${origin}/${opts.url.replace(/^\//, '')}` : '';
+    const r = await sendCallMeBot(env, text.trim() + link);
     if (r.ok) channels.push('callmebot');
     else if (r.kind === 'busy') await queueWhatsApp(env, text); // sale en la próxima vuelta; la notificación llega ya
     else errors.push('WhatsApp: ' + r.error);

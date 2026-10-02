@@ -1,6 +1,7 @@
 // Consultas compartidas por la API, el asistente y el cron.
 import type { Env } from './env';
 import { getSettings } from './db';
+import { courseLabel, money } from './wa';
 import { cuandoTexto, daysBetween, fechaLarga, localDate, localToUnix, MESES, nowSec } from './time';
 
 export type Task = {
@@ -172,6 +173,32 @@ export async function summaryShort(env: Env): Promise<string> {
   if (!p.paid && p.state === 'open') parts.push(`💳 La cuota cierra en ${p.daysToClose} día(s)`);
   if (d.average !== null) parts.push(`📊 Promedio ${d.average}`);
   return parts.join('\n');
+}
+
+/**
+ * Resumen del día para los avisos (WhatsApp y notificaciones): por secciones, fácil de leer de un vistazo
+ * y sin "responde…", porque por ahí no se contesta. (El asistente usa summaryText, que sí invita a responder.)
+ */
+export async function summaryAlert(env: Env): Promise<string> {
+  const d = await dashboard(env);
+  const now = nowSec();
+  const hr = localDate(env).getUTCHours();
+  const saludo = hr < 12 ? '☀️ *Buenos días' : hr < 19 ? '🌤️ *Buenas tardes' : '🌙 *Buenas noches';
+  const item = (t: Task) => { const c = courseLabel(t.course_name, t.course_short); return `• ${t.title}${c ? ` _(${c})_` : ''} · ${t.due_at ? (t.due_at < now ? 'venció ' : '') + cuandoTexto(env, t.due_at) : 'sin fecha'}`; };
+  const endToday = (() => { const l = localDate(env); return localToUnix(env, l.getUTCFullYear(), l.getUTCMonth() + 1, l.getUTCDate(), 23, 59); })();
+  const overdue = d.tasks.filter((t) => t.due_at !== null && t.due_at < now);
+  const today = d.tasks.filter((t) => t.due_at !== null && t.due_at >= now && t.due_at <= endToday);
+  const soon = d.tasks.filter((t) => t.due_at === null || t.due_at > endToday).slice(0, 5);
+  const B: string[] = [`${saludo}${d.name ? ', ' + d.name : ''}*\n_${d.today.charAt(0).toUpperCase() + d.today.slice(1)}_`];
+  B.push(today.length ? `📌 *Hoy ${today.length === 1 ? 'cierra 1 entrega' : `cierran ${today.length} entregas`}*\n${today.map(item).join('\n')}` : '✅ *Hoy no vence nada*');
+  if (overdue.length) B.push(`⚠️ *Atrasadas*\n${overdue.map(item).join('\n')}`);
+  if (soon.length) B.push(`📅 *Lo que viene*\n${soon.map(item).join('\n')}`);
+  const p = d.pay, extra: string[] = [];
+  if (!p.paid && p.state === 'open') extra.push(`💳 *Pago:* la ventana cierra en ${p.daysToClose} día${p.daysToClose === 1 ? '' : 's'}${p.amount ? ` · ${money(p.amount)}` : ''}`);
+  else if (!p.paid && p.daysToOpen <= 3) extra.push(`💳 *Pago:* la ventana abre en ${p.daysToOpen} día${p.daysToOpen === 1 ? '' : 's'}`);
+  if (d.average !== null) extra.push(`📊 *Promedio:* ${d.average}`);
+  if (extra.length) B.push(extra.join('\n'));
+  return B.join('\n\n');
 }
 
 export async function summaryText(env: Env): Promise<string> {

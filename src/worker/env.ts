@@ -8,6 +8,7 @@ export interface Env {
   BACKUPS?: KVNamespace;
   TZ_OFFSET_HOURS: string;
   MOODLE_URL: string;
+  APP_URL?: string;
   // Secretos
   APP_PASSWORD?: string;
   SESSION_SECRET?: string;
