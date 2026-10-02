@@ -785,10 +785,13 @@ app.post('/api/callmebot/setup', async (c) => {
   if (other && other !== c.env.UID) return c.json({ error: 'Ese número ya lo usa otra cuenta de Rumbo.' }, 409);
   const name = (await getSettings(c.env)).student_name || '';
   const r = await sendCallMeBot({ ...c.env, WA_MY_NUMBER: phone, CALLMEBOT_APIKEY: apikey }, `*✅ Rumbo conectado${name ? ', ' + name : ''}*\nDesde ahora te llegan aquí el resumen del día, las entregas, las notas nuevas, los pagos y los avisos.`);
-  if (!r.ok) return c.json({ error: `CallMeBot no lo envió: ${r.error || 'revisa el número y la clave'}. Si acabas de activarlo, espera un minuto y vuelve a intentar.` }, 400);
+  if (r.kind === 'invalid') return c.json({ error: `CallMeBot dice que esa clave no es del número +${phone}. Usa exactamente el mismo WhatsApp desde el que le escribiste a CallMeBot (con el 1 delante si es de RD) y la clave que te mandó.` }, 400);
+  if (!r.ok && r.kind !== 'busy') return c.json({ error: `CallMeBot no lo envió: ${r.error}. Inténtalo en un minuto.` }, 400);
+  // Saturado: se guarda igual y el mensaje de prueba sale en la próxima vuelta (cada 30 min).
   await setSetting(c.env, 'wa_number', phone);
   await setSetting(c.env, 'callmebot_apikey', apikey);
-  return c.json({ ok: true, number: phone });
+  if (r.kind === 'busy') await setSetting(c.env, 'wa_outbox', JSON.stringify([{ t: '*✅ Rumbo conectado*\nDesde ahora te llegan aquí el resumen del día y tus avisos.', at: nowSec() }]));
+  return c.json({ ok: true, number: phone, pending: r.kind === 'busy' });
 });
 
 app.post('/api/callmebot/remove', async (c) => {

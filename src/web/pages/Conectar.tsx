@@ -191,7 +191,12 @@ function WaStep({ n, cmb, prefs, onChanged }: { n: number; cmb: SettingsRes['sta
   const [busy, setBusy] = useState(false);
   async function test() {
     setBusy(true); haptic(8);
-    try { const r = await api<{ ok: boolean; error?: string }>('/notify/test', { method: 'POST' }); toast(r.ok ? 'Te mandé tu resumen por WhatsApp ✅' : `No se pudo: ${r.error}`, r.ok ? 'ok' : 'err'); }
+    try {
+      const r = await api<{ ok: boolean; channels: string[]; error?: string }>('/notify/test', { method: 'POST' });
+      if (r.channels?.includes('callmebot')) toast('Te mandé tu resumen por WhatsApp ✅');
+      else if (r.ok) toast('CallMeBot está ocupado: el WhatsApp te llega solo en menos de 30 min (ya te llegó al teléfono).');
+      else toast(`No se pudo: ${r.error}`, 'err');
+    }
     catch (e) { toast((e as Error).message, 'err'); }
     setBusy(false);
   }
@@ -224,7 +229,12 @@ function CallMeBotModal({ cmb, onClose, onDone }: { cmb: SettingsRes['status']['
   const bot = `+${cmb.bot.slice(0, 2)} ${cmb.bot.slice(2, 5)} ${cmb.bot.slice(5, 8)} ${cmb.bot.slice(8)}`;
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr('');
-    try { await api('/callmebot/setup', { method: 'POST', body: { phone, apikey: key } }); haptic(12); toast('¡Listo! Revisa tu WhatsApp: te llegó un mensaje de prueba ✅'); onDone(); }
+    try {
+      const r = await api<{ pending?: boolean }>('/callmebot/setup', { method: 'POST', body: { phone, apikey: key } });
+      haptic(12);
+      toast(r.pending ? 'Guardado ✅ CallMeBot está ocupado ahora: el mensaje de prueba te llega solo en menos de 30 minutos.' : '¡Listo! Revisa tu WhatsApp: te llegó un mensaje de prueba ✅');
+      onDone();
+    }
     catch (e2) { setErr((e2 as Error).message); }
     setBusy(false);
   }

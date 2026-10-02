@@ -3,7 +3,7 @@ import type { Env } from './env';
 import { activeUsers, forUser, getSettings, markSent, unmarkSent, wasSent } from './db';
 import { payWindow, periodLabel, summaryShort, summaryText } from './data';
 import { syncEva } from './moodle';
-import { sendToMe } from './notify';
+import { flushWhatsApp, sendToMe } from './notify';
 import { announceRelease } from './changelog';
 import { backupDue, makeBackup } from './backup';
 import { checkHealth } from './health';
@@ -43,6 +43,8 @@ export async function runScheduled(env: Env): Promise<string[]> {
 
 async function runForUser(env: Env, syncNow: boolean, backupError?: string): Promise<string[]> {
   const log: string[] = [];
+  // WhatsApp que CallMeBot no aceptó antes por saturación
+  try { const n = await flushWhatsApp(env); if (n) log.push(`WhatsApp pendientes: ${n}`); } catch (e) { log.push('WhatsApp: ' + (e as Error).message); }
   const s = await getSettings(env);
   const now = nowSec();
   const local = localDate(env);

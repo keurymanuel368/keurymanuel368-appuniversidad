@@ -9,6 +9,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 23,
+    date: '2026-10-02',
+    title: 'WhatsApp más confiable',
+    items: [
+      'Si CallMeBot está saturado, Rumbo reintenta solo y, si aun así no sale, te manda el aviso por WhatsApp en la próxima vuelta (máximo 30 minutos). Ya no se pierde.',
+      'Al activar los avisos, tu clave se guarda aunque CallMeBot esté ocupado, y te dice claro si la clave no coincide con tu número.',
+    ],
+  },
+  {
     version: 22,
     date: '2026-10-02',
     title: 'Elige qué te llega por WhatsApp',

@@ -57,22 +57,58 @@ export async function sendWhatsApp(env: Env, text: string, to = env.WA_MY_NUMBER
 export const CALLMEBOT_NUMBER = '34694242562';
 export const CALLMEBOT_ACTIVATE = 'I allow callmebot to send me messages';
 
-/** Envía un mensaje a tu propio WhatsApp con CallMeBot (gratis para uso personal). */
-export async function sendCallMeBot(env: Env, text: string): Promise<{ ok: boolean; error?: string }> {
-  if (!callmebotConfigured(env)) return { ok: false, error: 'CallMeBot no configurado' };
+export type CallMeBotResult = { ok: boolean; kind: 'ok' | 'invalid' | 'busy' | 'error'; error?: string };
+
+/**
+ * Envía un mensaje a tu propio WhatsApp con CallMeBot (gratis para uso personal).
+ * Cloudflare sale a internet por servidores que comparten muchas apps, y CallMeBot a veces los frena con
+ * «Too many requests» (503). Por eso se reintenta unas veces con pausas: cada intento puede salir por otro servidor.
+ */
+export async function sendCallMeBot(env: Env, text: string): Promise<CallMeBotResult> {
+  if (!callmebotConfigured(env)) return { ok: false, kind: 'error', error: 'CallMeBot no configurado' };
   const phone = '+' + (env.WA_MY_NUMBER || '').replace(/\D/g, '');
   // Va en la dirección (GET): los mensajes muy largos se recortan para no pasar el límite.
   const msg = text.length > 1500 ? text.slice(0, 1497) + '…' : text;
   const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(msg)}&apikey=${encodeURIComponent(env.CALLMEBOT_APIKEY || '')}`;
-  let res: Response;
-  try { res = await fetch(url); } catch (e) { return { ok: false, error: 'No pude comunicarme con CallMeBot: ' + (e as Error).message }; }
-  const body = await res.text();
-  const failed = !res.ok || (/(error|invalid|not valid|no es v)/i.test(body) && !/(queued|sent|enviado)/i.test(body));
-  if (failed) {
-    return { ok: false, error: body.replace(/<[^>]+>/g, ' ').slice(0, 300) };
+  let last: CallMeBotResult = { ok: false, kind: 'error', error: 'Sin respuesta de CallMeBot' };
+  for (const wait of [0, 1500, 3000, 5000]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    let res: Response;
+    try { res = await fetch(url); } catch (e) { last = { ok: false, kind: 'error', error: 'No pude comunicarme con CallMeBot: ' + (e as Error).message }; continue; }
+    const body = (await res.text()).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (res.status === 503 || /too many requests|to often|too often/i.test(body)) { last = { ok: false, kind: 'busy', error: 'CallMeBot está saturado ahora mismo' }; continue; }
+    if (/apikey is invalid|invalid apikey|not valid/i.test(body)) return { ok: false, kind: 'invalid', error: 'La clave no coincide con ese número' };
+    if (!res.ok || (/(error|invalid)/i.test(body) && !/(queued|sent|enviado)/i.test(body))) return { ok: false, kind: 'error', error: body.slice(0, 200) || `CallMeBot respondió ${res.status}` };
+    await log(env, 'out', 'callmebot', text);
+    return { ok: true, kind: 'ok' };
   }
-  await log(env, 'out', 'callmebot', text);
-  return { ok: true };
+  return last;
+}
+
+type Pending = { t: string; at: number };
+
+/** Guarda un aviso que CallMeBot no aceptó por saturación, para reenviarlo en la próxima vuelta del cron. */
+async function queueWhatsApp(env: Env, text: string): Promise<void> {
+  const list = JSON.parse((await getSetting(env, 'wa_outbox', '[]')) || '[]') as Pending[];
+  list.push({ t: text, at: nowSec() });
+  await setSetting(env, 'wa_outbox', JSON.stringify(list.filter((x) => nowSec() - x.at < 86400).slice(-8)));
+}
+
+/** Reenvía los avisos pendientes (los de hace más de 24 h ya no sirven y se descartan). */
+export async function flushWhatsApp(env: Env): Promise<number> {
+  if (!callmebotConfigured(env)) return 0;
+  const list = (JSON.parse((await getSetting(env, 'wa_outbox', '[]')) || '[]') as Pending[]).filter((x) => nowSec() - x.at < 86400);
+  if (!list.length) return 0;
+  const left: Pending[] = [];
+  let sent = 0;
+  for (const p of list) {
+    // Si ya falló uno por saturación, los demás esperan a la siguiente vuelta.
+    if (left.length) { left.push(p); continue; }
+    const r = await sendCallMeBot(env, p.t);
+    if (r.ok) sent++; else if (r.kind === 'busy') left.push(p);
+  }
+  await setSetting(env, 'wa_outbox', JSON.stringify(left));
+  return sent;
 }
 
 /** ¿Está abierta la ventana de 24 h de WhatsApp (me escribiste hace menos de 23 h 45 min)? */
@@ -127,7 +163,9 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
   const quiet = (await getSetting(env, 'wa_quiet', '1')) !== '0' && (h >= 22 || h < 7) && opts.tag !== 'security';
   if (callmebotConfigured(env) && typeOk && !quiet) {
     const r = await sendCallMeBot(env, text);
-    if (r.ok) channels.push('callmebot'); else errors.push('WhatsApp: ' + r.error);
+    if (r.ok) channels.push('callmebot');
+    else if (r.kind === 'busy') await queueWhatsApp(env, text); // sale en la próxima vuelta; la notificación llega ya
+    else errors.push('WhatsApp: ' + r.error);
   }
 
   // La notificación sale siempre, salvo que ya llegó por WhatsApp y prefieres no duplicar.
