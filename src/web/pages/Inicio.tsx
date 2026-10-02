@@ -65,6 +65,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         <button className="avatar hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
       </PageHead>
 
+      <SetupBanner setup={d.setup} go={go} />
+
       <nav className="quick-row" aria-label="Accesos rápidos">
         <button className="quick" onClick={() => go('asistente')}><span className="q-ic grad"><Icon name="spark" size={19} /></span>Hablar con Rumbo</button>
         <button className="quick" onClick={() => { haptic(8); setCreating(true); }}><span className="q-ic blue"><Icon name="plus" size={19} /></span>Nueva tarea</button>
@@ -234,4 +236,24 @@ function Countdown({ to }: { to: number }) {
   const d = Math.floor(left / 86400), h = Math.floor((left % 86400) / 3600), m = Math.floor((left % 3600) / 60);
   const txt = d >= 2 ? `${d} días` : d === 1 ? `1 d ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
   return <span className={`countdown num ${left < 6 * 3600 ? 'hot' : ''}`}>{txt}</span>;
+}
+
+/** Si falta conectar algo (sobre todo el EVA), lo dice arriba con un botón. Se puede posponer 3 días. */
+function SetupBanner({ setup, go }: { setup?: Dashboard['setup']; go: (p: string) => void }) {
+  const [hidden, setHidden] = useState(() => { try { return Number(localStorage.getItem('rumbo-setup-later') || 0) > Date.now(); } catch { return false; } });
+  if (!setup) return null;
+  const missing = [!setup.eva && 'tu EVA', !setup.whatsapp && 'los avisos por WhatsApp', !setup.career && 'tu carrera'].filter(Boolean) as string[];
+  // Sin EVA la app está vacía: ese aviso no se puede posponer.
+  if (!missing.length || (hidden && setup.eva)) return null;
+  const list = missing.length > 1 ? `${missing.slice(0, -1).join(', ')} y ${missing[missing.length - 1]}` : missing[0];
+  return (
+    <div className={`setup-banner ${setup.eva ? '' : 'urgent'}`} role="status">
+      <span className="set-ic blue" aria-hidden="true"><Icon name="plug" size={18} /></span>
+      <div className="t"><b>{setup.eva ? 'Te falta poco' : 'Conecta tu EVA para empezar'}</b><span>Falta conectar {list}.</span></div>
+      <div className="sb-actions">
+        <button className="btn primary sm" onClick={() => go('conectar')}>Terminar</button>
+        {setup.eva && <button className="link-btn" onClick={() => { try { localStorage.setItem('rumbo-setup-later', String(Date.now() + 3 * 86400_000)); } catch { /* sin almacenamiento */ } setHidden(true); }}>Luego</button>}
+      </div>
+    </div>
+  );
 }

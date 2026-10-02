@@ -1738,3 +1738,16 @@ button.card:active, .stat:not(.static):active, .course:active, .tile:active, .gf
 .center-self { align-self: center; }
 /* Modo oscuro: el azul de marca sobre fondo noche no llega a 4.5:1 en texto; se usa el azul claro. */
 :root[data-mode="dark"] .btn.soft, :root[data-mode="dark"] .link-btn, :root[data-mode="dark"] .listen, :root[data-mode="dark"] .steps a { color: var(--blue-dark); }
+/* Aviso de conexiones pendientes en Inicio */
+.setup-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px; margin-bottom: 14px; box-shadow: var(--sh-1); }
+.setup-banner.urgent { border-color: color-mix(in srgb, var(--blue) 45%, transparent); background: var(--blue-tint); }
+.setup-banner .t { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.setup-banner .t b { color: var(--ink); }
+.setup-banner .t span { font-size: 14px; color: var(--muted); }
+.sb-actions { display: flex; align-items: center; gap: 12px; }
+.wa-types { display: flex; flex-wrap: wrap; gap: 8px; }
+.wa-prefs { flex-basis: 100%; display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+.cmb-help { margin-top: 8px; }
+.cmb-help summary { cursor: pointer; color: var(--blue); font-weight: 700; min-height: 32px; display: flex; align-items: center; }
+.cmb-help p { margin: 8px 0; font-size: 14px; color: var(--muted); }
+:root[data-mode="dark"] .cmb-help summary { color: var(--blue-dark); }

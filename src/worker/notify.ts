@@ -7,7 +7,7 @@ import type { Env } from './env';
 import { getSetting, setSetting } from './db';
 import { sendPushAll } from './push';
 import { sendTelegram, telegramReady } from './telegram';
-import { nowSec } from './time';
+import { localDate, nowSec } from './time';
 
 export type Channel = 'whatsapp' | 'callmebot' | 'push' | 'telegram';
 export type SendResult = { ok: boolean; channels: Channel[]; error?: string };
@@ -119,7 +119,13 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
 
   // WhatsApp solo para avisos, con CallMeBot (cada quien pone su número y su clave en Conexiones).
   // Llega siempre: no depende de la ventana de 24 h ni de la cuenta de Meta.
-  if (callmebotConfigured(env)) {
+  // Cada quien elige qué tipos le llegan por WhatsApp y si respeta su horario de descanso
+  // (de 10 p. m. a 7 a. m. solo llega al teléfono, que no hace ruido si está en silencio).
+  const waTypes = (await getSetting(env, 'wa_tipos', '')).split(',').filter(Boolean);
+  const typeOk = !opts.type || !waTypes.length || waTypes.includes(opts.type);
+  const h = localDate(env).getUTCHours();
+  const quiet = (await getSetting(env, 'wa_quiet', '1')) !== '0' && (h >= 22 || h < 7) && opts.tag !== 'security';
+  if (callmebotConfigured(env) && typeOk && !quiet) {
     const r = await sendCallMeBot(env, text);
     if (r.ok) channels.push('callmebot'); else errors.push('WhatsApp: ' + r.error);
   }

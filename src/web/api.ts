@@ -36,6 +36,7 @@ export type Dashboard = {
   news: { id: number; title: string; kind: string; created_at: number; read: number; course_name: string | null }[]; unreadNews: number; courses: Course[]; pay: PayWindow;
   lastSync: number | null; lastSyncError: string; summaryHour: number;
   mascot?: { mood: string; headline: string; sub: string; streak: number };
+  setup?: { eva: boolean; whatsapp: boolean; career: boolean };
 };
 export type PensumRow = { id: number; term: number; code: string | null; name: string; credits: number; status: string; grade: number | null; prereqs: string | null; coreqs?: string | null; kind?: string };
 export type Elective = { code: string; name: string; credits: number; block: string };

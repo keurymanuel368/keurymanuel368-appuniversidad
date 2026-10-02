@@ -9,6 +9,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 22,
+    date: '2026-10-02',
+    title: 'Elige qué te llega por WhatsApp',
+    items: [
+      'En Conexiones eliges qué te llega por WhatsApp: resumen, entregas, notas, pagos, avisos o novedades.',
+      'No molestar de 10 p. m. a 7 a. m.: en ese horario solo te llega la notificación del teléfono.',
+      'Si CallMeBot no te responde, hay un botón para pedir la clave otra vez y te explica qué hacer.',
+      'Inicio te avisa si te falta conectar algo (EVA, WhatsApp o tu carrera) y te lleva directo a terminarlo.',
+      'Pasos más claros para conectar el EVA con el enlace, con un botón para copiarlo.',
+    ],
+  },
+  {
     version: 21,
     date: '2026-10-02',
     title: '💬 Avisos por WhatsApp',

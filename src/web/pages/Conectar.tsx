@@ -39,7 +39,7 @@ export function Conectar() {
       <ol className="conn-list" aria-label="Pasos para conectar Rumbo">
         <EvaStep n={n('eva')} st={st.eva} onChanged={q.reload} />
         <PushStep n={n('push')} state={push} onChanged={async () => setPush(await pushState())} />
-        <WaStep n={n('wa')} cmb={st.callmebot} onChanged={q.reload} />
+        <WaStep n={n('wa')} cmb={st.callmebot} prefs={q.data.settings} onChanged={q.reload} />
         <CareerStep n={n('carrera')} current={st.career} onChanged={q.reload} />
       </ol>
 
@@ -116,7 +116,7 @@ function EvaModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
     setBusy(false);
   }
   // Enlace oficial del EVA para apps (el mismo que usa la app de Moodle).
-  const passport = Math.random().toString(36).slice(2, 10);
+  const [passport] = useState(() => Math.random().toString(36).slice(2, 10));
   const launch = `https://eva.uapa.edu.do/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=moodlemobile`;
   return (
     <Modal title="Conectar tu EVA" onClose={onClose}>
@@ -138,10 +138,14 @@ function EvaModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
           </>
         ) : (
           <>
+            <p className="small muted">Hazlo en una computadora con Chrome o Edge (toma 1 minuto):</p>
             <ol className="steps">
-              <li>Toca <a href={launch} target="_blank" rel="noopener"><b>Abrir el EVA</b></a> y entra como siempre.</li>
-              <li>Al terminar, el navegador intenta abrir una dirección que empieza por <b>moodlemobile://token=</b>. Mantén presionada la barra de direcciones y cópiala.</li>
-              <li>Pégala aquí abajo.</li>
+              <li>Entra al <a href="https://eva.uapa.edu.do/my/" target="_blank" rel="noopener"><b>EVA</b></a> como siempre y deja esa pestaña abierta.</li>
+              <li>En esa pestaña pulsa <b>F12</b> y abre la pestaña <b>Network</b> (o <b>Red</b>).</li>
+              <li>Copia este enlace, pégalo en la barra de direcciones de esa misma pestaña y pulsa Enter. Si no pasa nada en la página, es normal.
+                <button type="button" className="btn line block" onClick={async () => { try { await navigator.clipboard.writeText(launch); toast('Enlace copiado'); } catch { toast('No se pudo copiar: mantén presionado el enlace', 'err'); } }}><Icon name="link" size={18} />Copiar enlace</button></li>
+              <li>En Network escribe <b>launch</b> en el filtro y abre <b>launch.php</b> → <b>Headers</b> → <b>Response Headers</b> → <b>Location</b>. Copia ese valor: empieza con <b>moodlemobile://token=</b>.</li>
+              <li>Pégalo aquí abajo. No lo compartas con nadie: es como la llave de tu EVA.</li>
             </ol>
             <div className="field"><label htmlFor="eva-l">Enlace del EVA</label>
               <input id="eva-l" className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="moodlemobile://token=…" autoComplete="off" required /></div>
@@ -182,7 +186,7 @@ function PushStep({ n, state, onChanged }: { n: number; state: PushState | null;
 }
 
 // ---------- 3. Avisos por WhatsApp (CallMeBot) ----------
-function WaStep({ n, cmb, onChanged }: { n: number; cmb: SettingsRes['status']['callmebot']; onChanged: () => void }) {
+function WaStep({ n, cmb, prefs, onChanged }: { n: number; cmb: SettingsRes['status']['callmebot']; prefs: Record<string, string>; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   async function test() {
@@ -202,6 +206,7 @@ function WaStep({ n, cmb, onChanged }: { n: number; cmb: SettingsRes['status']['
           <button className="btn soft" onClick={test} disabled={busy}><Icon name="send" size={18} />{busy ? 'Enviando…' : 'Enviar prueba'}</button>
           <button className="btn line" onClick={() => setOpen(true)}>Cambiar</button>
           <button className="btn line" onClick={remove}>Apagar</button>
+          <WaPrefs prefs={prefs} onChanged={onChanged} />
         </div>
       ) : (
         <button className="btn primary lg block" onClick={() => { haptic(8); setOpen(true); }}><Icon name="chat" size={18} />Activar avisos por WhatsApp</button>
@@ -229,7 +234,13 @@ function CallMeBotModal({ cmb, onClose, onDone }: { cmb: SettingsRes['status']['
         <li><b>Activa CallMeBot</b> (solo una vez): toca el botón y envía el mensaje que ya va escrito.
           <a className="btn primary block" href={`https://wa.me/${cmb.bot}?text=${encodeURIComponent(cmb.activate)}`} target="_blank" rel="noopener"><Icon name="chat" size={18} />Abrir WhatsApp</a>
           <span className="small muted">Si no abre, agrega el número <b className="num">{bot}</b> y mándale: «{cmb.activate}».</span></li>
-        <li>En uno o dos minutos CallMeBot te responde con tu <b>clave (apikey)</b>, unos números. Cópiala.</li>
+        <li>En uno o dos minutos CallMeBot te responde con tu <b>clave (apikey)</b>, unos números. Cópiala.
+          <details className="cmb-help">
+            <summary>¿No te responde?</summary>
+            <p>CallMeBot es gratis y a veces se satura. Prueba esto:</p>
+            <a className="btn line block" href={`https://wa.me/${cmb.bot}?text=${encodeURIComponent('Recover APIKey')}`} target="_blank" rel="noopener"><Icon name="refresh" size={18} />Pedir la clave otra vez</a>
+            <p>Si en 2 minutos no llega nada, CallMeBot pide esperar 24 horas y volver a escribirle. Mientras tanto, los avisos te siguen llegando como notificación del teléfono.</p>
+          </details></li>
         <li>Escribe tu número y esa clave aquí abajo. Te mando un mensaje de prueba para confirmar.</li>
       </ol>
       <form className="form-stack" onSubmit={submit}>
@@ -242,6 +253,38 @@ function CallMeBotModal({ cmb, onClose, onDone }: { cmb: SettingsRes['status']['
       </form>
       <p className="small muted">CallMeBot es un servicio gratis para uso personal. A veces tarda unos minutos en entregar; las notificaciones del teléfono siguen llegando igual.</p>
     </Modal>
+  );
+}
+
+const WA_TYPES: { key: string; label: string }[] = [
+  { key: 'resumen', label: 'Resumen del día' }, { key: 'tareas', label: 'Entregas' }, { key: 'notas', label: 'Notas' },
+  { key: 'pagos', label: 'Pagos' }, { key: 'avisos', label: 'Avisos del EVA' }, { key: 'novedades', label: 'Novedades' },
+];
+
+/** Qué llega por WhatsApp y horario de descanso (lo demás sigue llegando al teléfono). */
+function WaPrefs({ prefs, onChanged }: { prefs: Record<string, string>; onChanged: () => void }) {
+  const on = new Set((prefs.wa_tipos || WA_TYPES.map((t) => t.key).join(',')).split(',').filter(Boolean));
+  const quiet = prefs.wa_quiet !== '0';
+  async function save(body: Record<string, string>) {
+    try { await api('/settings', { method: 'PUT', body }); haptic(6); onChanged(); } catch (e) { toast((e as Error).message, 'err'); }
+  }
+  function toggle(k: string) {
+    const next = new Set(on);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    if (!next.size) { toast('Deja al menos uno, o toca «Apagar»', 'err'); return; }
+    void save({ wa_tipos: [...next].join(',') });
+  }
+  return (
+    <div className="wa-prefs">
+      <span className="small muted" id="wa-t">Qué te llega por WhatsApp</span>
+      <div className="wa-types" role="group" aria-labelledby="wa-t">
+        {WA_TYPES.map((t) => <button key={t.key} type="button" className={`chip ${on.has(t.key) ? 'on' : ''}`} aria-pressed={on.has(t.key)} onClick={() => toggle(t.key)}>{t.label}</button>)}
+      </div>
+      <div className="toggle">
+        <div className="t"><b>No molestar de 10 p. m. a 7 a. m.</b><span>En ese horario solo llega la notificación del teléfono.</span></div>
+        <button className={`switch ${quiet ? 'on' : ''}`} role="switch" aria-checked={quiet} aria-label="No molestar de noche por WhatsApp" onClick={() => save({ wa_quiet: quiet ? '0' : '1' })} />
+      </div>
+    </div>
   );
 }
 

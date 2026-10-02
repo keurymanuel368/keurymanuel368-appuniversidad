@@ -366,7 +366,12 @@ app.post('/api/admin/users/:id/reset', async (c) => {
 });
 
 app.get('/api/mascot', async (c) => c.json(await widgetData(c.env)));
-app.get('/api/dashboard', async (c) => c.json({ ...(await dashboard(c.env)), mascot: await widgetData(c.env) }));
+app.get('/api/dashboard', async (c) => {
+  const s = await getSettings(c.env);
+  // Lo que le falta conectar (Inicio muestra un aviso para terminar en Conexiones).
+  const setup = { eva: !!c.env.MOODLE_TOKEN && !s.eva_last_error, whatsapp: callmebotConfigured(c.env), career: !!s.career };
+  return c.json({ ...(await dashboard(c.env)), mascot: await widgetData(c.env), setup });
+});
 
 /** Una asignatura solo se puede usar si es tuya (si no, la tarea queda sin asignatura). */
 async function ownCourse(env: Env, id: unknown): Promise<number | null> {
@@ -684,7 +689,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
+const EDITABLE = ['wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);
