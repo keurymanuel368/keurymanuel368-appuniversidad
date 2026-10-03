@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 29,
+    date: '2026-10-03',
+    title: 'Ficha de tarea más directa',
+    items: [
+      'Al abrir una tarea, lo primero es «Ya la entregué» y «Abrir en el EVA». Estudiar con IA y el modo enfoque quedan justo debajo, con una línea que explica cada uno.',
+      'La ficha dice cuándo venció la tarea y ya no muestra «Calificación —» en lo que todavía no has entregado.',
+      'Quien entra por primera vez ve una bienvenida con los pasos para dejar Rumbo listo, en vez de un Inicio vacío.',
+    ],
+  },
+  {
     version: 28,
     date: '2026-10-03',
     title: 'Pantallas más claras',

@@ -58,6 +58,9 @@ export function Inicio({ go }: { go: (p: string) => void }) {
     setBusy(false);
   }
 
+  // Compañero nuevo sin EVA ni datos: en vez de un Inicio en cero ("semana despejada"), una bienvenida con el siguiente paso.
+  if (d.setup && !d.setup.eva && !d.courses.length && !d.tasks.length) return <FirstSteps d={d} go={go} initial={initial} />;
+
   return (
     <>
       <PullIndicator pull={pull} refreshing={refreshing} />
@@ -256,5 +259,38 @@ function SetupBanner({ setup, go }: { setup?: Dashboard['setup']; go: (p: string
         {setup.eva && <button className="link-btn" onClick={() => { try { localStorage.setItem('rumbo-setup-later', String(Date.now() + 3 * 86400_000)); } catch { /* sin almacenamiento */ } setHidden(true); }}>Luego</button>}
       </div>
     </div>
+  );
+}
+
+/** Inicio de alguien que acaba de llegar: qué hace Rumbo y un solo paso claro (conectar el EVA). */
+function FirstSteps({ d, go, initial }: { d: Dashboard; go: (p: string) => void; initial: string }) {
+  const steps = [
+    { done: !!d.setup?.eva, icon: 'book', title: 'Conecta tu EVA', text: 'Trae tus asignaturas, entregas, notas y avisos. Toma un minuto.' },
+    { done: !!d.setup?.whatsapp, icon: 'chat', title: 'Avisos por WhatsApp', text: 'El resumen del día y las entregas, directo a tu WhatsApp.' },
+    { done: !!d.setup?.career, icon: 'cap', title: 'Elige tu carrera', text: 'Para ver tu pensum y cuánto te falta.' },
+  ];
+  return (
+    <>
+      <PageHead eyebrow={d.today} title={`${greeting()}${d.name ? ', ' + d.name : ''}`}>
+        <button className="avatar hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
+      </PageHead>
+      <div className="welcome-card">
+        <Mascot mood="feliz" size={84} />
+        <div>
+          <h2>¡Qué bueno tenerte en Rumbo!</h2>
+          <p>Aquí vas a ver lo que vence, tus notas y los avisos de la UAPA, y te aviso antes de cada entrega. Solo falta conectar tus cosas.</p>
+        </div>
+      </div>
+      <ol className="first-steps">
+        {steps.map((s, i) => (
+          <li key={s.title} className={s.done ? 'done' : ''}>
+            <span className="fs-n" aria-hidden="true">{s.done ? <Icon name="check" size={15} style={{ strokeWidth: 3 }} /> : i + 1}</span>
+            <span className="fs-copy"><b>{s.title}{s.done && <span className="sr-only"> (listo)</span>}</b><small>{s.text}</small></span>
+          </li>
+        ))}
+      </ol>
+      <button className="btn primary lg block" onClick={() => go('conectar')}><Icon name="plug" size={19} />Empezar ahora</button>
+      <p className="small muted center">Mientras tanto puedes agregar tareas a mano con el botón + o hablar con el asistente.</p>
+    </>
   );
 }

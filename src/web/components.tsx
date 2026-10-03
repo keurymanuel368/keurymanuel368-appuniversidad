@@ -277,7 +277,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const graded = task.grade !== null && task.grade !== undefined && !!task.grade_max;
   const pct = graded ? Math.round((task.grade! / task.grade_max!) * 100) : null;
   const closed = done && task.notes === 'Plazo cerrado en el EVA';
-  const state = done ? (closed ? 'Plazo cerrado' : task.source === 'eva' ? 'Entregada' : 'Hecha') : u === 'red' ? 'Vencida' : 'Pendiente';
+  const state = done ? (closed ? 'Plazo cerrado' : task.source === 'eva' ? 'Entregada' : 'Hecha') : u === 'red' && task.due_at ? overdueLabel(task.due_at) : 'Pendiente';
   const tone = done ? (closed ? 'gray' : 'green') : u === 'red' ? 'red' : u === 'orange' ? 'orange' : 'blue';
   const userNotes = task.notes && !/en el EVA$/.test(task.notes) ? task.notes : '';
   const dateTime = (s: number) => new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(s * 1000));
@@ -313,7 +313,8 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
       )}
 
       <div className="facts">
-        <div className="fact"><Icon name="trend" size={18} /><span>Calificación</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : done ? 'Todavía sin nota' : '—'}</b></div>
+        {/* La calificación solo cuando tiene sentido: ya hay nota o ya se entregó. */}
+        {(graded || done) && <div className="fact"><Icon name="trend" size={18} /><span>Calificación</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : 'Todavía sin nota'}</b></div>}
         <div className="fact"><Icon name="calendar" size={18} /><span>Fecha de entrega</span><b>{task.due_at ? cap(dateTime(task.due_at)) : 'Sin fecha'}</b></div>
         {task.submitted_at && !closed && <div className="fact"><Icon name="check" size={18} /><span>Registrada como entregada</span><b>{cap(dateTime(task.submitted_at))}</b></div>}
         {task.facilitator && <div className="fact"><Icon name="cap" size={18} /><span>Facilitador/a</span><b>{task.facilitator}</b></div>}
@@ -328,14 +329,22 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
         </div>
       )}
 
+      {/* Primero lo que más se hace con una tarea (entregarla y marcarla); después, las ayudas para hacerla. */}
       <div className="ts-actions">
-        {!done && <button className="btn study-btn lg block" onClick={() => { haptic(10); setStudying(true); }}><Icon name="spark" size={19} />Estudiar con IA<small>plan · práctica · explicación</small></button>}
-        {studying && <Suspense fallback={null}><StudyModal task={task} onClose={() => setStudying(false)} /></Suspense>}
-        {!done && <button className="btn focus-btn lg block" onClick={() => { haptic(10); setFocus(true); }}><Icon name="clock" size={19} />Modo enfoque{task.focus_minutes ? ` · llevas ${task.focus_minutes} min` : ''}</button>}
-        {task.url && <a className="btn primary lg block" href={task.url} target="_blank" rel="noopener"><Icon name="link" size={18} />Abrir en el EVA</a>}
         <div className="ts-row">
-          <button className="btn line grow" onClick={toggle} disabled={busy}><Icon name={done ? 'sync' : 'check'} size={18} />{done ? 'Reabrir' : 'Marcar hecha'}</button>
-          <button className="btn line grow" onClick={() => setEditing(true)}><Icon name="gear" size={18} />Editar</button>
+          {!done && <button className="btn primary lg grow" onClick={toggle} disabled={busy}><Icon name="check" size={19} />Ya la entregué</button>}
+          {task.url && <a className={`btn ${done ? 'primary' : 'line'} lg grow`} href={task.url} target="_blank" rel="noopener"><Icon name="link" size={18} />Abrir en el EVA</a>}
+        </div>
+        {!done && (
+          <div className="ts-help">
+            <button className="btn study-btn" onClick={() => { haptic(10); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Estudiar con IA</b><small>plan · práctica · explicación</small></span></button>
+            <button className="btn focus-btn" onClick={() => { haptic(10); setFocus(true); }}><Icon name="clock" size={19} /><span className="tb-txt"><b>Modo enfoque</b><small>{task.focus_minutes ? `llevas ${task.focus_minutes} min` : 'temporizador para concentrarte'}</small></span></button>
+          </div>
+        )}
+        {studying && <Suspense fallback={null}><StudyModal task={task} onClose={() => setStudying(false)} /></Suspense>}
+        <div className="ts-links">
+          {done && <button className="link-btn" onClick={toggle} disabled={busy}><Icon name="sync" size={16} />Reabrir</button>}
+          <button className="link-btn" onClick={() => setEditing(true)}><Icon name="gear" size={16} />Editar tarea</button>
         </div>
       </div>
     </Modal>

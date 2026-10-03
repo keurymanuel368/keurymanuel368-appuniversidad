@@ -1607,7 +1607,15 @@ button.card:active, .stat:not(.static):active, .course:active, .tile:active, .gf
 
 /* ===== Modo estudio con IA ===== */
 .study-btn { background: var(--grad); color: #fff; border: 0; box-shadow: var(--sh-blue); flex-wrap: wrap; row-gap: 0; }
-.study-btn small { flex-basis: 100%; font-size: 11.5px; font-weight: 600; opacity: .85; text-align: center; }
+.study-btn small { font-size: 11.5px; font-weight: 600; opacity: .85; }
+/* Ayudas de la ficha: dos tarjetas lado a lado, con título y una línea de explicación */
+.ts-help { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ts-help .btn { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 8px; min-height: 92px; padding: 14px; text-align: left; white-space: normal; border-radius: 18px; }
+.tb-txt { display: flex; flex-direction: column; gap: 2px; }
+.tb-txt b { font-size: 15px; }
+.tb-txt small { font-size: 12px; font-weight: 600; opacity: .85; line-height: 1.3; }
+.ts-links { display: flex; justify-content: center; gap: 22px; }
+.ts-row .btn { min-width: 0; }
 .study-body { min-height: 220px; margin: 14px 0; }
 .study-loading { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 26px 10px; }
 .study-loading b { font-family: var(--display); font-size: 17px; }
@@ -1775,3 +1783,17 @@ textarea.input { resize: vertical; min-height: 84px; font: inherit; line-height:
 .pay-config .pc-chev { transform: rotate(90deg); transition: transform .2s var(--ease); color: var(--muted); }
 .pay-config[open] .pc-chev { transform: rotate(-90deg); }
 .pay-config[open] { display: flex; flex-direction: column; gap: 14px; }
+/* Bienvenida de un compañero nuevo (Inicio sin EVA) */
+.welcome-card { display: flex; gap: 14px; align-items: center; padding: 18px; border-radius: 24px; background: var(--grad); color: #fff; box-shadow: var(--sh-blue); margin-bottom: 16px; }
+.welcome-card h2 { font-size: 21px; margin-bottom: 4px; }
+.welcome-card p { margin: 0; font-size: 14.5px; line-height: 1.45; opacity: .95; }
+.first-steps { list-style: none; margin: 0 0 16px; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--sh-1); }
+.first-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; }
+.first-steps li + li { border-top: 1px solid var(--line-2); }
+.fs-n { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue); font: 800 13px var(--mono); }
+.first-steps li.done .fs-n { background: var(--green); color: #fff; }
+.first-steps li.done b { text-decoration: line-through; color: var(--muted); }
+.fs-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fs-copy b { color: var(--ink); font-size: 15px; }
+.fs-copy small { color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+.center { text-align: center; }
