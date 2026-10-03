@@ -111,7 +111,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             <span className="stat-ic blue"><Icon name="tasks" size={18} /></span>
             <span className="value num"><CountUp value={d.counts.pending} /></span>
             <span className="label">Pendientes</span>
-            <span className={`foot ${d.counts.today ? 'warn' : ''}`}>{d.counts.today ? `${d.counts.today} ${d.counts.today > 1 ? "vencen" : "vence"} hoy` : 'Nada vence hoy'}</span>
+            {/* Lo vencido pesa más que lo de hoy: si hay, es lo primero que tiene que ver. */}
+            <span className={`foot ${d.counts.overdue || d.counts.today ? 'warn' : ''}`}>{d.counts.overdue ? `${d.counts.overdue} ${d.counts.overdue > 1 ? 'vencidas' : 'vencida'} sin marcar` : d.counts.today ? `${d.counts.today} ${d.counts.today > 1 ? 'vencen' : 'vence'} hoy` : 'Nada vence hoy'}</span>
           </button>
           <button className="stat" onClick={() => go('asignaturas')}>
             <span className="stat-ic green"><Icon name="trend" size={18} /></span>
@@ -127,9 +128,9 @@ export function Inicio({ go }: { go: (p: string) => void }) {
           </button>
           <button className="stat" onClick={() => go('pagos')}>
             <span className={`stat-ic ${payTone}`}><Icon name="wallet" size={18} /></span>
-            <span className="value num">{p.openDay}–{p.closeDay}</span>
-            <span className="label">Ventana de pago</span>
-            <span className={`foot ${payTone === 'orange' ? 'warn' : payTone === 'green' ? 'good' : 'info'}`}>{payState}</span>
+            <span className="value num">{p.paid ? '✓' : p.state === 'open' ? <><CountUp value={p.daysToClose} /><small className="unit"> {p.daysToClose === 1 ? 'día' : 'días'}</small></> : <><CountUp value={p.daysToOpen} /><small className="unit"> {p.daysToOpen === 1 ? 'día' : 'días'}</small></>}</span>
+            <span className="label">{p.paid ? 'Cuota pagada' : p.state === 'open' ? 'Para pagar la cuota' : 'Para que abra el pago'}</span>
+            <span className={`foot ${payTone === 'orange' ? 'warn' : payTone === 'green' ? 'good' : 'info'}`}>{p.paid ? payState : `Ventana del ${p.openDay} al ${p.closeDay}`}</span>
           </button>
         </div>
       </section>
@@ -181,7 +182,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             </button>
           )}
 
-          <div className="card">
+          <div className="card hide-mobile">
             <div className="card-head"><h3>Hoy y mañana</h3><span className="pill gray num">{soon.length}</span></div>
             {soon.length === 0 ? <p className="muted small">Nada vence en las próximas 36 horas. 🎉</p> : (
               <ol className="timeline">
@@ -217,7 +218,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             <div className="card-head"><h3>Cuota del mes</h3><span className={`pill ${payTone} spacer`}>{p.paid ? 'Pagado' : p.state === 'open' ? 'Abierta' : 'Aún no abre'}</span></div>
             <span className="amount num">{p.amount ? <><small>RD$</small>{Number(p.amount).toLocaleString('es-DO')}</> : <><small>RD$</small>—</>}</span>
             <div className="paybar"><div className={payTone} style={{ width: `${p.paid ? 100 : p.state === 'open' ? 100 - Math.min(100, (p.daysToClose / 11) * 100) : Math.max(4, 100 - (p.daysToOpen / 30) * 100)}%` }} /></div>
-            <div className="pay-legend num"><span>Hoy</span><span>Abre el {p.openDay}</span><span>Cierra el {p.closeDay}</span></div>
+            <div className="pay-legend"><span>{p.paid ? `Pagaste la cuota de este mes` : p.state === 'open' ? `Abrió el ${p.openDay} · cierra el ${p.closeDay}` : `Abre el ${p.openDay} · cierra el ${p.closeDay}`}</span><b className="num">{p.paid ? '✓' : p.state === 'open' ? `${p.daysToClose} d` : `en ${p.daysToOpen} d`}</b></div>
           </button>
         </div>
       </section>

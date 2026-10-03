@@ -65,6 +65,15 @@ export function whenLabel(sec: number | null): string {
   return cap(fmt({ weekday: 'short', day: 'numeric', month: 'short' }).format(d)).replace(/\./g, '');
 }
 
+/** "Venció hoy", "Venció ayer", "Venció hace 3 días" (para las entregas atrasadas). */
+export function overdueLabel(sec: number): string {
+  // Días de calendario en hora de RD (UTC−4 todo el año).
+  const day = (x: number) => Math.floor((x - 4 * 3600) / 86400);
+  const days = day(Date.now() / 1000) - day(sec);
+  if (days <= 0) return 'Venció hoy';
+  return days === 1 ? 'Venció ayer' : `Venció hace ${days} días`;
+}
+
 export function dateLabel(sec: number): string {
   return fmt({ day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(sec * 1000)).replace(/\./g, '');
 }
@@ -103,4 +112,12 @@ export const cap =(s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export function cleanTitle(t: string): string {
   const out = t.replace(/^\s*\d{4,}-[A-Z0-9]+(?:-[A-Z0-9]+)*\s*[:\-–]\s*/i, '').replace(/^(Re|Fwd?|RV|RE):\s*/i, '').trim();
   return out || t;
+}
+
+/** Título para mostrar de un aviso: si el del EVA no tiene letras ("....."), usa la primera línea del mensaje. */
+export function newsTitle(title: string, body?: string | null): string {
+  const t = cleanTitle(title);
+  if (/[\p{L}\p{N}]/u.test(t)) return t;
+  const first = (body || '').split('\n').map((l) => l.trim()).find((l) => /[\p{L}\p{N}]/u.test(l)) || '';
+  return first ? (first.length > 80 ? first.slice(0, 79).trimEnd() + '…' : first) : 'Mensaje del EVA';
 }

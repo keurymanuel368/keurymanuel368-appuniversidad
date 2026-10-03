@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Course, type Task } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, toast, usePullToRefresh, useLoad } from '../components';
+import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, toast, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 
 type Filter = 'pendientes' | 'plan' | 'hechas' | 'todas';
@@ -129,6 +129,7 @@ export function Tareas() {
                   <h3>{g.title}</h3>
                   {g.items.length > 0 && <span className={`pill ${g.tone || 'gray'} num`}>{g.items.length}</span>}
                   {g.extra && <span className={`section-extra ${g.extra.startsWith('Promedio') ? 'num' : ''}`}>{g.extra}</span>}
+                  {g.key === 'v' && g.items.length > 1 && <MarkAll items={g.items} onDone={() => { tasks.reload(); window.dispatchEvent(new Event('rumbo:badges')); }} />}
                 </div>
               )}
               {g.items.length > 0 && <div className="card list">{g.items.map((t) => <TaskRow key={t.id} t={t} onToggle={toggle} onOpen={setOpen} />)}</div>}
@@ -141,4 +142,19 @@ export function Tareas() {
       {creating && <TaskModal task={{}} courses={courses.data || []} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); tasks.reload(); }} />}
     </>
   );
+}
+
+/** «Marcar todas»: para cuando ya entregaste lo vencido. Pide un segundo toque en vez de una ventana de confirmación. */
+function MarkAll({ items, onDone }: { items: Task[]; onDone: () => void }) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 4000); return () => clearTimeout(t); }, [armed]);
+  async function go() {
+    if (!armed) { setArmed(true); haptic(6); return; }
+    setBusy(true); haptic(12);
+    try { await Promise.all(items.map((t) => api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: 'done' } }))); toast(`Listo: ${items.length} tareas marcadas como hechas`); onDone(); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false); setArmed(false);
+  }
+  return <button className={`link-btn spacer ${armed ? 'armed' : ''}`} onClick={go} disabled={busy} aria-live="polite">{busy ? 'Marcando…' : armed ? `¿Marcar las ${items.length}? Toca otra vez` : 'Marcar todas'}</button>;
 }

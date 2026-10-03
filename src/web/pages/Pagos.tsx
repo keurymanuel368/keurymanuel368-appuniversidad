@@ -68,8 +68,9 @@ export function Pagos() {
           )}
         </div>
 
-        <div className="card">
-          <div className="card-head"><h3>Configuración y avisos</h3></div>
+        {/* Se configura una vez: plegada cuando ya tiene monto, para que lo importante (pagar) quede arriba. */}
+        <details className="card pay-config" open={!s.pay_amount}>
+          <summary className="card-head"><h3>Configuración y avisos</h3><span className="small muted spacer">{s.pay_amount ? `Del ${s.pay_open_day} al ${s.pay_close_day}` : ''}</span><Icon name="chevron" size={18} className="pc-chev" /></summary>
           <div className="form-grid three">
             <div className="field"><label htmlFor="po">Abre el día</label><input id="po" className="input num" inputMode="numeric" defaultValue={s.pay_open_day} onBlur={(e) => saveSetting('pay_open_day', e.target.value)} /></div>
             <div className="field"><label htmlFor="pc">Cierra el día</label><input id="pc" className="input num" inputMode="numeric" defaultValue={s.pay_close_day} onBlur={(e) => saveSetting('pay_close_day', e.target.value)} /></div>
@@ -79,7 +80,7 @@ export function Pagos() {
           <div className="days">
             {dayList.map((d) => <button key={d} className={`day num ${remindDays.includes(d) ? 'on' : ''}`} onClick={() => toggleDay(d)} aria-pressed={remindDays.includes(d)}>{d}</button>)}
           </div>
-        </div>
+        </details>
       </section>
 
       <div className="section">

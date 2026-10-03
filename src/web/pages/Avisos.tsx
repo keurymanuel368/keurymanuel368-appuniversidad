@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, cleanTitle, dateLabel } from '../api';
+import { api, cleanTitle, newsTitle, dateLabel } from '../api';
 import { Empty, Modal, PageHead, PullIndicator, Segmented, Skeleton, haptic, toast, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 
@@ -32,7 +32,11 @@ export function Avisos() {
   const [filter, setFilter] = useState<Filter>('todo');
   const [open, setOpen] = useState<News | null>(null);
   const list = data.data || [];
-  const shown = list.filter((n) => filter === 'todo' ? n.kind !== 'nota' || n.source !== 'eva' : filter === 'aviso' ? n.kind === 'aviso' || n.kind === 'nota' : n.kind === filter);
+  const [allRumbo, setAllRumbo] = useState(false);
+  const filtered = list.filter((n) => filter === 'todo' ? n.kind !== 'nota' || n.source !== 'eva' : filter === 'aviso' ? n.kind === 'aviso' || n.kind === 'nota' : n.kind === filter);
+  // Las novedades de la app no deben tapar los avisos de la UAPA: en «Todo» solo va la más reciente.
+  const rumbo = filtered.filter((n) => n.source === 'rumbo');
+  const shown = filter === 'todo' && !allRumbo ? filtered.filter((n) => n.source !== 'rumbo' || n.id === rumbo[0]?.id) : filtered;
   const unread = list.filter((n) => !n.read).length;
   const refresh = useCallback(async () => {
     try { await api('/sync', { method: 'POST' }); toast('Avisos al día'); } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
@@ -79,6 +83,7 @@ export function Avisos() {
       {!data.data ? <Skeleton hero={false} rows={4} /> : shown.length === 0 ? (
         <div className="card"><Empty icon="bell" title={list.length ? 'Nada en esta categoría' : 'Sin avisos todavía'} text={list.length ? 'Prueba con otro filtro.' : 'Se traen del EVA al sincronizar: el foro de avisos de cada asignatura y las notificaciones de la universidad.'} /></div>
       ) : (
+        <>
         <div className="news-list stagger">
           {shown.map((n) => {
             const k = KIND[n.kind] || KIND.aviso;
@@ -87,13 +92,15 @@ export function Avisos() {
                 <span className={`news-ic ${k.tone}`}><Icon name={k.icon} size={19} /></span>
                 <span className="news-copy">
                   <span className="news-meta"><b>{n.course_name || SOURCE[n.source] || 'EVA'}</b><span>{ago(n.created_at)}</span>{!n.read && <i className="news-dot" aria-label="Sin leer" />}</span>
-                  <span className="news-title">{cleanTitle(n.title)}</span>
+                  <span className="news-title">{newsTitle(n.title, n.body)}</span>
                   {n.body && <span className="news-body">{n.body}</span>}
                 </span>
               </button>
             );
           })}
         </div>
+        {filter === 'todo' && rumbo.length > 1 && <button className="link-btn center-self more-rumbo" onClick={() => setAllRumbo((v) => !v)}>{allRumbo ? 'Ocultar novedades de Rumbo' : `Ver las ${rumbo.length - 1} novedades anteriores de Rumbo`}</button>}
+        </>
       )}
       {open && <NewsSheet n={open} onClose={() => setOpen(null)} />}
     </>
@@ -104,10 +111,10 @@ function NewsSheet({ n, onClose }: { n: News; onClose: () => void }) {
   const k = KIND[n.kind] || KIND.aviso;
   useEffect(() => haptic(5), []);
   return (
-    <Modal title={cleanTitle(n.title)} onClose={onClose} bare>
+    <Modal title={newsTitle(n.title, n.body)} onClose={onClose} bare>
       <div className="news-sheet">
         <span className={`pill ${k.tone === 'violet' ? 'blue' : k.tone}`}><Icon name={k.icon} size={13} />{k.label}</span>
-        <h2>{cleanTitle(n.title)}</h2>
+        <h2>{newsTitle(n.title, n.body)}</h2>
         <span className="small muted">{n.course_name || SOURCE[n.source]}{n.author ? ` · ${n.author}` : ''} · {dateLabel(n.created_at)}</span>
         <div className="news-full">{n.body || 'Sin contenido.'}</div>
       </div>

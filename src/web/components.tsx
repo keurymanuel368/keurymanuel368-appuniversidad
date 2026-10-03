@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState, type ReactNode, type RefOb
 // El modo estudio se descarga solo cuando lo abres.
 const StudyModal = lazy(() => import('./Study').then((m) => ({ default: m.StudyModal })));
 import { createPortal } from 'react-dom';
-import { api, cap, type Course, type Task, unixToLocalInput, localInputToUnix, urgency, whenLabel } from './api';
+import { api, cap, type Course, type Task, unixToLocalInput, localInputToUnix, overdueLabel, urgency, whenLabel } from './api';
 import { Icon } from './icons';
 
 /** Vibración corta en móviles (si el navegador la soporta). */
@@ -201,7 +201,7 @@ export function TaskRow({ t, onToggle, onOpen }: { t: Task; onToggle: (t: Task) 
   useEffect(() => setOptimistic(null), [t.status]);
   const done = optimistic ?? t.status === 'done';
   const u = urgency(t.due_at);
-  const due = u === 'red' ? 'Vencida' : whenLabel(t.due_at);
+  const due = u === 'red' && t.due_at ? overdueLabel(t.due_at) : whenLabel(t.due_at);
 
   function toggle() {
     setOptimistic(!done);

@@ -10,6 +10,19 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 28,
+    date: '2026-10-03',
+    title: 'Pantallas más claras',
+    items: [
+      'Inicio más corto y sin repetir: ya no sale dos veces lo que vence hoy, y si tienes entregas vencidas te lo dice primero.',
+      'El pago ahora dice lo que importa: «2 días para pagar la cuota».',
+      'Las tareas vencidas dicen cuándo vencieron («Venció ayer», «hace 3 días») y puedes marcarlas todas de una vez si ya las entregaste.',
+      'En Avisos, las novedades de Rumbo ya no tapan los avisos de la UAPA, y los avisos del EVA sin título muestran su primera línea.',
+      'En Pagos, la configuración se pliega cuando ya está lista.',
+      'Las notas de «Últimas calificaciones» quedan alineadas.',
+    ],
+  },
+  {
     version: 27,
     date: '2026-10-03',
     title: 'Se siente más como una app',
