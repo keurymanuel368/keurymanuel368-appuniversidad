@@ -283,7 +283,7 @@ function Login({ onIn }: { onIn: () => void }) {
         <label htmlFor="lg" className="sr-only">Matrícula o usuario</label>
         <div className="lg2-field">
           <span className="lg2-key"><Icon name="users" size={18} /></span>
-          <input id="lg" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Matrícula o usuario" enterKeyHint="next" />
+          <input id="lg" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="Matrícula o usuario" enterKeyHint="next" />
         </div>
         <label htmlFor="pw" className="sr-only">Contraseña</label>
         <div className="lg2-field">
@@ -348,7 +348,7 @@ function Signup({ code, onIn }: { code: string; onIn: () => void }) {
               <input id="su-n" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Tu nombre" required /></div>
             <label htmlFor="su-l" className="sr-only">Matrícula</label>
             <div className="lg2-field"><span className="lg2-key"><Icon name="users" size={18} /></span>
-              <input id="su-l" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" inputMode="numeric" placeholder="Matrícula (con ella entras)" required /></div>
+              <input id="su-l" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="numeric" placeholder="Matrícula (con ella entras)" required /></div>
             <label htmlFor="su-p" className="sr-only">Contraseña nueva</label>
             <div className="lg2-field"><span className="lg2-key"><Icon name="gear" size={18} /></span>
               <input id="su-p" type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="Contraseña nueva (8 o más)" minLength={8} required aria-describedby="su-hint" />

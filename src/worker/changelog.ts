@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 27,
+    date: '2026-10-03',
+    title: 'Se siente más como una app',
+    items: [
+      'Los botones responden al instante al tocarlos y ya no se quedan "marcados" después de tocarlos.',
+      'Dejar presionado un botón ya no abre el menú de copiar.',
+      'En Android, el teclado ya no tapa el cuadro del asistente.',
+      'La barra de arriba del teléfono combina con el modo claro y el oscuro.',
+    ],
+  },
+  {
     version: 26,
     date: '2026-10-02',
     title: 'WhatsApp con mejor formato',
