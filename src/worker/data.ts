@@ -31,9 +31,10 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
   const sql = `SELECT t.id, t.title, t.due_at, t.url, t.source, t.status, t.notes, t.submitted_at, t.course_id, t.focus_minutes,${opts.id !== undefined ? ' t.description,' : ''}
       c.name AS course_name, c.short_name AS course_short, c.color AS course_color,
       COALESCE(NULLIF(c.facilitator, ''), c.facilitator_eva) AS facilitator,
-      g.grade AS grade, g.grade_max AS grade_max, g.feedback AS grade_feedback
+      g.grade AS grade, g.grade_max AS grade_max, g.feedback AS grade_feedback, g.source AS grade_source
     FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-    LEFT JOIN grades g ON g.moodle_key IS NOT NULL AND g.user_id = t.user_id AND g.moodle_key = t.moodle_key
+    -- Un foro trae dos renglones de nota («calificación» y «foro completo»): se usa el que tiene nota.
+    LEFT JOIN grades g ON g.id = (SELECT g2.id FROM grades g2 WHERE g2.user_id = t.user_id AND g2.moodle_key = t.moodle_key ORDER BY g2.grade IS NULL, g2.updated_at DESC LIMIT 1)
     WHERE ${where.join(' AND ')}
     ORDER BY ${opts.status === 'done' ? 'COALESCE(t.due_at, t.submitted_at, t.updated_at) DESC' : 't.due_at IS NULL, t.due_at ASC'} LIMIT ?`;
   binds.push(opts.limit ?? 200);
@@ -42,13 +43,16 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
 }
 
 export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
+  // Cada actividad cuenta una vez (los foros traen dos renglones de nota: vale el que tiene nota).
   const { results } = await env.DB.prepare(`
+    WITH best AS (SELECT g.course_id, g.grade, g.grade_max FROM grades g WHERE g.user_id = ?1 AND g.id = (SELECT g2.id FROM grades g2
+      WHERE g2.course_id = g.course_id AND COALESCE(g2.moodle_key, 'i' || g2.id) = COALESCE(g.moodle_key, 'i' || g.id) ORDER BY g2.grade IS NULL, g2.id LIMIT 1))
     SELECT c.id, c.code, c.name, c.short_name, c.color, c.facilitator, c.facilitator_eva,
-      (SELECT COUNT(*) FROM grades g WHERE g.course_id = c.id AND g.grade IS NOT NULL) AS graded,
-      (SELECT COUNT(*) FROM grades g WHERE g.course_id = c.id) AS total,
-      (SELECT AVG(g.grade * 100.0 / g.grade_max) FROM grades g WHERE g.course_id = c.id AND g.grade IS NOT NULL AND g.grade_max > 0) AS average,
+      (SELECT COUNT(*) FROM best g WHERE g.course_id = c.id AND g.grade IS NOT NULL) AS graded,
+      (SELECT COUNT(*) FROM best g WHERE g.course_id = c.id) AS total,
+      (SELECT AVG(g.grade * 100.0 / g.grade_max) FROM best g WHERE g.course_id = c.id AND g.grade IS NOT NULL AND g.grade_max > 0) AS average,
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
-    FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
+    FROM courses c WHERE c.user_id = ?1 AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
   return results.map((r) => ({ ...r, average: r.average === null ? null : Math.round(r.average * 10) / 10 }));
 }
 
@@ -126,7 +130,7 @@ export async function dashboard(env: Env) {
   const pay = await payWindow(env, s);
   // Últimas notas de tus entregas (las más recientes primero).
   const { results: recentGrades } = await env.DB.prepare(`SELECT t.id FROM tasks t JOIN grades g ON g.user_id = t.user_id AND g.moodle_key = t.moodle_key
-    WHERE t.user_id = ? AND g.grade IS NOT NULL ORDER BY g.updated_at DESC, t.due_at DESC LIMIT 5`).bind(env.UID).all<{ id: number }>();
+    WHERE t.user_id = ? AND g.grade IS NOT NULL GROUP BY t.id ORDER BY MAX(g.updated_at) DESC, t.due_at DESC LIMIT 5`).bind(env.UID).all<{ id: number }>();
   const graded = recentGrades.length ? (await listTasks(env, { limit: 400 })).filter((t) => recentGrades.some((r) => r.id === t.id))
     .sort((a, b) => recentGrades.findIndex((r) => r.id === a.id) - recentGrades.findIndex((r) => r.id === b.id)) : [];
   // Progreso de la semana (lunes a domingo): cuántas entregas con fecha esta semana ya están listas.

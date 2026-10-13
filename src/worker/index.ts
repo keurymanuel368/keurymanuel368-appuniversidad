@@ -631,10 +631,20 @@ app.get('/api/courses/history', async (c) => {
 
 app.get('/api/courses/:id/grades', async (c) => {
   // Cada nota trae su tarea (si existe) para abrir la ficha desde Notas.
-  const { results } = await c.env.DB.prepare(`SELECT g.id, g.item_name, g.grade, g.grade_max, t.id AS task_id, t.due_at, t.status
+  type Row = { id: number; item_name: string; grade: number | null; grade_max: number; moodle_key: string | null; source: string | null; task_id: number | null; due_at: number | null; status: string | null };
+  const { results } = await c.env.DB.prepare(`SELECT g.id, g.item_name, g.grade, g.grade_max, g.moodle_key, g.source, t.id AS task_id, t.due_at, t.status
     FROM grades g LEFT JOIN tasks t ON g.moodle_key IS NOT NULL AND t.user_id = g.user_id AND t.moodle_key = g.moodle_key
-    WHERE g.user_id = ? AND g.course_id = ? ORDER BY COALESCE(t.due_at, 9999999999), g.id`).bind(c.env.UID, Number(c.req.param('id'))).all();
-  return c.json(results);
+    WHERE g.user_id = ? AND g.course_id = ? ORDER BY COALESCE(t.due_at, 9999999999), g.id`).bind(c.env.UID, Number(c.req.param('id'))).all<Row>();
+  // Un foro trae dos renglones («… calificación» y «… foro completo»): se muestra uno solo, el que tiene nota.
+  const byKey = new Map<string, Row>();
+  const out: Row[] = [];
+  for (const r of results) {
+    if (!r.moodle_key) { out.push(r); continue; }
+    const prev = byKey.get(r.moodle_key);
+    if (!prev) { byKey.set(r.moodle_key, r); out.push(r); continue; }
+    if (prev.grade === null && r.grade !== null) out[out.indexOf(prev)] = r, byKey.set(r.moodle_key, r);
+  }
+  return c.json(out.map((r) => ({ ...r, item_name: r.moodle_key?.startsWith('forum:') ? r.item_name.replace(/\s+(calificaci[oó]n|foro completo)$/i, '') : r.item_name })));
 });
 
 app.post('/api/courses', async (c) => {

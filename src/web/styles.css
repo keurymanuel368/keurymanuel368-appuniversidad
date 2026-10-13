@@ -594,6 +594,9 @@ textarea.input { min-height: 0; resize: vertical; }
   display: flex; align-items: center; gap: 10px; padding: 12px 16px 12px 12px; border-radius: 18px; background: rgba(10, 26, 56, .92); color: #fff;
   backdrop-filter: blur(16px); font-size: 14px; font-weight: 600; box-shadow: var(--sh-3); animation: toastIn .4s var(--spring) both; line-height: 1.35;
 }
+.toast-txt { flex: 1; min-width: 0; }
+.toast-act { pointer-events: auto; flex-shrink: 0; min-height: 36px; padding: 0 12px; margin: -4px -6px -4px 0; border: 0; border-radius: 12px; background: rgba(255, 255, 255, .14); color: #9CC3FF; font: inherit; font-weight: 800; cursor: pointer; }
+.toast-act:active { background: rgba(255, 255, 255, .24); }
 .toast-ic { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--green-2); }
 .toast.err .toast-ic { background: #E5484D; }
 
@@ -806,6 +809,7 @@ textarea.input { min-height: 0; resize: vertical; }
 .fact + .fact { border-top: 1px solid var(--line-2); }
 .fact .ic { color: var(--faint); grid-row: span 2; }
 .fact span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.fact .src-tag { margin-left: 8px; padding: 1px 7px; border-radius: 99px; background: var(--blue-soft); color: var(--blue-dark); font-size: 10.5px; font-weight: 700; }
 .fact b { font-size: 15px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
 .ts-actions { display: flex; flex-direction: column; gap: 10px; padding-bottom: 6px; }
 .ts-row { display: flex; gap: 10px; }

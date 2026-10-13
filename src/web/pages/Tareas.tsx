@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Course, type Task } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, toast, usePullToRefresh, useLoad } from '../components';
+import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 
 type Filter = 'pendientes' | 'plan' | 'hechas' | 'todas';
@@ -33,18 +33,13 @@ export function Tareas() {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function toggle(t: Task) {
-    await api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: t.status === 'done' ? 'pending' : 'done' } });
-    if (t.status !== 'done') toast('¡Bien hecho! Tarea completada');
-    tasks.reload();
-    window.dispatchEvent(new Event('rumbo:badges'));
-  }
+  const toggle = (t: Task) => toggleTask(t, tasks.reload).catch((e) => toast((e as Error).message, 'err'));
   const sync = useCallback(async () => {
     setBusy(true);
     try {
-      const r = await api<{ result: { tasksNew: number; courses: number; pastCourses: number; delivered: number; warnings: string[] } }>('/sync', { method: 'POST' });
+      const r = await api<{ result: { tasksNew: number; courses: number; pastCourses: number; delivered: number; forumGrades?: number; warnings: string[] } }>('/sync', { method: 'POST' });
       const x = r.result;
-      toast(`EVA al día · ${x.delivered} entregas en tu historial${x.tasksNew ? ` · ${x.tasksNew} nuevas` : ''}`);
+      toast(`EVA al día · ${x.delivered} entregas en tu historial${x.tasksNew ? ` · ${x.tasksNew} nuevas` : ''}${x.forumGrades ? ` · ${x.forumGrades} nota${x.forumGrades === 1 ? '' : 's'} de foros` : ''}`);
       if (x.warnings?.length) toast('Algunas partes del EVA no respondieron: ' + x.warnings.join(' · '), 'err');
       tasks.reload(); courses.reload();
     } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
@@ -101,7 +96,7 @@ export function Tareas() {
 
       {filter === 'pendientes' && tasks.data && <WeekStrip tasks={list} selected={day} onSelect={setDay} />}
       {tasks.data && list.length > 5 && (
-        <label className="search"><Icon name="tasks" size={18} /><span className="sr-only">Buscar tareas</span>
+        <label className="search"><Icon name="search" size={18} /><span className="sr-only">Buscar tareas</span>
           <input className="input" type="search" aria-label="Buscar tarea o asignatura" placeholder="Buscar tarea o asignatura…" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
       )}

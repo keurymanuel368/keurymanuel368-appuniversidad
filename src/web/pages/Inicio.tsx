@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, cleanTitle, channelsLabel, type Dashboard, type SendResult, type Task, dateLabel, whenLabel } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, toast, usePullToRefresh, useLoad } from '../components';
+import { agoLabel, api, cleanTitle, channelsLabel, type Dashboard, type SendResult, type Task, whenLabel } from '../api';
+import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
@@ -20,14 +20,25 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   const sync = useCallback(async () => {
     setSyncing(true);
     try {
-      const r = await api<{ result: { tasksNew: number; delivered: number } }>('/sync', { method: 'POST' });
-      toast(`EVA al día${r.result.tasksNew ? ` · ${r.result.tasksNew} nuevas` : ''}`);
+      const r = await api<{ result: { tasksNew: number; delivered: number; forumGrades?: number } }>('/sync', { method: 'POST' });
+      toast(`EVA al día${r.result.tasksNew ? ` · ${r.result.tasksNew} nuevas` : ''}${r.result.forumGrades ? ` · ${r.result.forumGrades} nota${r.result.forumGrades === 1 ? '' : 's'} de foros` : ''}`);
       reload(); window.dispatchEvent(new Event('rumbo:badges'));
     } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
     setSyncing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const { pull, refreshing } = usePullToRefresh(sync);
+
+  // Si el EVA lleva más de hora y media sin revisarse, se pone al día solo al abrir (una vez por sesión).
+  const lastSync = d?.lastSync ?? null;
+  const evaOn = !!d?.setup?.eva;
+  useEffect(() => {
+    if (!evaOn || (lastSync && Date.now() / 1000 - lastSync < 90 * 60)) return;
+    try { if (sessionStorage.getItem('rumbo-autosync')) return; sessionStorage.setItem('rumbo-autosync', '1'); } catch { /* sin almacenamiento */ }
+    setSyncing(true);
+    api('/sync', { method: 'POST' }).then(() => { reload(); window.dispatchEvent(new Event('rumbo:badges')); }).catch(() => {}).finally(() => setSyncing(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evaOn, lastSync]);
 
   if (error) return <div className="error">{error}</div>;
   if (!d) return <Skeleton rows={4} />;
@@ -43,11 +54,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   const payTone = p.paid ? 'green' : p.state === 'open' ? 'orange' : 'blue';
   const initial = (d.name || 'R').trim().charAt(0).toUpperCase();
 
-  async function toggle(t: Task) {
-    await api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: t.status === 'done' ? 'pending' : 'done' } });
-    if (t.status !== 'done') toast('¡Bien hecho! Tarea completada');
-    reload();
-  }
+  const toggle = (t: Task) => toggleTask(t, reload).catch((e) => toast((e as Error).message, 'err'));
   async function sendSummary() {
     setBusy(true);
     try {
@@ -127,7 +134,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             <span className="stat-ic violet"><Icon name="book" size={18} /></span>
             <span className="value num"><CountUp value={d.courses.length} /></span>
             <span className="label">Asignaturas</span>
-            <span className="foot">{d.lastSync ? `EVA · ${dateLabel(d.lastSync)}` : 'EVA sin sincronizar'}</span>
+            <span className="foot">{syncing ? 'Actualizando el EVA…' : d.lastSync ? `EVA ${agoLabel(d.lastSync)}` : 'EVA sin sincronizar'}</span>
           </button>
           <button className="stat" onClick={() => go('pagos')}>
             <span className={`stat-ic ${payTone}`}><Icon name="wallet" size={18} /></span>
@@ -160,7 +167,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
               <div className="section-head"><h3>Asignaturas</h3><button className="link-btn" onClick={() => go('asignaturas')}>Notas<Icon name="chevron" size={16} /></button></div>
               <div className="courses scroller">
                 {d.courses.map((c) => (
-                  <button key={c.id} className="course" onClick={() => go('asignaturas')} style={{ ['--c' as string]: c.color }}>
+                  <button key={c.id} className="course" onClick={() => go(`asignaturas/${c.id}`)} style={{ ['--c' as string]: c.color }}>
                     <span className="course-top"><span className="code">{c.code || (c.short_name || '').toUpperCase().slice(0, 14)}</span><span className="grade num">{c.average ?? '—'}</span></span>
                     <span className="name">{c.name}</span>
                     <div className="progress"><div style={{ width: `${c.total ? (c.graded / c.total) * 100 : 0}%` }} /></div>

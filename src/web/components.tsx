@@ -9,25 +9,42 @@ import { Icon } from './icons';
 export const haptic = (ms = 8) => { try { navigator.vibrate?.(ms); } catch { /* sin vibración */ } };
 
 // ----- Avisos flotantes (toasts) -----
-type ToastT = { id: number; text: string; kind: 'ok' | 'err' };
+type ToastAction = { label: string; run: () => void };
+type ToastT = { id: number; text: string; kind: 'ok' | 'err'; action?: ToastAction };
 const toastListeners = new Set<(t: ToastT) => void>();
-export function toast(text: string, kind: 'ok' | 'err' = 'ok') {
-  const t = { id: Date.now() + Math.random(), text, kind };
+export function toast(text: string, kind: 'ok' | 'err' = 'ok', action?: ToastAction) {
+  const t = { id: Date.now() + Math.random(), text, kind, action };
   toastListeners.forEach((l) => l(t));
+}
+
+/** Marca una tarea como hecha o pendiente; al completarla ofrece «Deshacer» por unos segundos. */
+export async function toggleTask(t: Task, reload: () => void) {
+  const next = t.status === 'done' ? 'pending' : 'done';
+  await api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: next } });
+  reload();
+  window.dispatchEvent(new Event('rumbo:badges'));
+  if (next === 'done') toast('¡Bien hecho! Tarea completada', 'ok', {
+    label: 'Deshacer',
+    run: async () => {
+      try { await api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: 'pending' } }); reload(); window.dispatchEvent(new Event('rumbo:badges')); }
+      catch (e) { toast((e as Error).message, 'err'); }
+    },
+  });
 }
 export function Toaster() {
   const [list, setList] = useState<ToastT[]>([]);
   useEffect(() => {
     const l = (t: ToastT) => {
       setList((x) => [...x.slice(-2), t]);
-      setTimeout(() => setList((x) => x.filter((y) => y.id !== t.id)), 4000);
+      setTimeout(() => setList((x) => x.filter((y) => y.id !== t.id)), t.action ? 6000 : 4000);
     };
     toastListeners.add(l);
     return () => { toastListeners.delete(l); };
   }, []);
   return (
     <div className="toasts" aria-live="polite" aria-atomic="false">
-      {list.map((t) => <div key={t.id} className={`toast ${t.kind}`} role={t.kind === 'err' ? 'alert' : 'status'}><span className="toast-ic"><Icon name={t.kind === 'ok' ? 'check' : 'alert'} size={16} style={{ strokeWidth: 2.6 }} /></span>{t.text}</div>)}
+      {list.map((t) => <div key={t.id} className={`toast ${t.kind}`} role={t.kind === 'err' ? 'alert' : 'status'}><span className="toast-ic"><Icon name={t.kind === 'ok' ? 'check' : 'alert'} size={16} style={{ strokeWidth: 2.6 }} /></span><span className="toast-txt">{t.text}</span>
+        {t.action && <button className="toast-act" onClick={() => { haptic(6); t.action!.run(); setList((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}</div>)}
     </div>
   );
 }
@@ -307,14 +324,14 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
 
       {graded && task.grade_feedback && (
         <div className="feedback-card">
-          <span className="fb-head"><Icon name="chat" size={16} />Comentario del facilitador</span>
+          <span className="fb-head"><Icon name="chat" size={16} />{task.grade_source === 'foro' ? 'Respuesta del facilitador en el foro' : 'Comentario del facilitador'}</span>
           <p>{task.grade_feedback}</p>
         </div>
       )}
 
       <div className="facts">
         {/* La calificación solo cuando tiene sentido: ya hay nota o ya se entregó. */}
-        {(graded || done) && <div className="fact"><Icon name="trend" size={18} /><span>Calificación</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : 'Todavía sin nota'}</b></div>}
+        {(graded || done) && <div className="fact"><Icon name="trend" size={18} /><span>Calificación{task.grade_source === 'foro' && <small className="src-tag">tomada del foro</small>}</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : 'Todavía sin nota'}</b></div>}
         <div className="fact"><Icon name="calendar" size={18} /><span>Fecha de entrega</span><b>{task.due_at ? cap(dateTime(task.due_at)) : 'Sin fecha'}</b></div>
         {task.submitted_at && !closed && <div className="fact"><Icon name="check" size={18} /><span>Registrada como entregada</span><b>{cap(dateTime(task.submitted_at))}</b></div>}
         {task.facilitator && <div className="fact"><Icon name="cap" size={18} /><span>Facilitador/a</span><b>{task.facilitator}</b></div>}

@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, dateLabel, type Course, type PensumRow, type Task } from '../api';
-import { CountUp, Empty, Modal, PageHead, Ring, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, toast, useLoad } from '../components';
+import { CountUp, Empty, Modal, PageHead, Ring, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, toast, toggleTask, useLoad } from '../components';
 import { Icon } from '../icons';
 
-type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; task_id: number | null; due_at: number | null; status: string | null };
+type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; source?: string | null; task_id: number | null; due_at: number | null; status: string | null };
 
 export function Asignaturas() {
   const courses = useLoad(() => api<Course[]>('/courses'));
-  const [sel, setSel] = useState<number | null>(null);
+  // Desde Inicio, «#asignaturas/12» abre directo esa asignatura.
+  const [sel, setSel] = useState<number | null>(() => Number(location.hash.match(/^#asignaturas\/(\d+)/)?.[1]) || null);
+  useEffect(() => {
+    if (!sel || !courses.data) return;
+    history.replaceState(null, '', '#asignaturas');
+    if (window.innerWidth < 900) setTimeout(() => document.querySelector('.detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!courses.data]);
   const [adding, setAdding] = useState(false);
   const list = courses.data || [];
   const current = list.find((c) => c.id === sel) || list[0] || null;
@@ -172,7 +179,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
               return (
                 <button key={x.id} className={`grade-row ${x.task_id ? 'tappable' : ''}`} onClick={() => x.task_id && openTask(x.task_id)} disabled={!x.task_id}>
                   <div className="grade-top">
-                    <span className="grade-name">{x.item_name}{x.due_at && <small>{dateLabel(x.due_at)}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}</small>}</span>
+                    <span className="grade-name">{x.item_name}{x.due_at && <small>{dateLabel(x.due_at)}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota tomada del foro' : ''}</small>}</span>
                     <span className={`grade-val num ${tone}`}>{x.grade === null ? 'Pendiente' : `${fmtGrade(x.grade)}/${fmtGrade(x.grade_max)}`}</span>
                     {x.task_id && <Icon name="chevron" size={16} className="row-chevron" />}
                   </div>
@@ -187,7 +194,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
       {upcoming.data && upcoming.data.length > 0 && (
         <div className="card">
           <div className="card-head"><h3>Próximas entregas</h3><span className="pill blue num">{upcoming.data.length}</span></div>
-          <div className="list">{upcoming.data.map((t) => <TaskRow key={t.id} t={t} onToggle={async (x) => { await api(`/tasks/${x.id}`, { method: 'PATCH', body: { status: 'done' } }); toast('¡Bien hecho! Tarea completada'); upcoming.reload(); }} onOpen={setOpen} />)}</div>
+          <div className="list">{upcoming.data.map((t) => <TaskRow key={t.id} t={t} onToggle={(x) => toggleTask(x, () => { upcoming.reload(); grades.reload(); }).catch((e) => toast((e as Error).message, 'err'))} onOpen={setOpen} />)}</div>
         </div>
       )}
       <div className="card simulator">

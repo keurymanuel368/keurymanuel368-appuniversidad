@@ -24,7 +24,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
 
 export type Task = {
   id: number; title: string; due_at: number | null; url: string | null; source: string; status: string; notes: string | null; submitted_at?: number | null;
-  grade?: number | null; grade_max?: number | null; grade_feedback?: string | null; facilitator?: string | null; focus_minutes?: number; description?: string | null;
+  grade?: number | null; grade_max?: number | null; grade_feedback?: string | null; grade_source?: string | null; facilitator?: string | null; focus_minutes?: number; description?: string | null;
   course_id: number | null; course_name: string | null; course_short: string | null; course_color: string | null;
 };
 export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number };
@@ -72,6 +72,16 @@ export function overdueLabel(sec: number): string {
   const days = day(Date.now() / 1000) - day(sec);
   if (days <= 0) return 'Venció hoy';
   return days === 1 ? 'Venció ayer' : `Venció hace ${days} días`;
+}
+
+/** «hace un momento», «hace 12 min», «hace 3 h», «ayer», o la fecha. */
+export function agoLabel(sec: number): string {
+  const s = Math.max(0, Date.now() / 1000 - sec);
+  if (s < 90) return 'hace un momento';
+  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+  if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+  if (s < 2 * 86400) return 'ayer';
+  return dateLabel(sec);
 }
 
 export function dateLabel(sec: number): string {

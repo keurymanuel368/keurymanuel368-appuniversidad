@@ -10,6 +10,19 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 30,
+    date: '2026-10-13',
+    title: '📝 Notas de foros, directo del foro',
+    items: [
+      'Rumbo ahora entra a tus foros calificables y busca la nota ahí mismo: la puntuación de tu mensaje o la respuesta del facilitador («Calificación: 95»). Así ves la nota aunque el EVA no la haya pasado al libro de calificaciones.',
+      'Arreglado: los foros salían «sin nota» aunque ya estaban calificados (el EVA trae dos renglones por foro y a veces se tomaba el vacío). Ahora cada foro sale una sola vez, con su nota.',
+      'Los foros donde ya participaste aparecen como entregados, aunque no tengan fecha.',
+      'Al marcar una tarea como hecha aparece «Deshacer» por si te equivocaste.',
+      'En Inicio, tocar una asignatura abre directo sus notas, y dice hace cuánto se revisó el EVA. Si lleva rato sin revisarse, se pone al día solo al abrir la app.',
+      'Arreglados los acentos rotos en algunos nombres del EVA («Tecnología»).',
+    ],
+  },
+  {
     version: 29,
     date: '2026-10-03',
     title: 'Ficha de tarea más directa',
