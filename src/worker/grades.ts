@@ -31,11 +31,11 @@ export async function notifyGrades(env: Env, grades: SyncResult['newGrades']): P
     const { icon, cheer, changed, title, head, body } = m;
     const task = g.key ? await env.DB.prepare('SELECT id FROM tasks WHERE user_id = ? AND moodle_key = ? LIMIT 1').bind(env.UID, g.key).first<{ id: number }>() : null;
     // En Avisos (filtro «Avisos» → calificaciones), con el comentario completo.
-    await env.DB.prepare(`INSERT OR IGNORE INTO announcements (user_id, source, ext_id, course_id, title, body, author, kind, created_at) VALUES (?, 'notas', ?, ?, ?, ?, 'EVA', 'nota', ?)`)
+    await env.DB.prepare(`INSERT OR IGNORE INTO announcements (user_id, source, ext_id, course_id, title, body, author, kind, url, created_at) VALUES (?, 'notas', ?, ?, ?, ?, 'EVA', 'nota', ?, ?)`)
       .bind(env.UID, `${g.courseId}:${g.itemId}:${g.grade}`, g.courseId, `${icon} ${g.item}: ${fmt(g.grade)}/${fmt(g.max)}`, `${changed ? `Tu nota cambió de ${fmt(g.prev!)} a ${fmt(g.grade)}.
 
 ` : ''}${g.feedback ? `Comentario del facilitador:
-${g.feedback}` : 'Sin comentario del facilitador.'}`, nowSec()).run();
+${g.feedback}` : 'Sin comentario del facilitador.'}`, task ? `/#tareas/${task.id}` : null, nowSec()).run();
     // WhatsApp: la nota grande, el comentario como cita (con «> » WhatsApp lo muestra con la barrita al lado).
     const quote = g.feedback ? `💬 _Comentario del facilitador:_\n${g.feedback.slice(0, 500).split('\n').filter((l) => l.trim()).map((l) => `> ${l}`).join('\n')}` : '';
     const r = await sendToMe(env, blocks(

@@ -256,7 +256,7 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
     budget -= out.calls;
     scanned[f.id] = now;
     const fd = out.finding;
-    log.push(`${f.id}:${fd.participated ? 'participó' : 'sin mensajes'}${fd.grade !== null ? ` nota ${fd.grade}/${fd.max} (${fd.how})` : ''}`);
+    log.push(`${f.id}:${fd.participated ? 'participó' : 'sin mensajes'}${fd.grade !== null ? ` nota ${fd.grade}/${fd.max} (${fd.how})` : ''} ${fd.debug.slice(0, 900)}`);
     if (fd.participated) delivered.add(key);
     if (fd.grade === null || !fd.max) continue;
     const target = own[0];

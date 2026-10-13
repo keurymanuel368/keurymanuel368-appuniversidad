@@ -118,7 +118,9 @@ function NewsSheet({ n, onClose }: { n: News; onClose: () => void }) {
         <span className="small muted">{n.course_name || SOURCE[n.source]}{n.author ? ` · ${n.author}` : ''} · {dateLabel(n.created_at)}</span>
         <div className="news-full">{n.body || 'Sin contenido.'}</div>
       </div>
-      {n.url && <a className="btn primary lg block" href={n.url} target="_blank" rel="noopener"><Icon name="link" size={18} />{n.source === 'correo' ? 'Abrir el correo' : 'Abrir en el EVA'}</a>}
+      {/* Aviso de nota: abre la ficha de la tarea o el foro con su calificación, dentro de Rumbo. */}
+      {n.url?.startsWith('/#') ? <button className="btn primary lg block" onClick={() => { onClose(); location.hash = n.url!.slice(2); }}><Icon name="trend" size={18} />Ver la calificación</button>
+      : n.url && <a className="btn primary lg block" href={n.url} target="_blank" rel="noopener"><Icon name="link" size={18} />{n.source === 'correo' ? 'Abrir el correo' : 'Abrir en el EVA'}</a>}
     </Modal>
   );
 }
