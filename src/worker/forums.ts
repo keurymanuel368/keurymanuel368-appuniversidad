@@ -68,7 +68,14 @@ export async function scanForum(env: Env, forum: ForumInfo, me: number, gradeMax
   const finding: ForumFinding = { forum, participated: false, firstPost: null, grade: null, max: null, feedback: '', how: null };
   type Disc = { id: number; discussion?: number; userid?: number; userfullname?: string; numreplies?: number };
   let calls = 1;
-  const discs = (await moodleCall<{ discussions?: Disc[] }>(env, 'mod_forum_get_forum_discussions', { forumid: forum.id, sortorder: 0, page: 0, perpage: 40 })).discussions || [];
+  let discs: Disc[];
+  try {
+    discs = (await moodleCall<{ discussions?: Disc[] }>(env, 'mod_forum_get_forum_discussions', { forumid: forum.id, sortorder: -1, page: 0, perpage: 40 })).discussions || [];
+  } catch {
+    // EVA más viejo: la versión paginada anterior.
+    calls++;
+    discs = (await moodleCall<{ discussions?: Disc[] }>(env, 'mod_forum_get_forum_discussions_paginated', { forumid: forum.id, sortby: 'timemodified', sortdirection: 'DESC', page: 0, perpage: 40 })).discussions || [];
+  }
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   const facs = facilitators.map(norm).filter(Boolean);
   // Primero las discusiones que abriste tú, luego las del facilitador; si son pocas, todas.

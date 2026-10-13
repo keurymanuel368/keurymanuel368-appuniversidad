@@ -171,7 +171,7 @@ async function syncNews(env: Env, userid: number, courseMap: Map<number, { id: n
         type Disc = { discussion?: number; id: number; name?: string; subject?: string; message?: string; created?: number; timemodified?: number; userfullname?: string };
         let discs: Disc[] = [];
         try {
-          discs = (await moodleCall<{ discussions: Disc[] }>(env, 'mod_forum_get_forum_discussions', { forumid: f.id, sortorder: 0, page: 0, perpage: 10 })).discussions || [];
+          discs = (await moodleCall<{ discussions: Disc[] }>(env, 'mod_forum_get_forum_discussions', { forumid: f.id, sortorder: -1, page: 0, perpage: 10 })).discussions || [];
         } catch {
           // Algunos foros de avisos están ocultos para estudiantes: se salta ese y se sigue con los demás.
           try {
