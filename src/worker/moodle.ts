@@ -3,7 +3,7 @@
 import type { Env } from './env';
 import { getSetting, setSetting } from './db';
 import { nowSec } from './time';
-import { notifyGrades } from './grades';
+import { notifyChanges, notifyGrades } from './grades';
 import { scanForum, type ForumInfo } from './forums';
 
 const COLORS = ['#1F5FE0', '#12A5C9', '#7A5AF0', '#F08A1C', '#0F9F6E', '#D6457A', '#8A6D3B', '#3E4C6B'];
@@ -64,9 +64,16 @@ function extractCode(c: MoodleCourse): string | null {
   return m ? `${m[1]}-${m[2]}` : null;
 }
 
+export type SyncChange =
+  | { kind: 'fecha'; taskId: number; title: string; course: string | null; from: number; to: number }
+  | { kind: 'nueva'; taskId: number; title: string; course: string | null; due: number }
+  | { kind: 'respuesta'; taskKey: string; title: string; course: string | null; author: string; text: string };
+
 export type SyncResult = {
   courses: number; pastCourses: number; tasksNew: number; tasksUpdated: number; tasksClosed: number; facilitators: number; activities: number; delivered: number; forumGrades: number;
   newGrades: { course: string; courseId: number; item: string; grade: number; max: number; prev: number | null; feedback: string; key: string | null; itemId: number }[]; newNews: NewsItem[]; warnings: string[];
+  /** Fechas movidas, tareas nuevas y respuestas a tus mensajes en foros (para avisarte). */
+  changes: SyncChange[];
 };
 
 /** Facilitadores de cada curso: primero los "contactos" del curso; si no hay, los docentes inscritos. */
@@ -235,6 +242,7 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
   const { results: rows } = await env.DB.prepare(`SELECT id, course_id, moodle_key, item_name, grade, grade_max, source FROM grades WHERE user_id = ? AND moodle_key LIKE 'forum:%'`)
     .bind(env.UID).all<{ id: number; course_id: number; moodle_key: string; item_name: string; grade: number | null; grade_max: number; source: string | null }>();
   const scanned = JSON.parse(await getSetting(env, 'forum_scan', '{}')) as Record<string, number>;
+  const seenReplies = JSON.parse(await getSetting(env, 'forum_replies_seen', '{}')) as Record<string, number>;
   const { results: facRows } = await env.DB.prepare(`SELECT moodle_id, COALESCE(NULLIF(facilitator, ''), facilitator_eva) AS f FROM courses WHERE user_id = ?`).bind(env.UID).all<{ moodle_id: number; f: string | null }>();
   const now = nowSec();
   // Los que el libro de calificaciones ya trae con nota no hace falta abrirlos.
@@ -260,6 +268,12 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
     const fd = out.finding;
     log.push(`${f.id}:${fd.participated ? 'participó' : 'sin mensajes'}${fd.grade !== null ? ` nota ${fd.grade}/${fd.max} (${fd.how})` : ''} ${fd.debug.slice(0, 900)}`);
     part.set(key, { posts: fd.posts, replies: fd.replies, needed: fd.needed });
+    // Respuestas nuevas a tus mensajes (la primera vez solo se anota lo que ya había).
+    const lastSeen = seenReplies[f.id];
+    const fresh = fd.toMe.filter((r) => lastSeen !== undefined && r.id > lastSeen);
+    if (fd.toMe.length) seenReplies[f.id] = Math.max(lastSeen ?? 0, ...fd.toMe.map((r) => r.id));
+    else if (lastSeen === undefined) seenReplies[f.id] = 0;
+    for (const r of fresh.slice(-3)) result.changes.push({ kind: 'respuesta', taskKey: key, title: fixText(f.name), course: course.name, author: r.author, text: r.text });
     if (fd.participated) delivered.add(key);
     if (fd.grade === null || !fd.max) continue;
     const target = own[0];
@@ -283,14 +297,24 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
     result.newGrades.push({ course: course.name, courseId: course.id, item: fixText(f.name), grade, max: gradeMax, prev: target?.grade ?? null, feedback: fd.feedback, key, itemId });
   }
   await setSetting(env, 'forum_scan', JSON.stringify(scanned));
+  await setSetting(env, 'forum_replies_seen', JSON.stringify(seenReplies));
   await setSetting(env, 'forum_scan_log', `${new Date(now * 1000).toISOString()} ${log.join(' | ') || 'nada que revisar'}`);
 }
 
 export async function syncEva(env: Env): Promise<SyncResult> {
-  const result: SyncResult = { forumGrades: 0, courses: 0, pastCourses: 0, delivered: 0, tasksNew: 0, tasksUpdated: 0, tasksClosed: 0, facilitators: 0, activities: 0, newGrades: [], newNews: [], warnings: [] };
+  const result: SyncResult = { forumGrades: 0, courses: 0, pastCourses: 0, delivered: 0, tasksNew: 0, tasksUpdated: 0, tasksClosed: 0, facilitators: 0, activities: 0, newGrades: [], newNews: [], warnings: [], changes: [] };
   wsState.set(env, { calls: 0, memo: new Map() });
   try {
-    const site = await moodleCall<{ userid: number; fullname: string }>(env, 'core_webservice_get_site_info');
+    const site = await moodleCall<{ userid: number; fullname: string; uploadfiles?: number; functions?: { name: string }[] }>(env, 'core_webservice_get_site_info');
+    const fns = new Set((site.functions || []).map((f) => f.name));
+    await setSetting(env, 'eva_can', JSON.stringify({
+      forumPost: fns.has('mod_forum_add_discussion_post'),
+      submit: !!site.uploadfiles && fns.has('mod_assign_save_submission'),
+      submitGrading: fns.has('mod_assign_submit_for_grading'),
+      status: fns.has('mod_assign_get_submission_status'),
+    }));
+    // ¿Ya había tareas del EVA? (en la primera sincronización no se avisa de «tareas nuevas»)
+    const hadTasks = !!(await env.DB.prepare(`SELECT 1 AS x FROM tasks WHERE user_id = ? AND source = 'eva' LIMIT 1`).bind(env.UID).first());
     const now = nowSec();
 
     // 1) Asignaturas: las actuales quedan activas; las de trimestres anteriores se guardan inactivas
@@ -343,7 +367,10 @@ export async function syncEva(env: Env): Promise<SyncResult> {
       if (!course.current && !pastToCheck.has(moodleId)) continue;
       try {
         const g = await moodleCall<{ usergrades: { gradeitems: GradeItem[] }[] }>(env, 'gradereport_user_get_grade_items', { courseid: moodleId, userid: site.userid });
-        const items = (g.usergrades?.[0]?.gradeitems || []).filter((i) => i.itemtype === 'mod' || i.itemtype === 'manual');
+        const all = g.usergrades?.[0]?.gradeitems || [];
+        const total = all.find((i) => i.itemtype === 'course');
+        if (total) await env.DB.prepare('UPDATE courses SET eva_total = ?, eva_total_max = ? WHERE id = ?').bind(total.graderaw, total.grademax || 100, course.id).run();
+        const items = all.filter((i) => i.itemtype === 'mod' || i.itemtype === 'manual');
         const known = await env.DB.prepare('SELECT COUNT(*) AS n FROM grades WHERE course_id = ?').bind(course.id).first<{ n: number }>();
         const firstSync = !known || known.n === 0;
         for (const it of items) {
@@ -354,7 +381,8 @@ export async function syncEva(env: Env): Promise<SyncResult> {
           // Comentario del facilitador (viene en HTML): se guarda como texto simple.
           const feedback = htmlToText(it.feedback || '').slice(0, 2000);
           await env.DB.prepare(`INSERT INTO grades (user_id, course_id, moodle_item_id, item_name, grade, grade_max, moodle_key, feedback, weight, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(course_id, moodle_item_id) DO UPDATE SET item_name = excluded.item_name, grade_max = excluded.grade_max, moodle_key = excluded.moodle_key, updated_at = excluded.updated_at,
+            ON CONFLICT(course_id, moodle_item_id) DO UPDATE SET item_name = excluded.item_name, grade_max = excluded.grade_max, moodle_key = excluded.moodle_key,
+              updated_at = CASE WHEN (CASE WHEN excluded.grade IS NULL AND grades.source IN ('foro', 'manual') THEN grades.grade ELSE excluded.grade END) IS NOT grades.grade THEN excluded.updated_at ELSE grades.updated_at END,
               -- Una nota encontrada en el foro se conserva mientras el libro de calificaciones siga vacío.
               weight = excluded.weight,
               grade = CASE WHEN excluded.grade IS NULL AND grades.source IN ('foro', 'manual') THEN grades.grade ELSE excluded.grade END,
@@ -389,14 +417,18 @@ export async function syncEva(env: Env): Promise<SyncResult> {
       if (key) pendingKeys.add(key);
       const courseId = e.course ? courseMap.get(e.course.id)?.id ?? null : null;
       const title = e.activityname || e.name.replace(/\s+(vence|debe entregarse|cierra|se cierra).*$/i, '');
-      const prev = await env.DB.prepare('SELECT id, due_at, title FROM tasks WHERE user_id = ? AND (moodle_event_id = ? OR (moodle_key IS NOT NULL AND moodle_key = ?)) LIMIT 1')
-        .bind(env.UID, e.id, key).first<{ id: number; due_at: number; title: string }>();
+      const prev = await env.DB.prepare('SELECT id, due_at, title, status FROM tasks WHERE user_id = ? AND (moodle_event_id = ? OR (moodle_key IS NOT NULL AND moodle_key = ?)) LIMIT 1')
+        .bind(env.UID, e.id, key).first<{ id: number; due_at: number | null; title: string; status: string }>();
+      const courseName = e.course ? courseMap.get(e.course.id)?.name ?? null : null;
       if (!prev) {
-        await env.DB.prepare(`INSERT INTO tasks (user_id, moodle_event_id, moodle_key, course_id, title, due_at, url, source, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'eva', 'pending')`)
-          .bind(env.UID, e.id, key, courseId, title, e.timesort, e.url || null).run();
+        const ins = await env.DB.prepare(`INSERT INTO tasks (user_id, moodle_event_id, moodle_key, course_id, title, due_at, url, source, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'eva', 'pending') RETURNING id`)
+          .bind(env.UID, e.id, key, courseId, title, e.timesort, e.url || null).first<{ id: number }>();
         result.tasksNew++;
+        if (hadTasks && ins && e.timesort > now) result.changes.push({ kind: 'nueva', taskId: ins.id, title, course: courseName, due: e.timesort });
       } else {
         if (prev.due_at !== e.timesort || prev.title !== title) result.tasksUpdated++;
+        // El facilitador movió la fecha (más de una hora de diferencia) de algo que todavía no entregas.
+        if (prev.status === 'pending' && prev.due_at && Math.abs(prev.due_at - e.timesort) > 3600) result.changes.push({ kind: 'fecha', taskId: prev.id, title, course: courseName, from: prev.due_at, to: e.timesort });
         await env.DB.prepare('UPDATE tasks SET moodle_event_id = ?, moodle_key = COALESCE(moodle_key, ?), due_at = ?, title = ?, course_id = COALESCE(?, course_id), updated_at = ? WHERE id = ?')
           .bind(e.id, key, e.timesort, title, courseId, now, prev.id).run();
       }
@@ -477,6 +509,7 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     await setSetting(env, 'eva_user', site.fullname);
     // Notas nuevas o cambiadas: aviso con la nota y el comentario (también al sincronizar a mano).
     if (result.newGrades.length) await notifyGrades(env, result.newGrades).catch((e) => console.log('Aviso de notas falló: ' + (e as Error).message));
+    if (result.changes.length) await notifyChanges(env, result.changes).catch((e) => console.log('Aviso de cambios falló: ' + (e as Error).message));
     return result;
   } catch (e) {
     await setSetting(env, 'eva_last_error', (e as Error).message.slice(0, 300));

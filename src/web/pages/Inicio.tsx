@@ -149,6 +149,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         </div>
       </section>
 
+      <GoalsCard goals={d.goals || []} ids={d.goalIds || []} onChanged={reload} />
       <AchievementsCard />
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
@@ -256,6 +257,59 @@ function NowCard({ t, onOpen, onDone }: { t: Task; onOpen: () => void; onDone: (
         <button className="btn line" onClick={() => { haptic(10); onDone(); }}><Icon name="check" size={17} />Ya la entregué</button>
       </div>
     </section>
+  );
+}
+
+const GOAL_OPTIONS = [
+  { id: 'atiempo', label: 'Entregar todo a tiempo', hint: 'Nada vencido sin entregar' },
+  { id: 'antes', label: 'Entregar un día antes', hint: 'Con un día de margen' },
+  { id: 'promedio:90', label: 'Promedio de 90 o más', hint: 'En las notas de la semana' },
+  { id: 'promedio:95', label: 'Promedio de 95 o más', hint: 'Para ir por honores' },
+];
+
+/** Metas de la semana: eliges una o varias y ves cómo vas (se reinician cada lunes). */
+function GoalsCard({ goals, ids, onChanged }: { goals: NonNullable<Dashboard['goals']>; ids: string[]; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [pick, setPick] = useState<string[]>(ids);
+  async function save() {
+    try { await api('/settings', { method: 'PUT', body: { goals: pick.join(',') } }); haptic(10); toast(pick.length ? 'Metas guardadas' : 'Metas quitadas'); setEditing(false); onChanged(); }
+    catch (e) { toast((e as Error).message, 'err'); }
+  }
+  const toggle = (id: string) => setPick((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p.filter((x) => !(id.startsWith('promedio') && x.startsWith('promedio'))), id]);
+  if (editing) return (
+    <div className="card goals">
+      <div className="card-head"><h3>Mis metas de la semana</h3></div>
+      <div className="goal-opts">
+        {GOAL_OPTIONS.map((o) => (
+          <button key={o.id} className={`goal-opt ${pick.includes(o.id) ? 'on' : ''}`} onClick={() => { haptic(5); toggle(o.id); }} aria-pressed={pick.includes(o.id)}>
+            <span className="go-check"><Icon name="check" size={13} style={{ strokeWidth: 3 }} /></span><span><b>{o.label}</b><small>{o.hint}</small></span>
+          </button>
+        ))}
+      </div>
+      <div className="ts-row"><button className="btn line grow" onClick={() => { setPick(ids); setEditing(false); }}>Cancelar</button><button className="btn primary grow" onClick={save}>Guardar</button></div>
+    </div>
+  );
+  if (!goals.length) return (
+    <button className="card goals-empty" onClick={() => { haptic(6); setEditing(true); }}>
+      <span className="set-ic violet"><Icon name="trend" size={18} /></span>
+      <span><b>Ponte una meta esta semana</b><small>«Entregar todo un día antes», «promedio de 95»… y te muestro cómo vas.</small></span>
+      <Icon name="chevron" size={18} className="row-chevron" />
+    </button>
+  );
+  return (
+    <div className="card goals">
+      <div className="card-head"><h3>Metas de la semana</h3><button className="link-btn spacer" onClick={() => setEditing(true)}>Cambiar</button></div>
+      {goals.map((g) => {
+        const pct = g.id.startsWith('promedio') ? Math.min(100, (g.done / g.total) * 100) : g.total ? (g.done / g.total) * 100 : 0;
+        return (
+          <div key={g.id} className={`goal ${g.ok ? 'ok' : ''}`}>
+            <div className="goal-top"><b>{g.ok ? '✅ ' : ''}{g.label}</b><span className="num">{g.id.startsWith('promedio') ? (g.done ? fmtGrade(g.done) : '—') : `${g.done}/${g.total}`}</span></div>
+            <div className="progress thin"><div className={g.ok ? 'green' : ''} style={{ width: `${pct}%` }} /></div>
+            <small>{g.detail}</small>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

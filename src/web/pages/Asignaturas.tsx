@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, dateLabel, type Course, type PensumRow, type Task } from '../api';
 import { CountUp, Empty, Modal, PageHead, Ring, Segmented, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, useLoad } from '../components';
 import { Icon } from '../icons';
+import { AverageChart, FeedbackNotes, RecordModal } from '../NotasExtras';
 
 type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; weight?: number | null; source?: string | null; task_id: number | null; due_at: number | null; status: string | null };
 
@@ -16,12 +17,14 @@ export function Asignaturas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!courses.data]);
   const [adding, setAdding] = useState(false);
+  const [record, setRecord] = useState(false);
   const list = courses.data || [];
   const current = list.find((c) => c.id === sel) || list[0] || null;
 
   return (
     <>
       <PageHead eyebrow="Trimestre actual" title="Asignaturas y notas">
+        <button className="btn line" onClick={() => { haptic(6); setRecord(true); }} aria-label="Récord de notas"><Icon name="download" size={18} /><span className="lbl">Récord</span></button>
         <button className="btn line" onClick={() => setAdding(true)} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Agregar a mano</span></button>
       </PageHead>
       {courses.error && <div className="error">{courses.error}</div>}
@@ -31,6 +34,7 @@ export function Asignaturas() {
         </Empty></div>
       ) : (<>
         <TermSummary courses={list} onPick={(id) => { haptic(5); setSel(id); }} />
+        <AverageChart />
         <section className="grid2 courses-layout">
           <div className="courses scroller picker">
             {list.map((c) => (
@@ -45,7 +49,9 @@ export function Asignaturas() {
           {current && <Detail key={current.id} course={current} courses={list} onChanged={courses.reload} />}
         </section>
       </>)}
+      <FeedbackNotes />
       <History />
+      {record && <RecordModal onClose={() => setRecord(false)} />}
       {adding && <AddCourse onClose={() => setAdding(false)} onSaved={() => { setAdding(false); courses.reload(); }} />}
     </>
   );
@@ -173,6 +179,11 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
             <span className="code num">{course.code || course.short_name}</span>
             <h2>{course.name}</h2>
             <span className="muted small">{graded.length} de {g.length} actividades calificadas</span>
+            {course.eva_total != null && course.eva_total_max ? (() => {
+              const evaPct = (course.eva_total / course.eva_total_max) * 100;
+              const off = course.average !== null && Math.abs(evaPct - course.average) > 2;
+              return <span className={`eva-total ${off ? 'off' : ''}`}>Total oficial en el EVA: <b className="num">{fmtGrade(Math.round(course.eva_total * 100) / 100)}/{fmtGrade(course.eva_total_max)}</b>{off ? ' · no coincide con el promedio de Rumbo: el EVA calcula con su propia fórmula (pesos y actividades que cuenta)' : ''}</span>;
+            })() : null}
           </div>
           <Ring value={course.average ?? pct} size={84} stroke={10} light={false} display={course.average !== null ? fmtGrade(course.average) : `${pct}%`} label={course.average !== null ? 'promedio' : 'calificado'} />
         </div>

@@ -1,6 +1,9 @@
 import { Suspense, lazy, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 // El modo estudio se descarga solo cuando lo abres.
 const StudyModal = lazy(() => import('./Study').then((m) => ({ default: m.StudyModal })));
+// Foro y entregas en el EVA (se descargan al abrir la ficha).
+const ForumSheet = lazy(() => import('./EvaActions').then((m) => ({ default: m.ForumSheet })));
+const SubmitPanel = lazy(() => import('./EvaActions').then((m) => ({ default: m.SubmitPanel })));
 import { createPortal } from 'react-dom';
 import { api, cap, type Course, type Task, unixToLocalInput, localInputToUnix, overdueLabel, urgency, whenLabel } from './api';
 import { Icon } from './icons';
@@ -312,6 +315,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const [studying, setStudying] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [studyMode, setStudyMode] = useState<'plan' | 'foro'>('plan');
+  const [forum, setForum] = useState(false);
   const [task, setTask] = useState<Task>(initial);
   const refresh = () => api<Task>(`/tasks/${initial.id}`).then(setTask).catch(() => {});
   // Las instrucciones y el tiempo de estudio se cargan al abrir la ficha.
@@ -330,6 +334,23 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const dateTime = (s: number) => new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(s * 1000));
   const isForum = !!task.moodle_key?.startsWith('forum:');
   const files: { name: string }[] = (() => { try { return JSON.parse(task.attachments || '[]'); } catch { return []; } })();
+  const isAssign = !!task.moodle_key?.startsWith('assign:');
+  // Todo lo de la tarea en un solo texto, listo para pegarlo en ChatGPT, Gemini o cualquier IA.
+  async function copyForAI() {
+    const text = [
+      `Asignatura: ${task.course_name || 'Personal'}`,
+      `Actividad: ${task.title}${isForum ? ' (foro de discusión)' : ''}`,
+      task.due_at ? `Fecha de entrega: ${dateTime(task.due_at)}` : '',
+      task.facilitator ? `Facilitador/a: ${task.facilitator}` : '',
+      files.length ? `Archivos adjuntos del facilitador: ${files.map((f) => f.name).join(', ')}` : '',
+      '',
+      'Instrucciones del facilitador:',
+      task.description || '(El EVA no tiene instrucciones escritas para esta actividad.)',
+    ].filter((l, i) => l || i > 4).join('\n');
+    haptic(10);
+    try { await navigator.clipboard.writeText(text); toast('Instrucciones copiadas. Pégalas en tu IA favorita.'); }
+    catch { toast('No pude copiar: mantén presionado el texto de las instrucciones', 'err'); }
+  }
   const srcTag = task.grade_source === 'foro' ? 'tomada del foro' : task.grade_source === 'manual' ? 'puesta por ti' : '';
 
   async function toggle() {
@@ -380,6 +401,8 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
 
       {(done || isForum) && (!graded || task.grade_source === 'manual') && <ManualGrade task={task} onSaved={refresh} />}
 
+      {isAssign && !closed && <Suspense fallback={null}><SubmitPanel task={task} onDone={() => { void refresh(); onChanged(); }} /></Suspense>}
+
       {files.length > 0 && (
         <div className="ts-files">
           <span className="label"><Icon name="download" size={15} />Archivos del facilitador</span>
@@ -389,7 +412,10 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
 
       {task.description && (
         <div className="instructions">
-          <span className="label"><Icon name="book" size={15} />Instrucciones del facilitador</span>
+          <div className="instr-head">
+            <span className="label"><Icon name="book" size={15} />Instrucciones del facilitador</span>
+            <button className="btn soft sm" onClick={copyForAI}><Icon name="upload" size={15} />Copiar</button>
+          </div>
           <div className={`instr-text ${showAll ? 'open' : ''}`}>{task.description}</div>
           {task.description.length > 420 && <button className="link-btn" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Ver menos' : 'Ver todo'}<Icon name="chevron" size={15} /></button>}
         </div>
@@ -402,10 +428,12 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
           {task.url && <a className={`btn ${done ? 'primary' : 'line'} lg grow`} href={task.url} target="_blank" rel="noopener"><Icon name="link" size={18} />Abrir en el EVA</a>}
         </div>
         {isForum && (
-          <div className="ts-help one">
-            <button className="btn study-btn" onClick={() => { haptic(10); setStudyMode('foro'); setStudying(true); }}><Icon name="chat" size={19} /><span className="tb-txt"><b>Borrador del foro con IA</b><small>tu aporte e ideas para responder a compañeros</small></span></button>
+          <div className="ts-help">
+            <button className="btn study-btn" onClick={() => { haptic(10); setForum(true); }}><Icon name="chat" size={19} /><span className="tb-txt"><b>Ver el foro y participar</b><small>tu aporte, respuestas y compañeros</small></span></button>
+            <button className="btn focus-btn" onClick={() => { haptic(10); setStudyMode('foro'); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Borrador con IA</b><small>aporte e ideas para responder</small></span></button>
           </div>
         )}
+        {forum && <Suspense fallback={null}><ForumSheet task={task} onClose={() => setForum(false)} onPosted={() => { void refresh(); }} /></Suspense>}
         {!done && (
           <div className="ts-help">
             <button className="btn study-btn" onClick={() => { haptic(10); setStudyMode('plan'); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Estudiar con IA</b><small>plan · práctica · explicación</small></span></button>
@@ -415,6 +443,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
         {studying && <Suspense fallback={null}><StudyModal task={task} initial={studyMode} onClose={() => setStudying(false)} /></Suspense>}
         <div className="ts-links">
           {done && <button className="link-btn" onClick={toggle} disabled={busy}><Icon name="sync" size={16} />Reabrir</button>}
+          {!task.description && <button className="link-btn" onClick={copyForAI}><Icon name="upload" size={16} />Copiar para la IA</button>}
           <button className="link-btn" onClick={() => setEditing(true)}><Icon name="gear" size={16} />Editar tarea</button>
         </div>
       </div>

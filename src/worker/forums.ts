@@ -13,6 +13,8 @@ export type ForumFinding = {
   forum: ForumInfo; participated: boolean; firstPost: number | null;
   /** Mensajes tuyos que responden al tema (tu aporte) y respuestas a compañeros. */
   posts: number; replies: number; needed: number | null;
+  /** Respuestas de otras personas a tus mensajes (para avisarte cuando llega una nueva). */
+  toMe: { id: number; author: string; text: string; created: number }[];
   grade: number | null; max: number | null; feedback: string; how: 'puntuacion' | 'respuesta' | 'panel' | null;
   /** Resumen corto de lo que se vio (para diagnosticar foros raros). */
   debug: string;
@@ -104,7 +106,7 @@ async function wholeForumGrade(env: Env, contextid: number, me: number): Promise
  * Usa como máximo `budget` llamadas al EVA; devuelve cuántas gastó.
  */
 export async function scanForum(env: Env, forum: ForumInfo, me: number, gradeMax: number, facilitators: string[], budget: number): Promise<{ finding: ForumFinding; calls: number }> {
-  const finding: ForumFinding = { forum, participated: false, firstPost: null, grade: null, max: null, feedback: '', how: null, debug: '', posts: 0, replies: 0, needed: neededReplies(htmlToText(forum.intro)) };
+  const finding: ForumFinding = { forum, participated: false, firstPost: null, grade: null, max: null, feedback: '', how: null, debug: '', toMe: [], posts: 0, replies: 0, needed: neededReplies(htmlToText(forum.intro)) };
   type Disc = { id: number; discussion?: number; userid?: number; userfullname?: string; numreplies?: number };
   let calls = 1;
   let discs: Disc[];
@@ -141,6 +143,7 @@ export async function scanForum(env: Env, forum: ForumInfo, me: number, gradeMax
     const mineIds = new Set(mine.map((p) => p.id));
     const root = posts.find((p) => !p.parent) || posts[0];
     for (const p of mine) { if (p.id === root.id || p.parent === root.id) finding.posts++; else finding.replies++; }
+    for (const p of posts) if (p.author !== me && mineIds.has(p.parent)) finding.toMe.push({ id: p.id, author: p.authorName, text: p.text.slice(0, 600), created: p.created });
     const myRatings = ratings.filter((r) => mineIds.has(r.itemid)).map((r) => `${r.aggregatestr ?? r.aggregate ?? '-'}(${r.count ?? 0})`);
     const replies = posts.filter((p) => p.author !== me && mineIds.has(p.parent)).map((p) => p.text.replace(/\s+/g, ' ').slice(0, 160));
     finding.debug += ` [d${id}: ${posts.length} msj, míos ${mine.length}, punt ${myRatings.join(',') || 'ninguna'}, resp ${replies.length}${replies.length ? ': «' + replies.join('» «') + '»' : ''}]`;

@@ -22,6 +22,7 @@ import { providers, testEngines } from './llm';
 import { runScheduled } from './cron';
 import { weeklyPlan } from './plan';
 import { nowSec } from './time';
+import { registerExtras } from './extras';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -327,7 +328,7 @@ app.post('/api/me/password', async (c) => {
 // Los motores gratis tienen una cuota al día para TODOS: cada compañero tiene un tope para que nadie la agote.
 // El administrador no tiene tope.
 const AI_DAILY_LIMIT = 60;
-const AI_PATHS = /^\/api\/(assistant(\/(stream|voice|voice-stream|transcribe))?|study\/\d+)$/;
+const AI_PATHS = /^\/api\/(assistant(\/(stream|voice|voice-stream|transcribe))?|study\/\d+|tasks\/\d+\/forum\/draft-reply|feedback-notes\/summary)$/;
 app.use('/api/*', async (c, next) => {
   if (c.req.method !== 'POST' || c.env.ROLE === 'admin' || !AI_PATHS.test(new URL(c.req.url).pathname)) return next();
   const today = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
@@ -343,6 +344,9 @@ app.use('/api/*', async (c, next) => {
   await setSetting(c.env, 'ai_count', String(used + 1));
   await next();
 });
+
+// Foros, entregas, historial del promedio, comentarios, récord y comprobantes (src/worker/extras.ts)
+registerExtras(app);
 
 // ---------- Comentarios y problemas (llegan al administrador) ----------
 app.post('/api/feedback', async (c) => {
@@ -737,7 +741,7 @@ app.patch('/api/courses/:id', async (c) => {
 
 // Pagos
 app.get('/api/payments', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT id, period, amount, paid_at, note FROM payments WHERE user_id = ? ORDER BY paid_at DESC LIMIT 60').bind(c.env.UID).all();
+  const { results } = await c.env.DB.prepare('SELECT p.id, p.period, p.amount, p.paid_at, p.note, (SELECT 1 FROM payment_receipts r WHERE r.payment_id = p.id) AS has_receipt FROM payments p WHERE p.user_id = ? ORDER BY p.paid_at DESC LIMIT 60').bind(c.env.UID).all();
   return c.json({ window: await payWindow(c.env), history: results });
 });
 
@@ -828,7 +832,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
+const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);

@@ -10,6 +10,7 @@ import { announceRelease } from './changelog';
 import { backupDue, makeBackup } from './backup';
 import { checkHealth } from './health';
 import { checkAchievements } from './achievements';
+import { recordAverage } from './extras';
 import { cuandoTexto, localDate, nowSec, ymd } from './time';
 
 /**
@@ -170,6 +171,9 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
     if (!r.ok) await unmarkSent(env, `plan:${today}`);
     log.push(`Plan semanal: ${r.ok ? 'enviado' : r.error}`);
   }
+
+  // Historial del promedio (para la gráfica de Notas)
+  try { await recordAverage(env); } catch (e) { log.push('Historial del promedio: ' + (e as Error).message); }
 
   // Logros nuevos
   try { const got = await checkAchievements(env); if (got.length) log.push('Logros: ' + got.join(', ')); } catch (e) { log.push('Logros: ' + (e as Error).message); }

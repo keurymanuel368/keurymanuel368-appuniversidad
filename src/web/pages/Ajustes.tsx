@@ -244,7 +244,7 @@ export function TelegramCard({ st, onChanged }: { st: { configured: boolean; con
 }
 
 /** Calendario: tus entregas en Google Calendar o en el calendario del iPhone. */
-export function CalendarCard({ connected, onChanged }: { connected: boolean; onChanged: () => void }) {
+export function CalendarCard({ connected, onChanged, studyOn = true, onStudy }: { connected: boolean; onChanged: () => void; studyOn?: boolean; onStudy?: (on: boolean) => void }) {
   const [links, setLinks] = useState<{ url: string; webcal: string; google: string } | null>(null);
   async function open() {
     try { setLinks(await api<{ url: string; webcal: string; google: string }>('/calendar/setup', { method: 'POST' })); onChanged(); }
@@ -258,6 +258,13 @@ export function CalendarCard({ connected, onChanged }: { connected: boolean; onC
         <div className="t"><b>Calendario del teléfono</b><span>{connected ? 'Tus entregas aparecen en tu calendario y se actualizan solas.' : 'Tus entregas y la ventana de pago en Google Calendar o iPhone, con alarmas.'}</span></div>
         <button className="btn soft sm" onClick={open}>{connected ? 'Ver' : 'Agregar'}</button>
       </div>
+      {onStudy && (
+        <div className="toggle">
+          <span className="set-ic violet"><Icon name="book" size={18} /></span>
+          <div className="t"><b>Bloques de estudio en el calendario</b><span>Una hora a tu hora de estudio, dos días antes de cada entrega. Se acomodan solos.</span></div>
+          <button className={`switch ${studyOn ? 'on' : ''}`} role="switch" aria-checked={studyOn} aria-label="Bloques de estudio en el calendario" onClick={() => { haptic(8); onStudy(!studyOn); }} />
+        </div>
+      )}
       {links && (
         <Modal title="Agregar a tu calendario" onClose={() => setLinks(null)}>
           <p className="hint"><Icon name="alert" size={16} />Es un enlace privado y solo tuyo: tu calendario lo revisa cada pocas horas y muestra cada entrega con alarmas 1 día y 3 horas antes.</p>
@@ -720,7 +727,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
               <MailCard connected={st.mail.connected} lastAt={st.mail.lastAt} onChanged={q.reload} />
               {admin && <AiEnginesCard engines={st.ai.engines} />}
               <TelegramCard st={st.telegram} onChanged={q.reload} />
-              <CalendarCard connected={st.calendar.connected} onChanged={q.reload} />
+              <CalendarCard connected={st.calendar.connected} onChanged={q.reload} studyOn={s.ics_study !== '0'} onStudy={(on) => save('ics_study', on ? '1' : '0')} />
             </div>
           </div>
           <div className="section">

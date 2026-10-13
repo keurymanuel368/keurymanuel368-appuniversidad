@@ -45,3 +45,8 @@ describe('courseAverage', () => {
   it('sin pesos, todas valen igual', () => expect(courseAverage([r(100, null), r(50, 0.1)]).avg).toBe(75));
   it('sin notas no hay promedio', () => expect(courseAverage([r(null, 0.2)]).avg).toBeNull());
 });
+
+describe('toForumHtml', async () => {
+  const { toForumHtml } = await import('../src/worker/extras');
+  it('convierte párrafos y escapa HTML', () => expect(toForumHtml('Hola <b>todos</b>\nlínea 2\n\nOtro párrafo')).toBe('<p>Hola &lt;b&gt;todos&lt;/b&gt;<br>línea 2</p><p>Otro párrafo</p>'));
+});

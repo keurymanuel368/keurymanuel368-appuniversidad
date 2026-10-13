@@ -1,9 +1,9 @@
 // Avisos de calificaciones: cuando el facilitador corrige una tarea (o cambia la nota),
 // te llega una notificación con la nota, el comentario y un enlace directo a la tarea, y queda guardado en Avisos.
 import type { Env } from './env';
-import type { SyncResult } from './moodle';
+import type { SyncChange, SyncResult } from './moodle';
 import { sendToMe } from './notify';
-import { nowSec } from './time';
+import { cuandoTexto, nowSec } from './time';
 import { blocks, courseLabel } from './wa';
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
@@ -48,6 +48,31 @@ ${g.feedback}` : 'Sin comentario del facilitador.'}`, task ? `/#tareas/${task.id
       pushBody: `${head}${g.feedback ? ' · 💬 ' + g.feedback.slice(0, 120) : ' · ' + cheer}`, type: 'notas',
     });
     if (r.ok) sent++;
+  }
+  return sent;
+}
+
+/** Avisos de cambios en el EVA: fechas movidas, tareas nuevas y respuestas a tus mensajes en foros. */
+export async function notifyChanges(env: Env, changes: SyncChange[]): Promise<number> {
+  let sent = 0;
+  for (const ch of changes.slice(0, 6)) {
+    const curso = ch.course ? `📚 ${courseLabel(ch.course)}` : '';
+    if (ch.kind === 'fecha') {
+      const later = ch.to > ch.from;
+      const r = await sendToMe(env, blocks(`🗓️ *Cambió una fecha de entrega*`, [`*${ch.title}*`, curso, `Antes: ~${cuandoTexto(env, ch.from)}~`, `Ahora: *${cuandoTexto(env, ch.to)}*`].filter(Boolean).join('\n'), later ? '_Te dieron más tiempo 🙌_' : '_Ojo: ahora vence antes._'),
+        { title: `🗓️ ${later ? 'Más tiempo' : 'Fecha adelantada'}: ${ch.title}`.slice(0, 90), pushBody: `${ch.course ? ch.course + ' · ' : ''}ahora vence ${cuandoTexto(env, ch.to)}`, tag: `date-${ch.taskId}`, url: `/#tareas/${ch.taskId}`, type: 'tareas' });
+      if (r.ok) sent++;
+    } else if (ch.kind === 'nueva') {
+      const r = await sendToMe(env, blocks('🆕 *Tarea nueva en el EVA*', [`*${ch.title}*`, curso, `⏰ Vence *${cuandoTexto(env, ch.due)}*`].filter(Boolean).join('\n')),
+        { title: `🆕 ${ch.title}`.slice(0, 90), pushBody: `${ch.course ? ch.course + ' · ' : ''}vence ${cuandoTexto(env, ch.due)}`, tag: `new-${ch.taskId}`, url: `/#tareas/${ch.taskId}`, type: 'tareas' });
+      if (r.ok) sent++;
+    } else {
+      const task = await env.DB.prepare('SELECT id FROM tasks WHERE user_id = ? AND moodle_key = ? LIMIT 1').bind(env.UID, ch.taskKey).first<{ id: number }>();
+      const text = ch.text.length > 400 ? ch.text.slice(0, 400) + '…' : ch.text;
+      const r = await sendToMe(env, blocks(`💬 *${ch.author || 'Alguien'} te respondió en el foro*`, [`*${ch.title}*`, curso].filter(Boolean).join('\n'), text.split('\n').filter((l) => l.trim()).map((l) => `> ${l}`).join('\n')),
+        { title: `💬 ${ch.author || 'Alguien'} te respondió`, pushBody: `${ch.title} · ${text.slice(0, 140)}`, tag: `reply-${ch.taskKey}`, url: task ? `/#tareas/${task.id}` : '/#tareas', type: 'tareas' });
+      if (r.ok) sent++;
+    }
   }
   return sent;
 }

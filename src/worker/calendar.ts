@@ -2,7 +2,8 @@
 // Se suscribe una vez con un enlace privado y se actualiza solo.
 import type { Env } from './env';
 import { listTasks, payWindow, periodLabel } from './data';
-import { nowSec } from './time';
+import { getSettings } from './db';
+import { localDate, localToUnix, nowSec } from './time';
 
 const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 const stamp = (sec: number) => new Date(sec * 1000).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
@@ -34,6 +35,19 @@ export async function calendarIcs(env: Env): Promise<string> {
     if (!done) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc('Mañana vence: ' + t.title)}`, 'TRIGGER:-P1D', 'END:VALARM',
       'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc('En 3 horas vence: ' + t.title)}`, 'TRIGGER:-PT3H', 'END:VALARM');
     L.push('END:VEVENT');
+  }
+  // Bloques de estudio: para cada entrega pendiente, 1 hora a tu hora de estudio dos días antes (o mañana si ya no da).
+  const s = await getSettings(env);
+  if (s.ics_study !== '0') {
+    const hour = Number(s.study_hour || 19);
+    for (const t of tasks.filter((x) => x.status === 'pending' && x.due_at! > now && x.due_at! < now + 14 * 86400)) {
+      const d = localDate(env, Math.max(t.due_at! - 2 * 86400, now + 86400));
+      const start = localToUnix(env, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), hour, 0);
+      if (start + 3600 > t.due_at!) continue;
+      L.push('BEGIN:VEVENT', `UID:estudio-${t.id}@rumbo`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(start)}`, `DTEND:${stamp(start + 3600)}`,
+        `SUMMARY:${esc(`📚 Estudiar: ${t.title}`)}`, `DESCRIPTION:${esc(`Bloque sugerido por Rumbo. Vence ${t.course_name ? '(' + t.course_name + ') ' : ''}el ${new Date(t.due_at! * 1000).toISOString().slice(0, 10)}.`)}`, 'TRANSP:OPAQUE',
+        'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc('Hora de estudiar: ' + t.title)}`, 'TRIGGER:-PT10M', 'END:VALARM', 'END:VEVENT');
+    }
   }
   const p = await payWindow(env);
   L.push('BEGIN:VEVENT', `UID:pago-${p.period}@rumbo`, `DTSTAMP:${stamp(now)}`, `DTSTART;VALUE=DATE:${dateOnly(p.opensAt)}`, `DTEND;VALUE=DATE:${dateOnly(p.closesAt + 86400)}`,

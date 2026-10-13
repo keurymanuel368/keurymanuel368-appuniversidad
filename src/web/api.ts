@@ -28,7 +28,7 @@ export type Task = {
   moodle_key?: string | null; forum_posts?: number | null; forum_replies?: number | null; forum_needed?: number | null; attachments?: string | null;
   course_id: number | null; course_name: string | null; course_short: string | null; course_color: string | null;
 };
-export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number; weighted?: number };
+export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number; weighted?: number; eva_total?: number | null; eva_total_max?: number | null };
 export type PayWindow = { state: 'open' | 'closed'; period: string; opensAt: number; closesAt: number; daysToOpen: number; daysToClose: number; paid: boolean; amount: string; openDay: number; closeDay: number };
 export type Dashboard = {
   today: string; name: string; termProgress: number | null;
@@ -38,6 +38,7 @@ export type Dashboard = {
   lastSync: number | null; lastSyncError: string; summaryHour: number;
   mascot?: { mood: string; headline: string; sub: string; streak: number };
   setup?: { eva: boolean; whatsapp: boolean; career: boolean };
+  goals?: { id: string; label: string; done: number; total: number; ok: boolean; detail: string }[]; goalIds?: string[];
   freshGrade?: { id: number; title: string; grade: number; max: number; feedback: string; course: string | null; color: string | null; url: string | null; average: number | null; delta: number | null } | null;
 };
 export type PensumRow = { id: number; term: number; code: string | null; name: string; credits: number; status: string; grade: number | null; prereqs: string | null; coreqs?: string | null; kind?: string };

@@ -121,6 +121,20 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // Sin internet: un rato después de entrar, se guardan en el teléfono las fichas (con instrucciones) de lo pendiente.
+  useEffect(() => {
+    if (auth !== 'in' || !navigator.onLine) return;
+    try { if (sessionStorage.getItem('rumbo-prefetch')) return; sessionStorage.setItem('rumbo-prefetch', '1'); } catch { /* sin almacenamiento */ }
+    const t = setTimeout(async () => {
+      try {
+        const list = await api<{ id: number }[]>('/tasks?status=pending');
+        for (const x of list.slice(0, 25)) await api(`/tasks/${x.id}`).catch(() => {});
+        await api('/courses').catch(() => {});
+      } catch { /* se intenta la próxima vez */ }
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [auth]);
+
   // Buscador: lupa de arriba o tecla «/» (en computadora).
   const [searching, setSearching] = useState(false);
   useEffect(() => {

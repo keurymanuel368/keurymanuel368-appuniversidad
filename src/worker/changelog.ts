@@ -10,6 +10,21 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 32,
+    date: '2026-10-13',
+    title: '💬 Foros y entregas desde Rumbo',
+    items: [
+      '📋 Cada tarea tiene un botón «Copiar» junto a las instrucciones: copia la asignatura, la fecha y todo lo que pide el facilitador, listo para pegarlo en cualquier IA.',
+      '💬 «Ver el foro y participar»: lees el tema y los mensajes de tus compañeros, escribes tu aporte o respondes a alguien (con borrador de IA) y lo publicas en el EVA sin salir de Rumbo.',
+      '📤 Entrega tus tareas desde el teléfono: elige los archivos en la ficha y súbelos al EVA.',
+      '🔔 Te aviso cuando te responden en un foro, cuando el facilitador mueve una fecha y cuando publica una tarea nueva.',
+      '📊 En Notas: el total oficial del EVA de cada asignatura, la gráfica de tu promedio en el tiempo y lo que te comentan los facilitadores, con un resumen de IA de qué haces bien y qué mejorar.',
+      '🧾 «Récord»: tus notas listas para guardar en PDF o imprimir.',
+      '🎯 Metas de la semana en Inicio: «entregar todo a tiempo», «un día antes» o «promedio de 95», y cómo vas.',
+      '🗓️ Bloques de estudio en tu calendario (Ajustes → Calendario), el widget muestra tu última nota, las fichas de lo pendiente se guardan para verlas sin internet y puedes guardar la foto del comprobante de cada pago.',
+    ],
+  },
+  {
     version: 31,
     date: '2026-10-13',
     title: '🚀 Rumbo más rápido de usar',

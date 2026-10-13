@@ -21,6 +21,7 @@ export type WidgetData = {
   phrases: string[];
   doneWeek: number;
   updated: string;
+  lastGrade: { title: string; grade: number; max: number } | null;
 };
 
 const dayKey = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
@@ -83,11 +84,16 @@ export async function widgetData(env: Env): Promise<WidgetData> {
   }
 
   const list = [...overdue, ...pending.filter((t) => t.due_at! >= now)].slice(0, 3);
+  // Última nota (de los últimos 5 días): se alterna con las frases del widget.
+  const last = await env.DB.prepare(`SELECT g.item_name, g.grade, g.grade_max FROM grades g WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.updated_at > ? ORDER BY g.updated_at DESC LIMIT 1`)
+    .bind(env.UID, now - 5 * 86400).first<{ item_name: string; grade: number; grade_max: number }>();
+  const gradeLine = last ? `📊 Última nota: ${Math.round(last.grade * 100) / 100}/${last.grade_max} · ${last.item_name.replace(/\s+(calificaci[oó]n|foro completo)$/i, '').slice(0, 40)}` : null;
   return {
     mood, headline, sub, streak: racha, pending: pending.length, today: dueToday.length, overdue: overdue.length,
     tasks: list.map((t) => ({ title: t.title, when: t.due_at! < now ? 'Atrasada' : cuandoTexto(env, t.due_at!), course: t.course_short || t.course_name || '', urgent: t.due_at! < now + 86400 })),
     reminders: rem.map((r) => ({ text: r.text, when: cuandoTexto(env, r.remind_at) })),
-    phrases: [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)),
+    phrases: gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)),
+    lastGrade: last ? { title: last.item_name, grade: last.grade, max: last.grade_max } : null,
     doneWeek,
     updated: horaTexto(today),
   };

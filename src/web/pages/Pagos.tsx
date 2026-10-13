@@ -1,9 +1,19 @@
 import { useState } from 'react';
 import { api, dateLabel, type PayWindow } from '../api';
-import { Empty, PageHead, Skeleton, haptic, toast, useLoad } from '../components';
+import { Empty, Modal, PageHead, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 
-type Payment = { id: number; period: string; amount: number | null; paid_at: number; note: string | null };
+type Payment = { id: number; period: string; amount: number | null; paid_at: number; note: string | null; has_receipt?: number | null };
+
+/** Reduce la foto en el teléfono (máx. 1400 px, JPEG) para guardarla liviana. */
+async function shrink(file: File): Promise<string> {
+  const img = await createImageBitmap(file);
+  const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.8);
+}
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const periodLabel = (p: string) => { const [y, m] = p.split('-').map(Number); return `${MESES[m - 1]} ${y}`; };
 
@@ -11,6 +21,15 @@ export function Pagos() {
   const data = useLoad(() => api<{ window: PayWindow; history: Payment[] }>('/payments'));
   const settings = useLoad(() => api<{ settings: Record<string, string> }>('/settings'));
   const [amount, setAmount] = useState('');
+  const [viewing, setViewing] = useState<number | null>(null);
+  async function attach(id: number, file: File | undefined) {
+    if (!file) return;
+    try {
+      await api(`/payments/${id}/receipt`, { method: 'POST', body: { dataUrl: await shrink(file) } });
+      haptic(12); toast('Comprobante guardado'); data.reload();
+    } catch (e) { toast((e as Error).message, 'err'); }
+  }
+  async function removeReceipt(id: number) { await api(`/payments/${id}/receipt`, { method: 'DELETE' }); setViewing(null); toast('Comprobante quitado'); data.reload(); }
 
   if (data.error) return <div className="error">{data.error}</div>;
   if (!data.data || !settings.data) return <Skeleton rows={2} />;
@@ -91,11 +110,24 @@ export function Pagos() {
               <span className="check on static"><Icon name="check" size={15} style={{ strokeWidth: 3.2 }} /></span>
               <div className="body static"><span className="title">Cuota de {periodLabel(p.period)}</span><span className="sub"><span className="sub-txt">Pagado el {dateLabel(p.paid_at)}{p.note ? ' · ' + p.note : ''}</span></span></div>
               <span className="num money">{p.amount ? `RD$ ${p.amount.toLocaleString('es-DO')}` : '—'}</span>
+              {p.has_receipt
+                ? <button className="icon-btn ghosty" onClick={() => setViewing(p.id)} aria-label="Ver comprobante"><Icon name="book" size={17} /></button>
+                : <label className="icon-btn ghosty" aria-label="Adjuntar foto del comprobante" title="Adjuntar comprobante"><Icon name="upload" size={17} /><input type="file" accept="image/*" hidden onChange={(e) => attach(p.id, e.target.files?.[0])} /></label>}
               <button className="icon-btn ghosty" onClick={() => remove(p.id)} aria-label="Eliminar pago"><Icon name="trash" size={17} /></button>
             </div>
           ))}
         </div>
+        {data.data.history.length > 0 && <p className="small muted">Toca <Icon name="upload" size={13} /> para guardar la foto del comprobante de cada pago.</p>}
       </div>
+      {viewing !== null && (
+        <Modal title="Comprobante de pago" onClose={() => setViewing(null)}>
+          <img className="receipt-img" src={`/api/payments/${viewing}/receipt`} alt="Comprobante de pago" />
+          <div className="ts-row">
+            <a className="btn line grow" href={`/api/payments/${viewing}/receipt`} target="_blank" rel="noopener"><Icon name="download" size={17} />Abrir</a>
+            <button className="btn line grow" onClick={() => removeReceipt(viewing)}><Icon name="trash" size={17} />Quitar</button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

@@ -9,7 +9,8 @@
     "dev": "npm run build && wrangler dev",
     "db:local": "wrangler d1 migrations apply rumbo-db --local",
     "db:remote": "wrangler d1 migrations apply rumbo-db --remote",
-    "deploy": "npm test && npm run build && wrangler deploy && node scripts/announce.mjs && node scripts/backup-code.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "deploy": "npm test && npm run build && npm run smoke && wrangler deploy && node scripts/announce.mjs && node scripts/backup-code.mjs",
     "typecheck": "tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run",
     "backup:db": "node scripts/backup-db.mjs"

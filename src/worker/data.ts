@@ -17,6 +17,7 @@ export type CourseSummary = {
   graded: number; total: number; average: number | null; pending_tasks: number;
   /** 1 si el promedio usa los pesos del EVA (cada actividad vale lo que dice el libro de calificaciones). */
   weighted?: number;
+  eva_total?: number | null; eva_total_max?: number | null;
 };
 
 type GradeRow = { id: number; moodle_item_id: number | null; grade: number | null; grade_max: number; weight: number | null };
@@ -71,7 +72,7 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
 export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
   // Cada actividad cuenta una vez (los foros traen dos renglones de nota: vale el que tiene nota).
   const { results } = await env.DB.prepare(`
-    SELECT c.id, c.code, c.name, c.short_name, c.color, c.facilitator, c.facilitator_eva,
+    SELECT c.id, c.code, c.name, c.short_name, c.color, c.facilitator, c.facilitator_eva, c.eva_total, c.eva_total_max,
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
     FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
   const rows = await bestGrades(env);
@@ -186,7 +187,31 @@ export async function dashboard(env: Env) {
       delta: now1 !== null && before !== null ? Math.round((now1 - before) * 10) / 10 : null,
     };
   }
+  // Metas de la semana (las eliges en Inicio): a tiempo, un día antes, promedio mínimo.
+  const goalIds = (s.goals || '').split(',').filter(Boolean);
+  const goals: { id: string; label: string; done: number; total: number; ok: boolean; detail: string }[] = [];
+  if (goalIds.length) {
+    const { results: wkTasks } = await env.DB.prepare(`SELECT status, due_at, submitted_at FROM tasks WHERE user_id = ? AND due_at >= ? AND due_at < ?`)
+      .bind(env.UID, weekStart, weekStart + 7 * 86400).all<{ status: string; due_at: number; submitted_at: number | null }>();
+    for (const g of goalIds) {
+      if (g === 'atiempo') {
+        const due = wkTasks.filter((t) => t.due_at <= now);
+        const ok = due.filter((t) => t.status === 'done').length;
+        goals.push({ id: g, label: 'Entregar todo a tiempo', done: ok, total: due.length, ok: ok === due.length, detail: due.length ? `${ok} de ${due.length} entregas que ya vencieron` : 'Todavía no vence nada esta semana' });
+      } else if (g === 'antes') {
+        const done = wkTasks.filter((t) => t.status === 'done' && t.submitted_at);
+        const early = done.filter((t) => t.submitted_at! <= t.due_at - 86400).length;
+        goals.push({ id: g, label: 'Entregar un día antes', done: early, total: wkTasks.length, ok: wkTasks.length > 0 && early === wkTasks.length, detail: `${early} de ${wkTasks.length} entregas de la semana con un día de margen` });
+      } else if (g.startsWith('promedio:')) {
+        const target = Number(g.split(':')[1]) || 90;
+        const { results: wkGrades } = await env.DB.prepare(`SELECT grade, grade_max FROM grades WHERE user_id = ? AND grade IS NOT NULL AND grade_max > 0 AND updated_at >= ?`).bind(env.UID, weekStart).all<{ grade: number; grade_max: number }>();
+        const avg = wkGrades.length ? wkGrades.reduce((a, x) => a + (x.grade / x.grade_max) * 100, 0) / wkGrades.length : null;
+        goals.push({ id: g, label: `Promedio de ${target} o más`, done: avg === null ? 0 : Math.round(avg * 10) / 10, total: target, ok: avg !== null && avg >= target, detail: avg === null ? 'Sin notas nuevas esta semana' : `Esta semana vas con ${Math.round(avg * 10) / 10} (${wkGrades.length} nota${wkGrades.length === 1 ? '' : 's'})` });
+      }
+    }
+  }
   return {
+    goals, goalIds,
     freshGrade,
     news, unreadNews: unread?.n ?? 0,
     weekProgress: { total: wk?.total ?? 0, done: wk?.done ?? 0 },
