@@ -9,7 +9,16 @@ export function applyTheme(t: string) {
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#0B1220' : '#F3F7FE'));
 }
 
+/** Tamaño de letra de toda la app (normal, grande, muy grande). */
+export const TEXT_SIZES = [{ id: '1', label: 'Normal' }, { id: '1.1', label: 'Grande' }, { id: '1.22', label: 'Muy grande' }];
+export function applyTextSize(z: string) {
+  const v = TEXT_SIZES.some((x) => x.id === z) ? z : '1';
+  (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom = v === '1' ? '' : v;
+}
+export const storedTextSize = () => { try { return localStorage.getItem('rumbo-texto') || '1'; } catch { return '1'; } };
+
 export function initTheme() {
   applyTheme(stored());
+  applyTextSize(storedTextSize());
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (stored() === 'auto') applyTheme('auto'); });
 }

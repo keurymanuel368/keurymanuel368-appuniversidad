@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Course, type Task } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
+import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 
-type Filter = 'pendientes' | 'plan' | 'hechas' | 'todas';
+type Filter = 'pendientes' | 'plan' | 'mes' | 'hechas' | 'todas';
 const dayKey = (sec: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date(sec * 1000));
 const dayTitle = (k: string) => new Intl.DateTimeFormat('es-DO', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(k + 'T12:00:00Z'));
 
@@ -25,7 +25,7 @@ function studyPlan(list: Task[]) {
 
 export function Tareas() {
   const [filter, setFilter] = useState<Filter>('pendientes');
-  const tasks = useLoad(() => api<Task[]>(`/tasks${filter === 'todas' ? '' : filter === 'hechas' ? '?status=done' : '?status=pending'}`), [filter]);
+  const tasks = useLoad(() => api<Task[]>(`/tasks${filter === 'todas' || filter === 'mes' ? '' : filter === 'hechas' ? '?status=done' : '?status=pending'}`), [filter]);
   const courses = useLoad(() => api<Course[]>('/courses'));
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<Task | null>(null);
@@ -37,10 +37,7 @@ export function Tareas() {
   const sync = useCallback(async () => {
     setBusy(true);
     try {
-      const r = await api<{ result: { tasksNew: number; courses: number; pastCourses: number; delivered: number; forumGrades?: number; warnings: string[] } }>('/sync', { method: 'POST' });
-      const x = r.result;
-      toast(`EVA al día · ${x.delivered} entregas en tu historial${x.tasksNew ? ` · ${x.tasksNew} nuevas` : ''}${x.forumGrades ? ` · ${x.forumGrades} nota${x.forumGrades === 1 ? '' : 's'} de foros` : ''}`);
-      if (x.warnings?.length) toast('Algunas partes del EVA no respondieron: ' + x.warnings.join(' · '), 'err');
+      syncToast(await runSync(), true);
       tasks.reload(); courses.reload();
     } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
     setBusy(false);
@@ -68,6 +65,7 @@ export function Tareas() {
   type Group = { key: string; title: string; tone?: string; color?: string; extra?: string; items: Task[] };
   let groups: Group[];
   if (day || q.trim()) groups = [{ key: 'day', title: day ? dayTitle(day) : `Resultados (${shown.length})`, items: shown }];
+  else if (filter === 'mes') groups = [];
   else if (filter === 'plan') groups = studyPlan(list).map((d) => ({ key: d.key, title: d.title, tone: d.today ? 'blue' : 'gray', extra: d.items.length ? undefined : 'Día libre ✨', items: d.items }));
   else if (filter === 'pendientes') groups = [
     { key: 'v', title: 'Vencidas', tone: 'red', items: list.filter((t) => t.due_at && t.due_at < now) },
@@ -92,10 +90,11 @@ export function Tareas() {
         <button className={`btn line ${busy ? 'spinning' : ''}`} onClick={sync} disabled={busy} aria-label="Sincronizar EVA"><Icon name="sync" size={18} /><span className="lbl">{busy ? 'Sincronizando…' : 'Sincronizar EVA'}</span></button>
         <button className="btn primary" onClick={() => setCreating(true)} aria-label="Nueva tarea"><Icon name="plus" size={18} /><span className="lbl">Nueva</span></button>
       </PageHead>
-      <Segmented label="Filtrar tareas" value={filter} onChange={(f) => { setFilter(f); setDay(null); }} options={[{ id: 'pendientes', label: 'Pendientes' }, { id: 'plan', label: 'Plan' }, { id: 'hechas', label: 'Entregadas' }, { id: 'todas', label: 'Todas' }]} />
+      <Segmented label="Filtrar tareas" value={filter} onChange={(f) => { setFilter(f); setDay(null); }} options={[{ id: 'pendientes', label: 'Pendientes' }, { id: 'plan', label: 'Plan' }, { id: 'mes', label: 'Mes' }, { id: 'hechas', label: 'Entregadas' }, { id: 'todas', label: 'Todas' }]} />
 
       {filter === 'pendientes' && tasks.data && <WeekStrip tasks={list} selected={day} onSelect={setDay} />}
-      {tasks.data && list.length > 5 && (
+      {filter === 'mes' && tasks.data && <MonthView tasks={list} onOpen={setOpen} onToggle={toggle} />}
+      {filter !== 'mes' && tasks.data && list.length > 5 && (
         <label className="search"><Icon name="search" size={18} /><span className="sr-only">Buscar tareas</span>
           <input className="input" type="search" aria-label="Buscar tarea o asignatura" placeholder="Buscar tarea o asignatura…" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
@@ -110,7 +109,7 @@ export function Tareas() {
       )}
 
       {tasks.error && <div className="error">{tasks.error}</div>}
-      {!tasks.data ? <Skeleton hero={false} rows={5} /> : shown.length === 0 ? (
+      {filter === 'mes' ? null : !tasks.data ? <Skeleton hero={false} rows={5} /> : shown.length === 0 ? (
         <div className="card"><Empty icon={filter === 'hechas' ? 'tasks' : 'check'}
           title={q.trim() ? 'Sin resultados' : day ? 'Nada vence ese día' : filter === 'hechas' ? 'Aún no hay entregas' : 'Todo al día'}
           text={day ? 'Toca el día otra vez para ver todo.' : filter === 'hechas' ? 'Jala hacia abajo o pulsa sincronizar para traer del EVA lo que ya entregaste.' : 'No hay tareas aquí. Toca + para agregar una.'} /></div>
@@ -136,6 +135,55 @@ export function Tareas() {
       {open && <TaskSheet task={open} courses={courses.data || []} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); tasks.reload(); }} />}
       {creating && <TaskModal task={{}} courses={courses.data || []} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); tasks.reload(); }} />}
     </>
+  );
+}
+
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/** Calendario del mes: un punto de color por entrega (color de la asignatura). Toca un día para ver qué vence. */
+function MonthView({ tasks, onOpen, onToggle }: { tasks: Task[]; onOpen: (t: Task) => void; onToggle: (t: Task) => void }) {
+  const today = dayKey(Date.now() / 1000);
+  const [ym, setYm] = useState(() => { const [y, m] = today.split('-').map(Number); return { y, m }; });
+  const [sel, setSel] = useState<string>(today);
+  const byDay = new Map<string, Task[]>();
+  for (const t of tasks) if (t.due_at) { const k = dayKey(t.due_at); byDay.set(k, [...(byDay.get(k) || []), t]); }
+  const first = new Date(Date.UTC(ym.y, ym.m - 1, 1));
+  const lead = (first.getUTCDay() + 6) % 7; // lunes primero
+  const days = new Date(Date.UTC(ym.y, ym.m, 0)).getUTCDate();
+  const cells = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => `${ym.y}-${String(ym.m).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`)];
+  const move = (d: number) => { haptic(5); setYm(({ y, m }) => { const n = m + d; return n < 1 ? { y: y - 1, m: 12 } : n > 12 ? { y: y + 1, m: 1 } : { y, m: n }; }); };
+  const items = byDay.get(sel) || [];
+  const now = Date.now() / 1000;
+  return (
+    <div className="col">
+      <div className="card month">
+        <div className="month-head">
+          <button className="icon-round" onClick={() => move(-1)} aria-label="Mes anterior"><Icon name="chevron" size={18} style={{ transform: 'rotate(180deg)' }} /></button>
+          <b>{MONTHS[ym.m - 1]} {ym.y}</b>
+          <button className="icon-round" onClick={() => move(1)} aria-label="Mes siguiente"><Icon name="chevron" size={18} /></button>
+        </div>
+        <div className="month-grid" role="grid" aria-label={`${MONTHS[ym.m - 1]} ${ym.y}`}>
+          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <span key={i} className="mg-dow" aria-hidden="true">{d}</span>)}
+          {cells.map((k, i) => {
+            if (!k) return <span key={i} />;
+            const list = byDay.get(k) || [];
+            const late = list.some((t) => t.status !== 'done' && t.due_at! < now);
+            return (
+              <button key={k} className={`mg-day ${k === today ? 'today' : ''} ${k === sel ? 'on' : ''} ${late ? 'late' : ''}`} onClick={() => { haptic(4); setSel(k); }}
+                aria-label={`${Number(k.slice(8))} de ${MONTHS[ym.m - 1]}: ${list.length ? list.length + ' entrega' + (list.length > 1 ? 's' : '') : 'nada'}`} aria-pressed={k === sel}>
+                <span className="num">{Number(k.slice(8))}</span>
+                <span className="mg-dots">{list.slice(0, 3).map((t) => <i key={t.id} className={t.status === 'done' ? 'done' : ''} style={{ background: t.course_color || 'var(--blue)' }} />)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="section">
+        <div className="section-head"><h3>{sel === today ? 'Hoy' : dayTitle(sel)}</h3>{items.length > 0 && <span className="pill blue num">{items.length}</span>}</div>
+        {items.length ? <div className="card list">{items.map((t) => <TaskRow key={t.id} t={t} onToggle={onToggle} onOpen={onOpen} />)}</div>
+          : <div className="card"><Empty icon="calendar" title="Nada vence ese día" text="Toca otro día del mes." /></div>}
+      </div>
+    </div>
   );
 }
 

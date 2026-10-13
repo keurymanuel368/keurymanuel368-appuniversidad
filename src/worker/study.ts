@@ -2,17 +2,19 @@
 //   plan     → pasos concretos para hacerla, con tiempo estimado
 //   tarjetas → preguntas de práctica con su respuesta (para repasar)
 //   explica  → explicación corta del tema, para leer o escuchar
+//   foro     → borrador de tu aporte al foro e ideas para responder a compañeros
 // Las respuestas se guardan (study_cache) para no gastar los límites gratis de la IA cada vez.
 import type { Env } from './env';
 import { listTasks } from './data';
 import { llmComplete } from './llm';
 import { nowSec } from './time';
 
-export type StudyMode = 'plan' | 'tarjetas' | 'explica';
+export type StudyMode = 'plan' | 'tarjetas' | 'explica' | 'foro';
 export type StudyResult =
   | { mode: 'plan'; steps: { title: string; detail: string; minutes: number }[]; tip: string }
   | { mode: 'tarjetas'; cards: { q: string; a: string }[] }
-  | { mode: 'explica'; title: string; text: string; keys: string[] };
+  | { mode: 'explica'; title: string; text: string; keys: string[] }
+  | { mode: 'foro'; aporte: string; respuestas: string[]; tips: string };
 
 const PROMPTS: Record<StudyMode, string> = {
   plan: `Arma un plan para hacer esta tarea universitaria. Responde SOLO con JSON:
@@ -23,6 +25,9 @@ Entre 3 y 6 pasos, en orden, realistas para un estudiante que trabaja.`,
 Exactamente 6 tarjetas, de lo básico a lo más difícil.`,
   explica: `Explica el tema central de esta tarea para que un estudiante lo entienda rápido. Responde SOLO con JSON:
 {"title": "tema en pocas palabras", "text": "explicación en 2 o 3 párrafos cortos, con un ejemplo de la vida diaria en República Dominicana", "keys": ["3 a 5 ideas clave cortas"]}`,
+  foro: `Ayuda a preparar la participación en este foro universitario. Responde SOLO con JSON:
+{"aporte": "borrador del aporte principal: 2 a 4 párrafos en primera persona que respondan exactamente lo que pide la consigna", "respuestas": ["3 ideas para responder a compañeros: cómo empezar y qué aportar, 1 o 2 frases cada una"], "tips": "un consejo corto sobre lo que suele evaluar el facilitador en este foro"}
+Escribe natural, como un estudiante dominicano que se expresa bien. No inventes citas, autores ni datos.`,
 };
 
 function parseJson(raw: string): Record<string, unknown> | null {
@@ -42,6 +47,10 @@ export function normalizeStudy(mode: StudyMode, j: Record<string, unknown> | nul
   if (mode === 'tarjetas') {
     const cards = (Array.isArray(j.cards) ? j.cards : []).map((c: Record<string, unknown>) => ({ q: str(c.q), a: str(c.a) })).filter((c) => c.q && c.a).slice(0, 10);
     return cards.length ? { mode, cards } : null;
+  }
+  if (mode === 'foro') {
+    const aporte = str(j.aporte);
+    return aporte ? { mode, aporte, respuestas: (Array.isArray(j.respuestas) ? j.respuestas : []).map(str).filter(Boolean).slice(0, 5), tips: str(j.tips) } : null;
   }
   const text = str(j.text);
   return text ? { mode, title: str(j.title), text, keys: (Array.isArray(j.keys) ? j.keys : []).map(str).filter(Boolean).slice(0, 6) } : null;

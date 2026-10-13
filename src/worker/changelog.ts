@@ -10,6 +10,24 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 31,
+    date: '2026-10-13',
+    title: '🚀 Rumbo más rápido de usar',
+    items: [
+      '✍️ Pon tu nota a mano: si el EVA no muestra la nota de un foro (o de cualquier entrega), ábrela y toca «Poner mi nota». Si después el EVA la publica, se usa la del EVA.',
+      '⏰ Inicio te dice qué hacer ahora: la entrega más urgente arriba, con «Abrir en el EVA» y «Ya la entregué».',
+      '🎉 Cuando te califican, Inicio te muestra la nota grande, el comentario y cuánto subió o bajó tu promedio.',
+      '💬 Foros: la ficha dice si ya pusiste tu aporte y cuántas respuestas a compañeros llevas («Respuestas 1 de 2»). Si el foro cierra pronto y te faltan, te aviso.',
+      '🤖 «Borrador del foro con IA»: lee la consigna y te prepara tu aporte e ideas para responder a compañeros.',
+      '📊 Promedios con el peso real de cada actividad (cuando el EVA lo publica), también en el simulador «¿Cuánto necesito?».',
+      '🔎 Buscador en toda la app: toca la lupa de arriba y busca tareas, avisos, asignaturas o facilitadores, sin preocuparte por las tildes.',
+      '📅 Nueva vista «Mes» en Tareas, con un punto de color por cada entrega.',
+      '📎 Los archivos que adjunta el facilitador (rúbricas, guías) se abren desde la ficha de la tarea.',
+      '🗓️ El plan del domingo ahora trae cómo te fue en notas esa semana.',
+      'También: barrita arriba mientras se actualiza el EVA, Notas con filtro «Sin nota» y orden por nota, tamaño de letra en Ajustes → Apariencia, y pantallas vacías con un botón para revisar el EVA.',
+    ],
+  },
+  {
     version: 30,
     date: '2026-10-13',
     title: '📝 Notas de foros, directo del foro',

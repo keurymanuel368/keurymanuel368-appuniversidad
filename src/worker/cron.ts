@@ -106,6 +106,21 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
     }
   }
 
+  // 3b) Foros: pusiste tu aporte pero te faltan respuestas a compañeros y el foro cierra pronto.
+  const { results: foros } = await env.DB.prepare(`SELECT t.id, t.title, t.due_at, t.forum_replies, t.forum_needed, c.short_name AS course, c.name AS course_name FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
+    WHERE t.user_id = ? AND t.moodle_key LIKE 'forum:%' AND t.due_at > ? AND t.due_at <= ? AND t.forum_posts > 0 AND t.forum_needed > 0 AND COALESCE(t.forum_replies, 0) < t.forum_needed`)
+    .bind(env.UID, now, now + 2 * 86400).all<{ id: number; title: string; due_at: number; forum_replies: number | null; forum_needed: number; course: string | null; course_name: string | null }>();
+  for (const f of foros) {
+    if (!(await markSent(env, `forum-replies:${f.id}`))) continue;
+    const faltan = f.forum_needed - (f.forum_replies ?? 0);
+    const curso = courseLabel(f.course_name, f.course);
+    const r = await sendToMe(env, blocks('💬 *Te faltan respuestas en un foro*',
+      [`*${f.title}*`, curso && `📚 ${curso}`, `✅ Tu aporte ya está`, `✍️ Te ${faltan === 1 ? 'falta 1 respuesta' : `faltan ${faltan} respuestas`} a compañeros (llevas ${f.forum_replies ?? 0} de ${f.forum_needed})`, `⏰ Cierra *${cuandoTexto(env, f.due_at)}*`].filter(Boolean).join('\n')),
+      { title: `💬 Faltan ${faltan} respuesta${faltan === 1 ? '' : 's'}: ${f.title}`.slice(0, 90), pushBody: `${curso ? curso + ' · ' : ''}cierra ${cuandoTexto(env, f.due_at)}`, tag: `forum-${f.id}`, url: `/#tareas/${f.id}`, type: 'tareas' });
+    if (!r.ok) await unmarkSent(env, `forum-replies:${f.id}`);
+    log.push(`Foro ${f.id} sin respuestas: ${r.ok ? 'avisado' : r.error}`);
+  }
+
   // 4) Avisos de pago (días configurables dentro de la ventana, a partir de la hora del resumen)
   const pay = await payWindow(env, s);
   const payDays = (s.pay_remind_days || '').split(',').map(Number).filter(Boolean);

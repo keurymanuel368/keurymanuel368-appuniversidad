@@ -6,11 +6,13 @@ import { htmlToText, moodleCall } from './moodle';
 
 export type ForumInfo = {
   id: number; course: number; name: string; cmid: number; type: string;
-  assessed?: number; scale?: number; grade_forum?: number; duedate?: number; cutoffdate?: number; intro?: string;
+  assessed?: number; scale?: number; grade_forum?: number; duedate?: number; cutoffdate?: number; intro?: string; introfiles?: { filename?: string; fileurl?: string }[];
 };
 
 export type ForumFinding = {
   forum: ForumInfo; participated: boolean; firstPost: number | null;
+  /** Mensajes tuyos que responden al tema (tu aporte) y respuestas a compañeros. */
+  posts: number; replies: number; needed: number | null;
   grade: number | null; max: number | null; feedback: string; how: 'puntuacion' | 'respuesta' | 'panel' | null;
   /** Resumen corto de lo que se vio (para diagnosticar foros raros). */
   debug: string;
@@ -35,6 +37,17 @@ export function parseGradeText(text: string, gradeMax = 100): { grade: number; m
   if (max === null) max = value <= 10 && gradeMax > 10 ? 10 : gradeMax;
   if (!Number.isFinite(value) || max < 1 || max > 100 || value > max) return null;
   return { grade: value, max };
+}
+
+const WORD_NUM: Record<string, number> = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5 };
+
+/** Cuántas respuestas a compañeros pide la consigna («responde al menos a dos compañeros»). */
+export function neededReplies(intro: string): number | null {
+  const t = intro.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+  const m = t.match(/(?:respond|comenta|retroaliment|reacciona|interactu|replica|valora|aporta)\w*\s+(?:a\s+|al\s+|en\s+)?(?:por lo menos|al menos|minimo|como minimo)?\s*(?:a\s+)?(?:los\s+|las\s+)?(\d|un|uno|una|dos|tres|cuatro|cinco)\s+(?:\(\d\)\s+)?(?:de\s+)?(?:sus\s+|tus\s+|los\s+|las\s+)?(?:companer|participant|aporte|intervencion|colega|publicacion)/);
+  if (!m) return null;
+  const n = /\d/.test(m[1]) ? Number(m[1]) : WORD_NUM[m[1]];
+  return n && n <= 6 ? n : null;
 }
 
 /** Combina las puntuaciones de tus mensajes como lo hace el foro (promedio, máximo, mínimo, suma o cantidad). */
@@ -91,7 +104,7 @@ async function wholeForumGrade(env: Env, contextid: number, me: number): Promise
  * Usa como máximo `budget` llamadas al EVA; devuelve cuántas gastó.
  */
 export async function scanForum(env: Env, forum: ForumInfo, me: number, gradeMax: number, facilitators: string[], budget: number): Promise<{ finding: ForumFinding; calls: number }> {
-  const finding: ForumFinding = { forum, participated: false, firstPost: null, grade: null, max: null, feedback: '', how: null, debug: '' };
+  const finding: ForumFinding = { forum, participated: false, firstPost: null, grade: null, max: null, feedback: '', how: null, debug: '', posts: 0, replies: 0, needed: neededReplies(htmlToText(forum.intro)) };
   type Disc = { id: number; discussion?: number; userid?: number; userfullname?: string; numreplies?: number };
   let calls = 1;
   let discs: Disc[];
@@ -126,6 +139,8 @@ export async function scanForum(env: Env, forum: ForumInfo, me: number, gradeMax
     finding.participated = true;
     finding.firstPost = Math.min(finding.firstPost ?? Infinity, ...mine.map((p) => p.created));
     const mineIds = new Set(mine.map((p) => p.id));
+    const root = posts.find((p) => !p.parent) || posts[0];
+    for (const p of mine) { if (p.id === root.id || p.parent === root.id) finding.posts++; else finding.replies++; }
     const myRatings = ratings.filter((r) => mineIds.has(r.itemid)).map((r) => `${r.aggregatestr ?? r.aggregate ?? '-'}(${r.count ?? 0})`);
     const replies = posts.filter((p) => p.author !== me && mineIds.has(p.parent)).map((p) => p.text.replace(/\s+/g, ' ').slice(0, 160));
     finding.debug += ` [d${id}: ${posts.length} msj, míos ${mine.length}, punt ${myRatings.join(',') || 'ninguna'}, resp ${replies.length}${replies.length ? ': «' + replies.join('» «') + '»' : ''}]`;

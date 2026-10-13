@@ -7,14 +7,39 @@ import { cuandoTexto, daysBetween, fechaLarga, localDate, localToUnix, MESES, no
 export type Task = {
   id: number; title: string; due_at: number | null; url: string | null; source: string; status: string; notes: string | null; submitted_at: number | null;
   grade: number | null; grade_max: number | null; grade_feedback?: string | null; facilitator: string | null;
-  focus_minutes?: number; description?: string | null;
+  focus_minutes?: number; description?: string | null; grade_source?: string | null; moodle_key?: string | null;
+  forum_posts?: number | null; forum_replies?: number | null; forum_needed?: number | null; attachments?: string | null;
   course_id: number | null; course_name: string | null; course_short: string | null; course_color: string | null;
 };
 
 export type CourseSummary = {
   id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva: string | null;
   graded: number; total: number; average: number | null; pending_tasks: number;
+  /** 1 si el promedio usa los pesos del EVA (cada actividad vale lo que dice el libro de calificaciones). */
+  weighted?: number;
 };
+
+type GradeRow = { id: number; moodle_item_id: number | null; grade: number | null; grade_max: number; weight: number | null };
+
+/** Promedio de una asignatura: con los pesos del EVA si todas las notas los traen; si no, todas valen igual. */
+export function courseAverage(rows: GradeRow[]): { avg: number | null; weighted: boolean } {
+  const g = rows.filter((r) => r.grade !== null && r.grade_max > 0);
+  if (!g.length) return { avg: null, weighted: false };
+  const weighted = g.every((r) => (r.weight ?? 0) > 0);
+  if (weighted) {
+    const w = g.reduce((a, r) => a + r.weight!, 0);
+    return { avg: g.reduce((a, r) => a + (r.grade! / r.grade_max) * 100 * r.weight!, 0) / w, weighted };
+  }
+  return { avg: g.reduce((a, r) => a + (r.grade! / r.grade_max) * 100, 0) / g.length, weighted };
+}
+
+/** Una nota por actividad (los foros traen dos renglones: vale el que tiene nota). */
+export async function bestGrades(env: Env, courseId?: number): Promise<(GradeRow & { course_id: number })[]> {
+  const { results } = await env.DB.prepare(`WITH best AS (SELECT g.id, g.course_id, g.moodle_item_id, g.grade, g.grade_max, g.weight FROM grades g WHERE g.user_id = ?1 AND g.id = (SELECT g2.id FROM grades g2
+      WHERE g2.course_id = g.course_id AND COALESCE(g2.moodle_key, 'i' || g2.id) = COALESCE(g.moodle_key, 'i' || g.id) ORDER BY g2.grade IS NULL, g2.id LIMIT 1))
+    SELECT * FROM best${courseId ? ' WHERE course_id = ?2' : ''}`).bind(...(courseId ? [env.UID, courseId] : [env.UID])).all<GradeRow & { course_id: number }>();
+  return results;
+}
 
 export type PayWindow = {
   state: 'open' | 'closed'; period: string; opensAt: number; closesAt: number;
@@ -31,7 +56,8 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
   const sql = `SELECT t.id, t.title, t.due_at, t.url, t.source, t.status, t.notes, t.submitted_at, t.course_id, t.focus_minutes,${opts.id !== undefined ? ' t.description,' : ''}
       c.name AS course_name, c.short_name AS course_short, c.color AS course_color,
       COALESCE(NULLIF(c.facilitator, ''), c.facilitator_eva) AS facilitator,
-      g.grade AS grade, g.grade_max AS grade_max, g.feedback AS grade_feedback, g.source AS grade_source
+      g.grade AS grade, g.grade_max AS grade_max, g.feedback AS grade_feedback, g.source AS grade_source,
+      t.moodle_key, t.forum_posts, t.forum_replies, t.forum_needed,${opts.id !== undefined ? ' t.attachments,' : ''}
     FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
     -- Un foro trae dos renglones de nota («calificación» y «foro completo»): se usa el que tiene nota.
     LEFT JOIN grades g ON g.id = (SELECT g2.id FROM grades g2 WHERE g2.user_id = t.user_id AND g2.moodle_key = t.moodle_key ORDER BY g2.grade IS NULL, g2.updated_at DESC LIMIT 1)
@@ -45,15 +71,15 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
 export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
   // Cada actividad cuenta una vez (los foros traen dos renglones de nota: vale el que tiene nota).
   const { results } = await env.DB.prepare(`
-    WITH best AS (SELECT g.course_id, g.grade, g.grade_max FROM grades g WHERE g.user_id = ?1 AND g.id = (SELECT g2.id FROM grades g2
-      WHERE g2.course_id = g.course_id AND COALESCE(g2.moodle_key, 'i' || g2.id) = COALESCE(g.moodle_key, 'i' || g.id) ORDER BY g2.grade IS NULL, g2.id LIMIT 1))
     SELECT c.id, c.code, c.name, c.short_name, c.color, c.facilitator, c.facilitator_eva,
-      (SELECT COUNT(*) FROM best g WHERE g.course_id = c.id AND g.grade IS NOT NULL) AS graded,
-      (SELECT COUNT(*) FROM best g WHERE g.course_id = c.id) AS total,
-      (SELECT AVG(g.grade * 100.0 / g.grade_max) FROM best g WHERE g.course_id = c.id AND g.grade IS NOT NULL AND g.grade_max > 0) AS average,
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
-    FROM courses c WHERE c.user_id = ?1 AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
-  return results.map((r) => ({ ...r, average: r.average === null ? null : Math.round(r.average * 10) / 10 }));
+    FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
+  const rows = await bestGrades(env);
+  return results.map((r) => {
+    const mine = rows.filter((g) => g.course_id === r.id);
+    const { avg, weighted } = courseAverage(mine);
+    return { ...r, graded: mine.filter((g) => g.grade !== null).length, total: mine.length, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
+  });
 }
 
 export type GradeMatch = { course: string; item: string; grade: number | null; grade_max: number; updated_at: number };
@@ -142,7 +168,26 @@ export async function dashboard(env: Env) {
   const { results: news } = await env.DB.prepare(`SELECT a.id, a.title, a.kind, a.created_at, a.read, c.name AS course_name FROM announcements a LEFT JOIN courses c ON c.id = a.course_id
     WHERE a.user_id = ? AND (a.source = 'avisos' OR a.kind IN ('pago', 'evento') OR a.source = 'correo') ORDER BY a.created_at DESC LIMIT 3`).bind(env.UID).all();
   const unread = await env.DB.prepare(`SELECT COUNT(*) AS n FROM announcements WHERE user_id = ? AND read = 0 AND (source = 'avisos' OR kind IN ('pago', 'evento') OR source = 'correo')`).bind(env.UID).first<{ n: number }>();
+  const fresh = await env.DB.prepare(`SELECT a.id, a.ext_id, a.title, a.body, a.url, a.course_id, a.created_at, c.name AS course_name, c.color AS course_color
+    FROM announcements a LEFT JOIN courses c ON c.id = a.course_id WHERE a.user_id = ? AND a.source = 'notas' AND a.read = 0 AND a.created_at > ? ORDER BY a.created_at DESC LIMIT 1`)
+    .bind(env.UID, now - 4 * 86400).first<{ id: number; ext_id: string; title: string; body: string; url: string | null; course_id: number | null; created_at: number; course_name: string | null; course_color: string | null }>();
+  let freshGrade = null;
+  if (fresh) {
+    const [, itemId, grade] = fresh.ext_id.split(':').map(Number);
+    const rows = fresh.course_id ? await bestGrades(env, fresh.course_id) : [];
+    const now1 = courseAverage(rows).avg;
+    const before = courseAverage(rows.filter((r) => r.moodle_item_id !== itemId && r.id !== itemId)).avg;
+    const row = rows.find((r) => r.moodle_item_id === itemId || r.id === itemId);
+    freshGrade = {
+      id: fresh.id, title: fresh.title.replace(/^\S+\s/, '').replace(/:\s*[\d.,]+\/[\d.,]+$/, ''), grade, max: row?.grade_max ?? 100,
+      feedback: fresh.body.startsWith('Comentario del facilitador:') ? fresh.body.replace('Comentario del facilitador:', '').trim() : '',
+      course: fresh.course_name, color: fresh.course_color, url: fresh.url,
+      average: now1 === null ? null : Math.round(now1 * 10) / 10,
+      delta: now1 !== null && before !== null ? Math.round((now1 - before) * 10) / 10 : null,
+    };
+  }
   return {
+    freshGrade,
     news, unreadNews: unread?.n ?? 0,
     weekProgress: { total: wk?.total ?? 0, done: wk?.done ?? 0 },
     graded,

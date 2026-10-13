@@ -450,6 +450,76 @@ app.get('/api/tasks/:id', async (c) => {
   return t ? c.json(t) : c.json({ error: 'Tarea no encontrada.' }, 404);
 });
 
+// Tu nota a mano: cuando el EVA no la publica (por ejemplo, un foro), la pones tú. Si luego el EVA la publica, manda la del EVA.
+app.post('/api/tasks/:id/grade', async (c) => {
+  const id = Number(c.req.param('id'));
+  const b = await c.req.json<{ grade?: number; max?: number }>().catch(() => ({} as { grade?: number; max?: number }));
+  const grade = Number(b.grade), max = Number(b.max || 100);
+  if (!Number.isFinite(grade) || !Number.isFinite(max) || max <= 0 || grade < 0 || grade > max) return c.json({ error: `Escribe una nota entre 0 y ${max || 100}.` }, 400);
+  const t = await c.env.DB.prepare('SELECT id, title, course_id, moodle_key FROM tasks WHERE id = ? AND user_id = ?').bind(id, c.env.UID).first<{ id: number; title: string; course_id: number | null; moodle_key: string | null }>();
+  if (!t) return c.json({ error: 'Tarea no encontrada.' }, 404);
+  if (!t.course_id) return c.json({ error: 'Primero asígnale una asignatura a la tarea (Editar tarea).' }, 400);
+  const key = t.moodle_key || `task:${t.id}`;
+  if (!t.moodle_key) await c.env.DB.prepare('UPDATE tasks SET moodle_key = ? WHERE id = ?').bind(key, t.id).run();
+  const rows = (await c.env.DB.prepare('SELECT id, item_name, grade_max FROM grades WHERE user_id = ? AND moodle_key = ?').bind(c.env.UID, key).all<{ id: number; item_name: string; grade_max: number }>()).results
+    .sort((a, b2) => Number(/calificaci/i.test(b2.item_name)) - Number(/calificaci/i.test(a.item_name)) || a.id - b2.id);
+  const now = nowSec();
+  if (rows[0]) {
+    const scaled = Math.round((grade / max) * rows[0].grade_max * 100) / 100;
+    await c.env.DB.prepare(`UPDATE grades SET grade = ?, source = 'manual', updated_at = ? WHERE id = ?`).bind(scaled, now, rows[0].id).run();
+  } else {
+    await c.env.DB.prepare(`INSERT INTO grades (user_id, course_id, moodle_item_id, item_name, grade, grade_max, moodle_key, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?)`)
+      .bind(c.env.UID, t.course_id, -(2_000_000_000 + t.id), t.title, grade, max, key, now).run();
+  }
+  return c.json({ ok: true });
+});
+
+app.delete('/api/tasks/:id/grade', async (c) => {
+  const id = Number(c.req.param('id'));
+  const t = await c.env.DB.prepare('SELECT moodle_key FROM tasks WHERE id = ? AND user_id = ?').bind(id, c.env.UID).first<{ moodle_key: string | null }>();
+  if (!t?.moodle_key) return c.json({ ok: true });
+  await c.env.DB.prepare(`DELETE FROM grades WHERE user_id = ? AND moodle_item_id = ?`).bind(c.env.UID, -(2_000_000_000 + id)).run();
+  await c.env.DB.prepare(`UPDATE grades SET grade = NULL, source = NULL WHERE user_id = ? AND moodle_key = ? AND source = 'manual'`).bind(c.env.UID, t.moodle_key).run();
+  return c.json({ ok: true });
+});
+
+// Archivo que adjuntó el facilitador: Rumbo lo descarga del EVA con tu token (el token nunca llega al navegador).
+app.get('/api/tasks/:id/files/:n', async (c) => {
+  const t = await c.env.DB.prepare('SELECT attachments FROM tasks WHERE id = ? AND user_id = ?').bind(Number(c.req.param('id')), c.env.UID).first<{ attachments: string | null }>();
+  const f = (JSON.parse(t?.attachments || '[]') as { name: string; url: string }[])[Number(c.req.param('n'))];
+  const base = c.env.MOODLE_URL.replace(/\/$/, '');
+  if (!f || !c.env.MOODLE_TOKEN || !f.url.startsWith(base)) return c.json({ error: 'Archivo no encontrado.' }, 404);
+  const u = new URL(f.url.replace('/pluginfile.php/', '/webservice/pluginfile.php/').replace('/webservice/webservice/', '/webservice/'));
+  u.searchParams.set('token', c.env.MOODLE_TOKEN);
+  const r = await fetch(u.toString());
+  if (!r.ok) return c.json({ error: `El EVA respondió ${r.status}.` }, 502);
+  return new Response(r.body, { headers: {
+    'Content-Type': r.headers.get('Content-Type') || 'application/octet-stream',
+    'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(f.name)}`,
+    'Cache-Control': 'private, max-age=3600',
+  } });
+});
+
+// Búsqueda en toda la app: tareas, avisos y asignaturas (sin importar tildes ni mayúsculas).
+app.get('/api/search', async (c) => {
+  const fold = (x: unknown) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const words = fold(c.req.query('q')).split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return c.json({ tasks: [], news: [], courses: [] });
+  const hit = (...parts: unknown[]) => { const t = fold(parts.join(' ')); return words.every((w) => t.includes(w)); };
+  type T = { id: number; title: string; due_at: number | null; status: string; course_name: string | null; course_color: string | null; description: string | null };
+  const tasks = (await c.env.DB.prepare(`SELECT t.id, t.title, t.due_at, t.status, t.description, c.name AS course_name, c.color AS course_color FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
+    WHERE t.user_id = ? ORDER BY t.status = 'done', COALESCE(t.due_at, 0) DESC LIMIT 600`).bind(c.env.UID).all<T>()).results
+    .filter((t) => hit(t.title, t.course_name, t.description)).slice(0, 12).map(({ description: _d, ...t }) => t);
+  type N = { id: number; title: string; body: string | null; kind: string; created_at: number; course_name: string | null };
+  const news = (await c.env.DB.prepare(`SELECT a.id, a.title, a.body, a.kind, a.created_at, c.name AS course_name FROM announcements a LEFT JOIN courses c ON c.id = a.course_id
+    WHERE a.user_id = ? ORDER BY a.created_at DESC LIMIT 400`).bind(c.env.UID).all<N>()).results
+    .filter((n) => hit(n.title, n.body, n.course_name)).slice(0, 8).map(({ body: _b, ...n }) => ({ ...n, title: cleanNewsText(n.title) }));
+  type C = { id: number; name: string; code: string | null; color: string; facilitator_eva: string | null; facilitator: string | null };
+  const courses = (await c.env.DB.prepare('SELECT id, name, code, color, facilitator, facilitator_eva FROM courses WHERE user_id = ? AND active = 1').bind(c.env.UID).all<C>()).results
+    .filter((x) => hit(x.name, x.code, x.facilitator, x.facilitator_eva)).slice(0, 6);
+  return c.json({ tasks, news, courses });
+});
+
 app.post('/api/tasks', async (c) => {
   const b = await c.req.json<{ title: string; due_at?: number | null; course_id?: number | null; notes?: string }>();
   if (!b.title?.trim()) return c.json({ error: 'El título es obligatorio.' }, 400);
@@ -554,7 +624,7 @@ app.get('/api/backups/download', async (c) => {
 // Modo estudio con IA (plan, tarjetas o explicación de una tarea)
 app.post('/api/study/:id', async (c) => {
   const b = await c.req.json<{ mode?: string; fresh?: boolean }>().catch(() => ({} as { mode?: string; fresh?: boolean }));
-  const mode = (['plan', 'tarjetas', 'explica'].includes(b.mode || '') ? b.mode : 'plan') as StudyMode;
+  const mode = (['plan', 'tarjetas', 'explica', 'foro'].includes(b.mode || '') ? b.mode : 'plan') as StudyMode;
   try { return c.json(await study(c.env, Number(c.req.param('id')), mode, !!b.fresh)); }
   catch (e) { return c.json({ error: /cuota|motor/i.test((e as Error).message) ? 'Los motores de IA están ocupados. Inténtalo en un minuto.' : (e as Error).message }, 502); }
 });
@@ -631,8 +701,8 @@ app.get('/api/courses/history', async (c) => {
 
 app.get('/api/courses/:id/grades', async (c) => {
   // Cada nota trae su tarea (si existe) para abrir la ficha desde Notas.
-  type Row = { id: number; item_name: string; grade: number | null; grade_max: number; moodle_key: string | null; source: string | null; task_id: number | null; due_at: number | null; status: string | null };
-  const { results } = await c.env.DB.prepare(`SELECT g.id, g.item_name, g.grade, g.grade_max, g.moodle_key, g.source, t.id AS task_id, t.due_at, t.status
+  type Row = { id: number; item_name: string; grade: number | null; grade_max: number; weight: number | null; moodle_key: string | null; source: string | null; task_id: number | null; due_at: number | null; status: string | null };
+  const { results } = await c.env.DB.prepare(`SELECT g.id, g.item_name, g.grade, g.grade_max, g.weight, g.moodle_key, g.source, t.id AS task_id, t.due_at, t.status
     FROM grades g LEFT JOIN tasks t ON g.moodle_key IS NOT NULL AND t.user_id = g.user_id AND t.moodle_key = g.moodle_key
     WHERE g.user_id = ? AND g.course_id = ? ORDER BY COALESCE(t.due_at, 9999999999), g.id`).bind(c.env.UID, Number(c.req.param('id'))).all<Row>();
   // Un foro trae dos renglones («… calificación» y «… foro completo»): se muestra uno solo, el que tiene nota.

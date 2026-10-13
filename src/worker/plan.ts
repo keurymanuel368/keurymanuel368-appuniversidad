@@ -67,6 +67,14 @@ export async function weeklyPlan(env: Env): Promise<WeekPlan> {
     starts.forEach(({ t, when }, i) => L.push(`${i + 1}. ${t.title} → _${when === 'hoy' ? 'hazla hoy' : 'empieza ' + when}_`));
   }
 
+  // Cómo te fue en notas la semana pasada
+  const { results: notas } = await env.DB.prepare(`SELECT g.grade, g.grade_max FROM grades g WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.grade_max > 0 AND g.updated_at > ?`)
+    .bind(env.UID, now - 7 * 86400).all<{ grade: number; grade_max: number }>();
+  if (notas.length) {
+    const avg = notas.reduce((a, n) => a + (n.grade / n.grade_max) * 100, 0) / notas.length;
+    L.push('', `📊 *Notas de la semana:* te calificaron ${notas.length} actividad${notas.length === 1 ? '' : 'es'} · promedio *${Math.round(avg * 10) / 10}* ${avg >= 90 ? '🏅' : avg >= 70 ? '✅' : '⚠️'}`);
+  }
+
   // Pagos que caen esta semana
   const p = await payWindow(env, s);
   if (!p.paid && p.state === 'open' && p.closesAt <= to) L.push('', `💳 La ventana de pago de ${periodLabel(p.period)} cierra el ${fechaCorta(localDate(env, p.closesAt))}.`);

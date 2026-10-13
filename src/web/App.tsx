@@ -2,7 +2,8 @@ import { Suspense, lazy, useEffect, useRef, useState, type FormEvent } from 'rea
 import { flushSync } from 'react-dom';
 import { api, ApiError, type Course } from './api';
 import { Icon } from './icons';
-import { Modal, TaskModal, Toaster, haptic } from './components';
+import { Modal, SyncBar, TaskModal, Toaster, haptic } from './components';
+import { SearchModal } from './Search';
 import { Welcome } from './Welcome';
 import { isAdmin, setMe, type Me } from './me';
 
@@ -109,7 +110,8 @@ export function App() {
   useEffect(() => {
     api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch((e) => setAuth(e instanceof ApiError && e.status === 401 ? 'out' : 'in'));
     const onHash = () => {
-      const apply = () => { setPage(currentPage()); setMore(false); window.scrollTo({ top: 0 }); };
+      // «#tareas/12» estando ya en Tareas: se vuelve a montar la pantalla para que abra ese elemento.
+      const apply = () => { setPage(currentPage()); setMore(false); if (location.hash.includes('/')) setVersion((v) => v + 1); window.scrollTo({ top: 0 }); };
       // Transición suave entre pantallas donde el navegador la soporta (Chrome/Android, Safari 18+).
       const d = document as Document & { startViewTransition?: (cb: () => void) => unknown };
       if (d.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) d.startViewTransition(() => flushSync(apply));
@@ -117,6 +119,18 @@ export function App() {
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  // Buscador: lupa de arriba o tecla «/» (en computadora).
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const open = () => setSearching(true);
+    const key = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !/INPUT|TEXTAREA|SELECT/.test(el.tagName) && !el.isContentEditable) { e.preventDefault(); setSearching(true); }
+    };
+    window.addEventListener('rumbo:search', open); window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('rumbo:search', open); window.removeEventListener('keydown', key); };
   }, []);
 
   const go = (p: string) => { haptic(5); if (location.hash === '#' + p) { setMore(false); window.scrollTo({ top: 0, behavior: 'smooth' }); } else location.hash = p; };
@@ -236,6 +250,8 @@ export function App() {
       {creating && <TaskModal task={{}} courses={courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); setVersion((v) => v + 1); }} />}
       {(!online || cached) && <div className="offline" role="status"><Icon name="alert" size={16} />{online ? 'Mostrando lo último guardado' : 'Sin conexión: te muestro lo último guardado'}</div>}
       {welcome && <Welcome onDone={() => setWelcome(false)} />}
+      {searching && <SearchModal onClose={() => setSearching(false)} />}
+      <SyncBar />
       <Toaster />
     </div>
   );

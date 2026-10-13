@@ -25,9 +25,10 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
 export type Task = {
   id: number; title: string; due_at: number | null; url: string | null; source: string; status: string; notes: string | null; submitted_at?: number | null;
   grade?: number | null; grade_max?: number | null; grade_feedback?: string | null; grade_source?: string | null; facilitator?: string | null; focus_minutes?: number; description?: string | null;
+  moodle_key?: string | null; forum_posts?: number | null; forum_replies?: number | null; forum_needed?: number | null; attachments?: string | null;
   course_id: number | null; course_name: string | null; course_short: string | null; course_color: string | null;
 };
-export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number };
+export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number; weighted?: number };
 export type PayWindow = { state: 'open' | 'closed'; period: string; opensAt: number; closesAt: number; daysToOpen: number; daysToClose: number; paid: boolean; amount: string; openDay: number; closeDay: number };
 export type Dashboard = {
   today: string; name: string; termProgress: number | null;
@@ -37,6 +38,7 @@ export type Dashboard = {
   lastSync: number | null; lastSyncError: string; summaryHour: number;
   mascot?: { mood: string; headline: string; sub: string; streak: number };
   setup?: { eva: boolean; whatsapp: boolean; career: boolean };
+  freshGrade?: { id: number; title: string; grade: number; max: number; feedback: string; course: string | null; color: string | null; url: string | null; average: number | null; delta: number | null } | null;
 };
 export type PensumRow = { id: number; term: number; code: string | null; name: string; credits: number; status: string; grade: number | null; prereqs: string | null; coreqs?: string | null; kind?: string };
 export type Elective = { code: string; name: string; credits: number; block: string };

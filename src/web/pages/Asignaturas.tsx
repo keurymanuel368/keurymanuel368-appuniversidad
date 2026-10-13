@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api, dateLabel, type Course, type PensumRow, type Task } from '../api';
-import { CountUp, Empty, Modal, PageHead, Ring, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, toast, toggleTask, useLoad } from '../components';
+import { CountUp, Empty, Modal, PageHead, Ring, Segmented, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, useLoad } from '../components';
 import { Icon } from '../icons';
 
-type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; source?: string | null; task_id: number | null; due_at: number | null; status: string | null };
+type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; weight?: number | null; source?: string | null; task_id: number | null; due_at: number | null; status: string | null };
 
 export function Asignaturas() {
   const courses = useLoad(() => api<Course[]>('/courses'));
@@ -26,7 +26,9 @@ export function Asignaturas() {
       </PageHead>
       {courses.error && <div className="error">{courses.error}</div>}
       {!courses.data ? <Skeleton hero={false} rows={4} /> : list.length === 0 ? (
-        <div className="card"><Empty icon="book" title="Sin asignaturas todavía" text="Ve a Tareas → Sincronizar EVA, o agrégalas a mano." /></div>
+        <div className="card"><Empty icon="book" title="Sin asignaturas todavía" text="Se traen solas del EVA. Si acabas de conectarlo, revísalo ahora; también puedes agregarlas a mano.">
+          <button className="btn primary" onClick={() => runSync().then((r) => { syncToast(r); courses.reload(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA ahora</button>
+        </Empty></div>
       ) : (<>
         <TermSummary courses={list} onPick={(id) => { haptic(5); setSel(id); }} />
         <section className="grid2 courses-layout">
@@ -129,6 +131,9 @@ function History() {
 
 function Detail({ course, courses, onChanged }: { course: Course; courses: Course[]; onChanged: () => void }) {
   const grades = useLoad(() => api<Grade[]>(`/courses/${course.id}/grades`), [course.id]);
+  const [order, setOrder] = useState<'fecha' | 'sin' | 'nota'>('fecha');
+  // Al poner o quitar una nota a mano desde la ficha, la lista se actualiza.
+  useEffect(() => { const l = () => { grades.reload(); onChanged(); }; window.addEventListener('rumbo:grades', l); return () => window.removeEventListener('rumbo:grades', l); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   const upcoming = useLoad(() => api<Task[]>('/tasks?status=pending').then((l) => l.filter((t) => t.course_id === course.id)), [course.id]);
   const [goal, setGoal] = useState(90);
   const [fac, setFac] = useState(course.facilitator || '');
@@ -137,8 +142,14 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
   const g = grades.data || [];
   const graded = g.filter((x) => x.grade !== null);
   const pending = g.length - graded.length;
-  const sum = graded.reduce((a, x) => a + (x.grade! / x.grade_max) * 100, 0);
-  const need = pending > 0 ? (goal * g.length - sum) / pending : null;
+  // Con los pesos del EVA (si todas las actividades los traen) el cálculo es exacto; si no, todas valen igual.
+  const weighted = g.length > 0 && g.every((x) => (x.weight ?? 0) > 0);
+  const w = (x: Grade) => (weighted ? x.weight! : 1);
+  const sum = graded.reduce((a, x) => a + (x.grade! / x.grade_max) * 100 * w(x), 0);
+  const wAll = g.reduce((a, x) => a + w(x), 0), wLeft = g.filter((x) => x.grade === null).reduce((a, x) => a + w(x), 0);
+  const need = pending > 0 && wLeft > 0 ? (goal * wAll - sum) / wLeft : null;
+  const shownGrades = order === 'sin' ? g.filter((x) => x.grade === null)
+    : order === 'nota' ? [...g].sort((a, b) => (b.grade === null ? -1 : (b.grade / b.grade_max)) - (a.grade === null ? -1 : (a.grade / a.grade_max))) : g;
   const pct = g.length ? Math.round((graded.length / g.length) * 100) : 0;
 
   async function saveFac() {
@@ -171,15 +182,21 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
           <div className="field"><label htmlFor="fac">Facilitador/a</label><input id="fac" className="input" value={fac} onChange={(e) => setFac(e.target.value)} onBlur={saveFac} placeholder={course.facilitator_eva || 'El EVA no lo publica: escríbelo aquí'} /></div>
         )}
         {grades.error && <div className="error">{grades.error}</div>}
-        {!grades.data ? <div className="sk" style={{ height: 120 }} /> : g.length === 0 ? <p className="muted small">Aún no hay actividades calificables sincronizadas.</p> : (
+        {!grades.data ? <div className="sk" style={{ height: 120 }} /> : g.length === 0 ? (
+          <Empty icon="trend" title="Todavía no hay notas" text="Aparecen cuando el facilitador califica en el EVA. Rumbo revisa solo cada rato; si te acaban de calificar, revísalo ahora.">
+            <button className="btn line" onClick={() => runSync().then((r) => { syncToast(r); grades.reload(); onChanged(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA</button>
+          </Empty>
+        ) : (<>
+          <Segmented label="Ordenar notas" value={order} onChange={(o) => { haptic(4); setOrder(o); }} options={[{ id: 'fecha', label: 'Por fecha' }, { id: 'sin', label: 'Sin nota', count: pending }, { id: 'nota', label: 'Por nota' }]} />
           <div className="grades">
-            {g.map((x) => {
+            {shownGrades.length === 0 && <p className="muted small center">Todo lo de esta asignatura ya tiene nota. 🎉</p>}
+            {shownGrades.map((x) => {
               const v = x.grade === null ? null : (x.grade / x.grade_max) * 100;
               const tone = v === null ? 'gray' : v >= 70 ? 'green' : 'red';
               return (
                 <button key={x.id} className={`grade-row ${x.task_id ? 'tappable' : ''}`} onClick={() => x.task_id && openTask(x.task_id)} disabled={!x.task_id}>
                   <div className="grade-top">
-                    <span className="grade-name">{x.item_name}{x.due_at && <small>{dateLabel(x.due_at)}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota tomada del foro' : ''}</small>}</span>
+                    <span className="grade-name">{x.item_name}{x.due_at && <small>{dateLabel(x.due_at)}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota tomada del foro' : x.source === 'manual' ? ' · nota puesta por ti' : ''}{weighted ? ` · vale ${fmtGrade(Math.round(x.weight! * 1000) / 10)} %` : ''}</small>}</span>
                     <span className={`grade-val num ${tone}`}>{x.grade === null ? 'Pendiente' : `${fmtGrade(x.grade)}/${fmtGrade(x.grade_max)}`}</span>
                     {x.task_id && <Icon name="chevron" size={16} className="row-chevron" />}
                   </div>
@@ -188,7 +205,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
               );
             })}
           </div>
-        )}
+        </>)}
       </div>
 
       {upcoming.data && upcoming.data.length > 0 && (
@@ -209,7 +226,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
         <div className="sim-result">
           {verdict ?? <><span>Necesitas un promedio de</span><b className="num">{Math.max(0, Math.ceil(need!))}</b><span>{pending === 1 ? "en la actividad que falta." : `en las ${pending} actividades que faltan.`}</span></>}
         </div>
-        <p className="sim-note">Cálculo aproximado: supone que todas las actividades pesan lo mismo.</p>
+        <p className="sim-note">{weighted ? 'Usa el peso que cada actividad tiene en el EVA.' : 'Cálculo aproximado: el EVA no publica los pesos, así que supone que todas las actividades valen lo mismo.'}</p>
       </div>
       {open && <TaskSheet task={open} courses={courses} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); onChanged(); }} />}
     </div>

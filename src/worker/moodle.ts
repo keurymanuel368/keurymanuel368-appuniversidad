@@ -10,9 +10,10 @@ const COLORS = ['#1F5FE0', '#12A5C9', '#7A5AF0', '#F08A1C', '#0F9F6E', '#D6457A'
 
 type MoodleCourse = { id: number; shortname: string; fullname: string; displayname?: string; startdate?: number; enddate?: number; visible?: number };
 type MoodleEvent = { id: number; name: string; activityname?: string; timesort: number; url?: string; course?: { id: number; fullname: string }; modulename?: string; instance?: number };
-type GradeItem = { id: number; itemname: string | null; itemtype: string; itemmodule?: string | null; iteminstance?: number | null; graderaw: number | null; grademax: number; gradedatesubmitted?: number | null; feedback?: string | null };
+type GradeItem = { id: number; itemname: string | null; itemtype: string; itemmodule?: string | null; iteminstance?: number | null; graderaw: number | null; grademax: number; gradedatesubmitted?: number | null; feedback?: string | null; weightraw?: number | null };
 /** Una actividad evaluable del curso (tarea, cuestionario o foro). */
-type Activity = { key: string; module: string; cmid: number; name: string; due: number | null; moodleCourse: number; intro?: string };
+type MoodleFile = { filename?: string; fileurl?: string };
+type Activity = { key: string; module: string; cmid: number; name: string; due: number | null; moodleCourse: number; intro?: string; files?: MoodleFile[] };
 
 function flatten(params: Record<string, unknown>, prefix = '', out = new URLSearchParams()): URLSearchParams {
   for (const [k, v] of Object.entries(params)) {
@@ -93,12 +94,12 @@ async function fetchActivities(env: Env, courseIds: number[], result: SyncResult
   const acts: Activity[] = [];
   if (!courseIds.length) return acts;
   try {
-    const r = await moodleCall<{ courses?: { id: number; assignments?: { id: number; cmid: number; name: string; duedate: number; intro?: string }[] }[] }>(env, 'mod_assign_get_assignments', { courseids: courseIds });
-    for (const c of r.courses || []) for (const a of c.assignments || []) acts.push({ key: `assign:${a.id}`, module: 'assign', cmid: a.cmid, name: a.name, due: a.duedate || null, moodleCourse: c.id, intro: a.intro });
+    const r = await moodleCall<{ courses?: { id: number; assignments?: { id: number; cmid: number; name: string; duedate: number; intro?: string; introattachments?: MoodleFile[] }[] }[] }>(env, 'mod_assign_get_assignments', { courseids: courseIds });
+    for (const c of r.courses || []) for (const a of c.assignments || []) acts.push({ key: `assign:${a.id}`, module: 'assign', cmid: a.cmid, name: a.name, due: a.duedate || null, moodleCourse: c.id, intro: a.intro, files: a.introattachments });
   } catch (e) { result.warnings.push('Tareas: ' + (e as Error).message); }
   try {
-    const r = await moodleCall<{ quizzes?: { id: number; coursemodule: number; course: number; name: string; timeclose: number; intro?: string }[] }>(env, 'mod_quiz_get_quizzes_by_courses', { courseids: courseIds });
-    for (const q of r.quizzes || []) acts.push({ key: `quiz:${q.id}`, module: 'quiz', cmid: q.coursemodule, name: q.name, due: q.timeclose || null, moodleCourse: q.course, intro: q.intro });
+    const r = await moodleCall<{ quizzes?: { id: number; coursemodule: number; course: number; name: string; timeclose: number; intro?: string; introfiles?: MoodleFile[] }[] }>(env, 'mod_quiz_get_quizzes_by_courses', { courseids: courseIds });
+    for (const q of r.quizzes || []) acts.push({ key: `quiz:${q.id}`, module: 'quiz', cmid: q.coursemodule, name: q.name, due: q.timeclose || null, moodleCourse: q.course, intro: q.intro, files: q.introfiles });
   } catch (e) { result.warnings.push('Cuestionarios: ' + (e as Error).message); }
   try {
     const r = await moodleCall<ForumInfo[]>(env, 'mod_forum_get_forums_by_courses', { courseids: courseIds });
@@ -106,7 +107,7 @@ async function fetchActivities(env: Env, courseIds: number[], result: SyncResult
       if (f.type === 'news') continue; // foro de avisos
       const graded = (f.assessed ?? 0) > 0 || (f.grade_forum ?? 0) > 0;
       if (!graded && !f.duedate) continue; // foros de conversación general
-      acts.push({ key: `forum:${f.id}`, module: 'forum', cmid: f.cmid, name: f.name, due: f.duedate || f.cutoffdate || null, moodleCourse: f.course, intro: f.intro });
+      acts.push({ key: `forum:${f.id}`, module: 'forum', cmid: f.cmid, name: f.name, due: f.duedate || f.cutoffdate || null, moodleCourse: f.course, intro: f.intro, files: f.introfiles });
     }
   } catch (e) { result.warnings.push('Foros: ' + (e as Error).message); }
   return acts;
@@ -224,7 +225,8 @@ async function syncPensumFromCourses(env: Env): Promise<void> {
  * Abre los foros calificables que todavía no tienen nota en el libro de calificaciones y busca
  * la nota directamente en el foro. Se revisan pocos por vez (límite de llamadas de Cloudflare gratis).
  */
-async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id: number; name: string; current: boolean }>, delivered: Set<string>, result: SyncResult): Promise<void> {
+type Participation = Map<string, { posts: number; replies: number; needed: number | null }>;
+async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id: number; name: string; current: boolean }>, delivered: Set<string>, result: SyncResult, part: Participation): Promise<void> {
   const currentIds = [...courseMap].filter(([, c]) => c.current).map(([m]) => m);
   if (!currentIds.length) return;
   const forums = (await moodleCall<ForumInfo[]>(env, 'mod_forum_get_forums_by_courses', { courseids: currentIds }))
@@ -238,7 +240,7 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
   // Los que el libro de calificaciones ya trae con nota no hace falta abrirlos.
   const todo = forums.filter((f) => !rows.some((r) => r.moodle_key === `forum:${f.id}` && r.grade !== null && r.source !== 'foro'))
     // Los que no han vencido se revisan una vez al día (para saber si ya participaste).
-    .filter((f) => { const due = f.duedate || f.cutoffdate || 0; return !due || due < now || now - (scanned[f.id] ?? 0) > 86400; })
+    .filter((f) => { const due = f.duedate || f.cutoffdate || 0; return !due || due < now || now - (scanned[f.id] ?? 0) > (due - now < 3 * 86400 ? 6 * 3600 : 86400); })
     .sort((a, b) => (scanned[a.id] ?? 0) - (scanned[b.id] ?? 0));
   let budget = Math.max(0, Math.min(16, 44 - (wsState.get(env)?.calls ?? 0)));
   const log: string[] = [];
@@ -257,6 +259,7 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
     scanned[f.id] = now;
     const fd = out.finding;
     log.push(`${f.id}:${fd.participated ? 'participó' : 'sin mensajes'}${fd.grade !== null ? ` nota ${fd.grade}/${fd.max} (${fd.how})` : ''} ${fd.debug.slice(0, 900)}`);
+    part.set(key, { posts: fd.posts, replies: fd.replies, needed: fd.needed });
     if (fd.participated) delivered.add(key);
     if (fd.grade === null || !fd.max) continue;
     const target = own[0];
@@ -350,13 +353,14 @@ export async function syncEva(env: Env): Promise<SyncResult> {
           const gKey = it.itemmodule && it.iteminstance ? `${it.itemmodule}:${it.iteminstance}` : null;
           // Comentario del facilitador (viene en HTML): se guarda como texto simple.
           const feedback = htmlToText(it.feedback || '').slice(0, 2000);
-          await env.DB.prepare(`INSERT INTO grades (user_id, course_id, moodle_item_id, item_name, grade, grade_max, moodle_key, feedback, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          await env.DB.prepare(`INSERT INTO grades (user_id, course_id, moodle_item_id, item_name, grade, grade_max, moodle_key, feedback, weight, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(course_id, moodle_item_id) DO UPDATE SET item_name = excluded.item_name, grade_max = excluded.grade_max, moodle_key = excluded.moodle_key, updated_at = excluded.updated_at,
               -- Una nota encontrada en el foro se conserva mientras el libro de calificaciones siga vacío.
-              grade = CASE WHEN excluded.grade IS NULL AND grades.source = 'foro' THEN grades.grade ELSE excluded.grade END,
-              feedback = CASE WHEN excluded.grade IS NULL AND grades.source = 'foro' THEN grades.feedback ELSE excluded.feedback END,
-              source = CASE WHEN excluded.grade IS NULL AND grades.source = 'foro' THEN 'foro' ELSE NULL END`)
-            .bind(env.UID, course.id, it.id, it.itemname || 'Actividad', it.graderaw, it.grademax || 100, gKey, feedback || null, now).run();
+              weight = excluded.weight,
+              grade = CASE WHEN excluded.grade IS NULL AND grades.source IN ('foro', 'manual') THEN grades.grade ELSE excluded.grade END,
+              feedback = CASE WHEN excluded.grade IS NULL AND grades.source IN ('foro', 'manual') THEN grades.feedback ELSE excluded.feedback END,
+              source = CASE WHEN excluded.grade IS NULL AND grades.source IN ('foro', 'manual') THEN grades.source ELSE NULL END`)
+            .bind(env.UID, course.id, it.id, it.itemname || 'Actividad', it.graderaw, it.grademax || 100, gKey, feedback || null, typeof it.weightraw === 'number' ? it.weightraw : null, now).run();
           if (it.graderaw !== null && (!prev || prev.grade === null || prev.grade !== it.graderaw)) {
             // En la primera sincronización de una asignatura no se avisa (evita una avalancha de mensajes)
             if (!firstSync) result.newGrades.push({ course: course.name, courseId: course.id, item: it.itemname || 'Actividad', grade: it.graderaw, max: it.grademax || 100, prev: prev?.grade ?? null, feedback, key: gKey, itemId: it.id });
@@ -368,7 +372,8 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     }
 
     // 3b) Foros: la nota que el facilitador puso en el foro aunque el EVA no la publique.
-    try { await syncForumGrades(env, site.userid, courseMap, delivered, result); }
+    const participation: Participation = new Map();
+    try { await syncForumGrades(env, site.userid, courseMap, delivered, result, participation); }
     catch (e) { result.warnings.push('Notas de foros: ' + (e as Error).message); }
 
     // 4) Entregas pendientes: el calendario de Moodle solo muestra lo que todavía requiere acción.
@@ -434,6 +439,16 @@ export async function syncEva(env: Env): Promise<SyncResult> {
           .bind(env.UID, a.key, courseId, a.name, a.due, url).run();
         result.tasksNew++;
       }
+    }
+    // Foros: cuántos aportes y respuestas a compañeros llevas (y cuántas pide la consigna)
+    for (const [key, p] of participation) {
+      await env.DB.prepare('UPDATE tasks SET forum_posts = ?, forum_replies = ?, forum_needed = ? WHERE user_id = ? AND moodle_key = ?').bind(p.posts, p.replies, p.needed, env.UID, key).run();
+    }
+    // Archivos que adjuntó el facilitador (rúbricas, guías): se descargan a través de Rumbo.
+    for (const a of acts) {
+      const files = (a.files || []).filter((f) => f.fileurl).slice(0, 12).map((f) => ({ name: f.filename || 'archivo', url: f.fileurl! }));
+      const json = files.length ? JSON.stringify(files) : null;
+      await env.DB.prepare('UPDATE tasks SET attachments = ? WHERE user_id = ? AND moodle_key = ? AND attachments IS NOT ?').bind(json, env.UID, a.key, json).run();
     }
     // Instrucciones de cada actividad (las que escribe el facilitador en el EVA)
     for (const a of acts) {

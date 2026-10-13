@@ -24,7 +24,9 @@ describe('weeklyPlan', () => {
   it('el domingo arma la semana de lunes a domingo', async () => {
     vi.useFakeTimers(); vi.setSystemTime(SUN);
     const { weeklyPlan } = await import('../src/worker/plan');
-    const p = await weeklyPlan({ TZ_OFFSET_HOURS: '-4', UID: 2 } as unknown as Env);
+    // Notas de la semana: dos calificaciones (90 y 100).
+    const DB = { prepare: () => ({ bind: () => ({ all: async () => ({ results: [{ grade: 90, grade_max: 100 }, { grade: 10, grade_max: 10 }] }) }) }) };
+    const p = await weeklyPlan({ TZ_OFFSET_HOURS: '-4', UID: 2, DB } as unknown as Env);
     expect(p.text).toContain('🗓️ *Tu plan de la semana, Ana*\n_5–11 oct_');
     expect(p.count).toBe(3); // la de la otra semana no entra
     expect(p.text).toContain('⚠️ *Primero, lo atrasado*\n• Atrasada _(Tecno)_');
@@ -33,5 +35,6 @@ describe('weeklyPlan', () => {
     expect(p.text.indexOf('Quiz 3 →')).toBeLessThan(p.text.indexOf('Tarea 2 →'));
     expect(p.text).toContain('1. Foro 1 → _empieza mañana_');
     expect(p.text).not.toContain('Para otra semana');
+    expect(p.text).toContain('te calificaron 2 actividades · promedio *95*');
   });
 });

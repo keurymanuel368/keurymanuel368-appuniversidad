@@ -7,19 +7,21 @@ import { Mascot } from './Mascot';
 import { speakable } from './speech';
 import { utterance } from './VoiceCall';
 
-type Mode = 'plan' | 'tarjetas' | 'explica';
+type Mode = 'plan' | 'tarjetas' | 'explica' | 'foro';
 type Result =
   | { mode: 'plan'; steps: { title: string; detail: string; minutes: number }[]; tip: string }
   | { mode: 'tarjetas'; cards: { q: string; a: string }[] }
-  | { mode: 'explica'; title: string; text: string; keys: string[] };
+  | { mode: 'explica'; title: string; text: string; keys: string[] }
+  | { mode: 'foro'; aporte: string; respuestas: string[]; tips: string };
 
 const store = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } },
 };
 
-export function StudyModal({ task, onClose }: { task: Task; onClose: () => void }) {
-  const [mode, setMode] = useState<Mode>('plan');
+export function StudyModal({ task, onClose, initial = 'plan' }: { task: Task; onClose: () => void; initial?: Mode }) {
+  const [mode, setMode] = useState<Mode>(initial);
+  const isForum = !!task.moodle_key?.startsWith('forum:');
   const [data, setData] = useState<Partial<Record<Mode, Result>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -40,12 +42,12 @@ export function StudyModal({ task, onClose }: { task: Task; onClose: () => void 
   return (
     <Modal title={`Estudiar: ${task.title}`} onClose={onClose}>
       <Segmented label="Tipo de ayuda" value={mode} onChange={(m) => { window.speechSynthesis?.cancel(); setMode(m); }}
-        options={[{ id: 'plan', label: 'Plan' }, { id: 'tarjetas', label: 'Practicar' }, { id: 'explica', label: 'Explícame' }]} />
+        options={[...(isForum ? [{ id: 'foro' as Mode, label: 'Borrador' }] : []), { id: 'plan', label: 'Plan' }, { id: 'tarjetas', label: 'Practicar' }, { id: 'explica', label: 'Explícame' }]} />
       <div className="study-body" aria-live="polite" aria-busy={busy}>
         {busy && !r && (
           <div className="study-loading">
             <Mascot mood="talk" size={70} />
-            <b>{mode === 'plan' ? 'Armando tu plan…' : mode === 'tarjetas' ? 'Preparando preguntas…' : 'Pensando cómo explicártelo…'}</b>
+            <b>{mode === 'foro' ? 'Escribiendo tu borrador…' : mode === 'plan' ? 'Armando tu plan…' : mode === 'tarjetas' ? 'Preparando preguntas…' : 'Pensando cómo explicártelo…'}</b>
             <span>Leo las instrucciones de la tarea. Toma unos segundos.</span>
           </div>
         )}
@@ -59,6 +61,7 @@ export function StudyModal({ task, onClose }: { task: Task; onClose: () => void 
         {r?.mode === 'plan' && <PlanView taskId={task.id} r={r} />}
         {r?.mode === 'tarjetas' && <Cards r={r} />}
         {r?.mode === 'explica' && <Explain r={r} />}
+        {r?.mode === 'foro' && <ForumDraft r={r} />}
       </div>
       {r && (
         <button className="btn line block" onClick={() => { haptic(6); void load(mode, true); }} disabled={busy}>
@@ -122,6 +125,25 @@ function Cards({ r }: { r: Extract<Result, { mode: 'tarjetas' }> }) {
           <button className="btn primary grow" onClick={() => next(true)}><Icon name="check" size={18} />Me la sé</button>
         </div>
       ) : <p className="small muted center">Piensa la respuesta antes de voltearla 😉</p>}
+    </div>
+  );
+}
+
+/** Borrador del foro: tu aporte listo para copiar y ajustar, e ideas para responder a compañeros. */
+function ForumDraft({ r }: { r: Extract<Result, { mode: 'foro' }> }) {
+  async function copy() {
+    haptic(8);
+    try { await navigator.clipboard.writeText(r.aporte); toast('Copiado. Pégalo en el foro y ponle tu toque.'); }
+    catch { toast('No pude copiar: mantén presionado el texto para seleccionarlo', 'err'); }
+  }
+  return (
+    <div className="explain">
+      <div className="explain-head"><h3>Tu aporte</h3><button className="btn soft sm" onClick={copy}><Icon name="upload" size={16} />Copiar</button></div>
+      <div className="draft-text">{r.aporte.split(/\n+/).map((p, i) => <p key={i}>{p}</p>)}</div>
+      {r.respuestas.length > 0 && (
+        <div className="explain-keys"><span className="label">Ideas para responder a compañeros</span><ul>{r.respuestas.map((k, i) => <li key={i}>{k}</li>)}</ul></div>
+      )}
+      {r.tips && <p className="hint">💡 {r.tips}</p>}
     </div>
   );
 }

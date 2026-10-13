@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { agoLabel, api, cleanTitle, channelsLabel, type Dashboard, type SendResult, type Task, whenLabel } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
+import { agoLabel, api, cleanTitle, channelsLabel, overdueLabel, type Dashboard, type SendResult, type Task, whenLabel } from '../api';
+import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
@@ -20,9 +20,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   const sync = useCallback(async () => {
     setSyncing(true);
     try {
-      const r = await api<{ result: { tasksNew: number; delivered: number; forumGrades?: number } }>('/sync', { method: 'POST' });
-      toast(`EVA al día${r.result.tasksNew ? ` · ${r.result.tasksNew} nuevas` : ''}${r.result.forumGrades ? ` · ${r.result.forumGrades} nota${r.result.forumGrades === 1 ? '' : 's'} de foros` : ''}`);
-      reload(); window.dispatchEvent(new Event('rumbo:badges'));
+      syncToast(await runSync());
+      reload();
     } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
     setSyncing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -36,7 +35,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
     if (!evaOn || (lastSync && Date.now() / 1000 - lastSync < 90 * 60)) return;
     try { if (sessionStorage.getItem('rumbo-autosync')) return; sessionStorage.setItem('rumbo-autosync', '1'); } catch { /* sin almacenamiento */ }
     setSyncing(true);
-    api('/sync', { method: 'POST' }).then(() => { reload(); window.dispatchEvent(new Event('rumbo:badges')); }).catch(() => {}).finally(() => setSyncing(false));
+    runSync().then(() => reload()).catch(() => {}).finally(() => setSyncing(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evaOn, lastSync]);
 
@@ -44,6 +43,9 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   if (!d) return <Skeleton rows={4} />;
 
   const now = Date.now() / 1000;
+  // «Qué hago ahora»: lo vencido más reciente; si no hay, lo que vence en las próximas 48 h.
+  const overdueList = d.tasks.filter((t) => t.due_at && t.due_at < now).sort((a, b) => b.due_at! - a.due_at!);
+  const now1 = overdueList[0] || d.tasks.find((t) => t.due_at && t.due_at >= now && t.due_at - now < 48 * 3600) || null;
   const soon = d.tasks.filter((t) => t.due_at && t.due_at >= now && t.due_at - now < 86400 * 1.5);
   const next = d.tasks.find((t) => t.due_at && t.due_at >= now);
   const headline = d.counts.today > 0
@@ -76,6 +78,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
       </PageHead>
 
       <SetupBanner setup={d.setup} go={go} />
+      {d.freshGrade && <FreshGrade g={d.freshGrade} onDone={reload} />}
+      {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
 
       <nav className="quick-row" aria-label="Accesos rápidos">
         <button className="quick" onClick={() => go('asistente')}><span className="q-ic grad"><Icon name="spark" size={19} /></span>Hablar con Rumbo</button>
@@ -95,7 +99,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
               </div>
             ) : <span className="kicker"><Icon name="spark" size={14} />TU DÍA EN RUMBO</span>}
             <h2>{headline}</h2>
-            {next ? (
+            {next && next.id !== now1?.id ? (
               <button className="next" onClick={() => setEditing(next)}>
                 <span className="next-dot" style={{ background: next.course_color || '#fff' }} />
                 <span className="next-txt"><b>{next.title}</b><span>{whenLabel(next.due_at)}{next.course_short ? ' · ' + next.course_short : ''}</span><Countdown to={next.due_at!} /></span>
@@ -236,6 +240,47 @@ export function Inicio({ go }: { go: (p: string) => void }) {
       {creating && <TaskModal task={{}} courses={d.courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); reload(); }} />}
       {editing && <TaskSheet task={editing} courses={d.courses} onClose={() => setEditing(null)} onChanged={() => { setEditing(null); reload(); }} />}
     </>
+  );
+}
+
+/** La acción más urgente del momento, con los dos botones que se usan: abrir en el EVA y marcarla. */
+function NowCard({ t, onOpen, onDone }: { t: Task; onOpen: () => void; onDone: () => void }) {
+  const late = !!t.due_at && t.due_at < Date.now() / 1000;
+  return (
+    <section className={`now-card ${late ? 'late' : ''}`} style={{ ['--cc' as string]: t.course_color || 'var(--blue)' }} aria-label="Qué hago ahora">
+      <span className="now-kicker">{late ? '⚠️ ' + overdueLabel(t.due_at!) : '⏰ Ahora te toca'}</span>
+      <button className="now-title" onClick={onOpen}><b>{t.title}</b><span>{t.course_short || t.course_name || 'Personal'}{!late ? ' · ' + whenLabel(t.due_at) : ''}</span></button>
+      {!late && <Countdown to={t.due_at!} />}
+      <div className="now-actions">
+        {t.url && <a className="btn primary" href={t.url} target="_blank" rel="noopener"><Icon name="link" size={17} />Abrir en el EVA</a>}
+        <button className="btn line" onClick={() => { haptic(10); onDone(); }}><Icon name="check" size={17} />Ya la entregué</button>
+      </div>
+    </section>
+  );
+}
+
+/** «¡Te calificaron!»: la nota nueva grande, el comentario y cuánto movió tu promedio. */
+function FreshGrade({ g, onDone }: { g: NonNullable<Dashboard['freshGrade']>; onDone: () => void }) {
+  const pct = g.max ? (g.grade / g.max) * 100 : 0;
+  async function close() {
+    haptic(6);
+    await api('/announcements/read', { method: 'POST', body: { ids: [g.id] } }).catch(() => {});
+    window.dispatchEvent(new Event('rumbo:badges'));
+    onDone();
+  }
+  return (
+    <section className={`fresh-grade ${pct >= 70 ? 'good' : 'bad'}`} aria-label="Nota nueva">
+      <button className="fg-x" onClick={close} aria-label="Cerrar"><Icon name="x" size={16} /></button>
+      <span className="fg-kicker">{pct >= 90 ? '🎉 ¡Te calificaron!' : pct >= 70 ? '✅ Te calificaron' : '⚠️ Te calificaron'}</span>
+      <div className="fg-main">
+        <span className="fg-score num"><b>{fmtGrade(g.grade)}</b><small>/{fmtGrade(g.max)}</small></span>
+        <span className="fg-copy"><b>{g.title}</b><span><i className="dot" style={{ background: g.color || 'var(--blue)' }} />{g.course || 'Asignatura'}</span>
+          {g.average !== null && <span className="fg-avg">Promedio ahora <b className="num">{fmtGrade(g.average)}</b>{g.delta ? <em className={`num ${g.delta > 0 ? 'up' : 'down'}`}>{g.delta > 0 ? '▲ +' : '▼ '}{fmtGrade(g.delta)}</em> : null}</span>}
+        </span>
+      </div>
+      {g.feedback && <p className="fg-fb">💬 {g.feedback.length > 220 ? g.feedback.slice(0, 220) + '…' : g.feedback}</p>}
+      {g.url?.startsWith('/#') && <button className="link-btn" onClick={() => { void close(); location.hash = g.url!.slice(2); }}>Ver la ficha<Icon name="chevron" size={15} /></button>}
+    </section>
   );
 }
 

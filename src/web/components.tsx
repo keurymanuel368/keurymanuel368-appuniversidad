@@ -17,6 +17,34 @@ export function toast(text: string, kind: 'ok' | 'err' = 'ok', action?: ToastAct
   toastListeners.forEach((l) => l(t));
 }
 
+// ----- Sincronizar el EVA (una sola a la vez) con la barrita de progreso arriba -----
+export type SyncRes = { result: { tasksNew: number; courses: number; pastCourses: number; delivered: number; forumGrades?: number; warnings: string[] } };
+let syncing: Promise<SyncRes> | null = null;
+export function runSync(): Promise<SyncRes> {
+  if (syncing) return syncing;
+  window.dispatchEvent(new CustomEvent('rumbo:sync', { detail: true }));
+  syncing = api<SyncRes>('/sync', { method: 'POST' }).finally(() => {
+    syncing = null;
+    window.dispatchEvent(new CustomEvent('rumbo:sync', { detail: false }));
+    window.dispatchEvent(new Event('rumbo:badges'));
+  });
+  return syncing;
+}
+export function syncToast(r: SyncRes, verbose = false) {
+  const x = r.result;
+  toast(`EVA al día${verbose ? ` · ${x.delivered} entregas en tu historial` : ''}${x.tasksNew ? ` · ${x.tasksNew} nuevas` : ''}${x.forumGrades ? ` · ${x.forumGrades} nota${x.forumGrades === 1 ? '' : 's'} de foros` : ''}`);
+  if (verbose && x.warnings?.length) toast('Algunas partes del EVA no respondieron: ' + x.warnings.join(' · '), 'err');
+}
+export function SyncBar() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const l = (e: Event) => setOn(!!(e as CustomEvent<boolean>).detail);
+    window.addEventListener('rumbo:sync', l);
+    return () => window.removeEventListener('rumbo:sync', l);
+  }, []);
+  return <div className={`sync-bar ${on ? 'on' : ''}`} role="status" aria-label={on ? 'Actualizando el EVA' : undefined} />;
+}
+
 /** Marca una tarea como hecha o pendiente; al completarla ofrece «Deshacer» por unos segundos. */
 export async function toggleTask(t: Task, reload: () => void) {
   const next = t.status === 'done' ? 'pending' : 'done';
@@ -283,7 +311,9 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const [focus, setFocus] = useState(false);
   const [studying, setStudying] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [studyMode, setStudyMode] = useState<'plan' | 'foro'>('plan');
   const [task, setTask] = useState<Task>(initial);
+  const refresh = () => api<Task>(`/tasks/${initial.id}`).then(setTask).catch(() => {});
   // Las instrucciones y el tiempo de estudio se cargan al abrir la ficha.
   useEffect(() => { api<Task>(`/tasks/${initial.id}`).then(setTask).catch(() => {}); }, [initial.id]);
   if (editing) return <TaskModal task={task} courses={courses} onClose={() => setEditing(false)} onSaved={onChanged} />;
@@ -298,6 +328,9 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const tone = done ? (closed ? 'gray' : 'green') : u === 'red' ? 'red' : u === 'orange' ? 'orange' : 'blue';
   const userNotes = task.notes && !/en el EVA$/.test(task.notes) ? task.notes : '';
   const dateTime = (s: number) => new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(s * 1000));
+  const isForum = !!task.moodle_key?.startsWith('forum:');
+  const files: { name: string }[] = (() => { try { return JSON.parse(task.attachments || '[]'); } catch { return []; } })();
+  const srcTag = task.grade_source === 'foro' ? 'tomada del foro' : task.grade_source === 'manual' ? 'puesta por ti' : '';
 
   async function toggle() {
     setBusy(true); haptic(12);
@@ -331,12 +364,28 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
 
       <div className="facts">
         {/* La calificación solo cuando tiene sentido: ya hay nota o ya se entregó. */}
-        {(graded || done) && <div className="fact"><Icon name="trend" size={18} /><span>Calificación{task.grade_source === 'foro' && <small className="src-tag">tomada del foro</small>}</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : 'Todavía sin nota'}</b></div>}
+        {(graded || done) && <div className="fact"><Icon name="trend" size={18} /><span>Calificación{srcTag && <small className="src-tag">{srcTag}</small>}</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : 'Todavía sin nota'}</b></div>}
         <div className="fact"><Icon name="calendar" size={18} /><span>Fecha de entrega</span><b>{task.due_at ? cap(dateTime(task.due_at)) : 'Sin fecha'}</b></div>
+        {isForum && task.forum_posts != null && (
+          <div className="fact"><Icon name="chat" size={18} /><span>Tu participación en el foro</span>
+            <b className={task.forum_posts && (!task.forum_needed || (task.forum_replies ?? 0) >= task.forum_needed) ? 'good' : ''}>
+              {task.forum_posts ? 'Aporte ✓' : 'Sin aporte todavía'}
+              {task.forum_needed ? ` · Respuestas ${task.forum_replies ?? 0} de ${task.forum_needed}` : task.forum_replies ? ` · ${task.forum_replies} respuesta${task.forum_replies === 1 ? '' : 's'} a compañeros` : ''}
+            </b></div>
+        )}
         {task.submitted_at && !closed && <div className="fact"><Icon name="check" size={18} /><span>Registrada como entregada</span><b>{cap(dateTime(task.submitted_at))}</b></div>}
         {task.facilitator && <div className="fact"><Icon name="cap" size={18} /><span>Facilitador/a</span><b>{task.facilitator}</b></div>}
         {userNotes && <div className="fact"><Icon name="book" size={18} /><span>Notas</span><b>{userNotes}</b></div>}
       </div>
+
+      {(done || isForum) && (!graded || task.grade_source === 'manual') && <ManualGrade task={task} onSaved={refresh} />}
+
+      {files.length > 0 && (
+        <div className="ts-files">
+          <span className="label"><Icon name="download" size={15} />Archivos del facilitador</span>
+          {files.map((f, i) => <a key={i} className="file-row" href={`/api/tasks/${task.id}/files/${i}`} target="_blank" rel="noopener"><Icon name="book" size={17} /><span>{f.name}</span><Icon name="chevron" size={16} className="row-chevron" /></a>)}
+        </div>
+      )}
 
       {task.description && (
         <div className="instructions">
@@ -352,19 +401,68 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
           {!done && <button className="btn primary lg grow" onClick={toggle} disabled={busy}><Icon name="check" size={19} />Ya la entregué</button>}
           {task.url && <a className={`btn ${done ? 'primary' : 'line'} lg grow`} href={task.url} target="_blank" rel="noopener"><Icon name="link" size={18} />Abrir en el EVA</a>}
         </div>
+        {isForum && (
+          <div className="ts-help one">
+            <button className="btn study-btn" onClick={() => { haptic(10); setStudyMode('foro'); setStudying(true); }}><Icon name="chat" size={19} /><span className="tb-txt"><b>Borrador del foro con IA</b><small>tu aporte e ideas para responder a compañeros</small></span></button>
+          </div>
+        )}
         {!done && (
           <div className="ts-help">
-            <button className="btn study-btn" onClick={() => { haptic(10); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Estudiar con IA</b><small>plan · práctica · explicación</small></span></button>
+            <button className="btn study-btn" onClick={() => { haptic(10); setStudyMode('plan'); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Estudiar con IA</b><small>plan · práctica · explicación</small></span></button>
             <button className="btn focus-btn" onClick={() => { haptic(10); setFocus(true); }}><Icon name="clock" size={19} /><span className="tb-txt"><b>Modo enfoque</b><small>{task.focus_minutes ? `llevas ${task.focus_minutes} min` : 'temporizador para concentrarte'}</small></span></button>
           </div>
         )}
-        {studying && <Suspense fallback={null}><StudyModal task={task} onClose={() => setStudying(false)} /></Suspense>}
+        {studying && <Suspense fallback={null}><StudyModal task={task} initial={studyMode} onClose={() => setStudying(false)} /></Suspense>}
         <div className="ts-links">
           {done && <button className="link-btn" onClick={toggle} disabled={busy}><Icon name="sync" size={16} />Reabrir</button>}
           <button className="link-btn" onClick={() => setEditing(true)}><Icon name="gear" size={16} />Editar tarea</button>
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** «Poner mi nota»: para cuando el EVA no publica la nota (pasa mucho con los foros). */
+function ManualGrade({ task, onSaved }: { task: Task; onSaved: () => void }) {
+  const manual = task.grade_source === 'manual';
+  const [open, setOpen] = useState(false);
+  const [grade, setGrade] = useState(manual && task.grade != null ? String(task.grade) : '');
+  const [max, setMax] = useState(String(task.grade_max || 100));
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await api(`/tasks/${task.id}/grade`, { method: 'POST', body: { grade: Number(grade.replace(',', '.')), max: Number(max.replace(',', '.')) } });
+      haptic(12); toast('Nota guardada. Si el EVA la publica, se usa la del EVA.'); setOpen(false); onSaved();
+      window.dispatchEvent(new Event('rumbo:grades'));
+    } catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  }
+  async function remove() {
+    setBusy(true);
+    try { await api(`/tasks/${task.id}/grade`, { method: 'DELETE' }); toast('Quitaste tu nota'); onSaved(); window.dispatchEvent(new Event('rumbo:grades')); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  }
+  if (!open) return (
+    <div className="manual-grade">
+      <button className="link-btn" onClick={() => { haptic(6); setOpen(true); }}><Icon name="trend" size={16} />{manual ? 'Cambiar mi nota' : 'Poner mi nota'}</button>
+      {manual ? <button className="link-btn muted-link" onClick={remove} disabled={busy}>Quitar</button> : <span className="small muted">¿Ya te la dieron y el EVA no la muestra?</span>}
+    </div>
+  );
+  return (
+    <form className="manual-grade open" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <label htmlFor="mg-grade">Mi nota</label>
+      <div className="mg-row">
+        <input id="mg-grade" className="input num lg" inputMode="decimal" value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="95" autoFocus />
+        <span>de</span>
+        <input id="mg-max" className="input num" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} aria-label="Nota máxima" />
+      </div>
+      <div className="mg-row">
+        <button type="button" className="btn line grow" onClick={() => setOpen(false)}>Cancelar</button>
+        <button type="submit" className="btn primary grow" disabled={busy || !grade.trim()}>{busy ? 'Guardando…' : 'Guardar'}</button>
+      </div>
+    </form>
   );
 }
 
@@ -576,7 +674,10 @@ export function PageHead({ eyebrow, title, children }: { eyebrow: string; title:
           <span className="eyebrow">{cap(eyebrow)}</span>
           <h1 tabIndex={-1}>{title}</h1>
         </div>
-        {children && <div className="topbar-actions">{children}</div>}
+        <div className="topbar-actions">
+          {children}
+          <button className="search-btn" onClick={() => { haptic(5); window.dispatchEvent(new Event('rumbo:search')); }} aria-label="Buscar en Rumbo" title="Buscar (/)"><Icon name="search" size={20} /></button>
+        </div>
       </header>
     </>
   );

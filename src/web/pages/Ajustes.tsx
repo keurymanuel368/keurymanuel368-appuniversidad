@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, channelsLabel, dateLabel, type SendResult } from '../api';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
-import { applyTheme } from '../theme';
+import { TEXT_SIZES, applyTextSize, applyTheme, storedTextSize } from '../theme';
 import { Modal, PageHead, RichText, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
@@ -163,6 +163,11 @@ function ThemeCard() {
     try { localStorage.setItem('rumbo-theme', t); } catch { /* sin almacenamiento */ }
     applyTheme(t);
   }
+  const [size, setSize] = useState(storedTextSize);
+  function pickSize(z: string) {
+    haptic(6); setSize(z); applyTextSize(z);
+    try { localStorage.setItem('rumbo-texto', z); } catch { /* sin almacenamiento */ }
+  }
   const [mascot, setMascot] = useState(() => { try { return localStorage.getItem('rumbo-mascota') !== '0'; } catch { return true; } });
   function toggleMascot() {
     const v = !mascot; haptic(8); setMascot(v);
@@ -176,6 +181,14 @@ function ThemeCard() {
         {[{ id: 'auto', label: 'Automático' }, { id: 'light', label: 'Claro' }, { id: 'dark', label: 'Oscuro' }].map((t) => (
           <button key={t.id} className={`theme-opt ${t.id} ${theme === t.id ? 'on' : ''}`} onClick={() => pick(t.id)} aria-pressed={theme === t.id}>
             <span className="theme-swatch" /><b>{t.label}</b>
+          </button>
+        ))}
+      </div>
+      <span className="label">Tamaño de la letra</span>
+      <div className="theme-pick text-pick">
+        {TEXT_SIZES.map((t) => (
+          <button key={t.id} className={`theme-opt ${size === t.id ? 'on' : ''}`} onClick={() => pickSize(t.id)} aria-pressed={size === t.id}>
+            <span className="text-sample" style={{ fontSize: `${15 * Number(t.id)}px` }}>Aa</span><b>{t.label}</b>
           </button>
         ))}
       </div>

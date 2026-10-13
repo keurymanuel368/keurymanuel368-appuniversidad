@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, cleanTitle, newsTitle, dateLabel } from '../api';
-import { Empty, Modal, PageHead, PullIndicator, Segmented, Skeleton, haptic, toast, usePullToRefresh, useLoad } from '../components';
+import { Empty, Modal, PageHead, PullIndicator, Segmented, Skeleton, haptic, runSync, toast, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 
 export type News = {
@@ -39,7 +39,7 @@ export function Avisos() {
   const shown = filter === 'todo' && !allRumbo ? filtered.filter((n) => n.source !== 'rumbo' || n.id === rumbo[0]?.id) : filtered;
   const unread = list.filter((n) => !n.read).length;
   const refresh = useCallback(async () => {
-    try { await api('/sync', { method: 'POST' }); toast('Avisos al día'); } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
+    try { await runSync(); toast('Avisos al día'); } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
     data.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -81,7 +81,10 @@ export function Avisos() {
       ]} />
       {data.error && <div className="error">{data.error}</div>}
       {!data.data ? <Skeleton hero={false} rows={4} /> : shown.length === 0 ? (
-        <div className="card"><Empty icon="bell" title={list.length ? 'Nada en esta categoría' : 'Sin avisos todavía'} text={list.length ? 'Prueba con otro filtro.' : 'Se traen del EVA al sincronizar: el foro de avisos de cada asignatura y las notificaciones de la universidad.'} /></div>
+        <div className="card"><Empty icon="bell" title={list.length ? 'Nada en esta categoría' : 'Sin avisos todavía'} text={list.length ? 'Prueba con otro filtro.' : 'Se traen del EVA: el foro de avisos de cada asignatura y las notificaciones de la universidad.'}>
+          {list.length ? <button className="btn line" onClick={() => setFilter('todo')}>Ver todos los avisos</button>
+            : <button className="btn primary" onClick={() => { void refresh(); }}><Icon name="sync" size={17} />Revisar el EVA ahora</button>}
+        </Empty></div>
       ) : (
         <>
         <div className="news-list stagger">
