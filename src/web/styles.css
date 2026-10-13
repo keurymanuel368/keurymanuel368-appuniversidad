@@ -411,7 +411,7 @@ button.card { cursor: pointer; font: inherit; transition: transform .25s var(--e
 .career-copy > span:last-child { color: #DCE8FF; font-size: 14px; }
 .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 0 4px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
-.lg { width: 12px; height: 12px; border-radius: 4px; display: inline-block; border: 1px solid var(--line); background: #fff; }
+.lg:not(.btn):not(.input) { width: 12px; height: 12px; border-radius: 4px; display: inline-block; border: 1px solid var(--line); background: #fff; }
 .lg.en_curso { background: var(--grad); border: 0; }
 .lg.aprobada { background: var(--green-soft); border-color: #BFE7D2; }
 .lg.bloqueada { background: #F3F6FB; border: 1px dashed #9AA8C4; }
@@ -2118,3 +2118,37 @@ h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
   .topbar-copy { animation: none !important; }
   ::view-transition-old(pagina), ::view-transition-new(pagina) { animation: none !important; }
 }
+
+/* ==========================================================================
+   Rumbo Pro (v34): tipografía más limpia, jerarquía clara y menos ruido.
+   ========================================================================== */
+/* Números con la letra de la app (cifras alineadas), no con letra de máquina de escribir.
+   La letra monoespaciada queda solo para claves como LET-101. */
+.num { font-family: inherit; font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.01em; }
+.stat .value, .ts-index b, .course .grade, .amount, .sim-goal b, .sim-result b, .fg-score b, .grade-badge b, .gf-score b, .ring-num, .countdown { font-family: var(--display); letter-spacing: -0.03em; }
+
+/* Título grande al estilo iPhone: corto, en una línea, y el saludo arriba */
+.topbar h1 { font-size: 34px; line-height: 1.08; }
+@media (max-width: 900px) { .topbar h1 { font-size: 32px; } .topbar { align-items: center; } }
+@media (max-width: 380px) { .topbar h1 { font-size: 28px; } }
+.topbar .eyebrow { font-size: 13.5px; font-weight: 600; }
+
+/* El simulador de nota vuelve a ser azul oscuro (un degradado general lo estaba aclarando) */
+.card.simulator { background: var(--grad-deep); }
+
+/* Avisos agrupados por día */
+.news-group { display: flex; flex-direction: column; gap: 8px; }
+.news-group + .news-group { margin-top: 14px; }
+.news-day { font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 2px 4px 0; }
+.news-ic.gray { background: var(--line-2); color: var(--muted); }
+.activity-toggle { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border-radius: var(--r); border: 1px dashed var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.activity-toggle .news-copy { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.activity-toggle small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.news-list.compact { gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.news.mini { border: 0; border-radius: 0; box-shadow: none; padding: 11px 16px; background: transparent; }
+.news.mini + .news.mini { border-top: 1px solid var(--line-2); }
+.news.mini .news-title { font-size: 14px; font-weight: 600; }
+
+/* Inicio: lo motivacional al final, con aire */
+.extras-row { margin-top: 6px; align-items: start; }
+

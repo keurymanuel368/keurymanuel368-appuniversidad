@@ -10,6 +10,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 34,
+    date: '2026-10-13',
+    title: '🎨 Rumbo más limpio',
+    items: [
+      'Inicio más claro: tu nombre en grande y el saludo arriba, primero lo que tienes que hacer y al final las metas y los logros.',
+      'Avisos ordenados por día (Hoy, Ayer, Esta semana). Las notificaciones automáticas del EVA (mensajes de foros, entregas confirmadas, inicios de sesión) quedan juntas en «Actividad del EVA» para que no tapen lo importante.',
+      'Los números ahora usan la misma letra de la app y se leen mejor.',
+      'Arreglado: el simulador de nota en Notas se veía casi transparente, y los botones grandes (como «Ya la entregué») tenían el ícono desalineado.',
+      'Tareas tiene un selector más cómodo: Pendientes, Mes, Plan y Entregadas.',
+    ],
+  },
+  {
     version: 33,
     date: '2026-10-13',
     title: '✨ Rumbo más fluido',

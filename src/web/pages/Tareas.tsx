@@ -90,7 +90,7 @@ export function Tareas() {
         <button className={`btn line ${busy ? 'spinning' : ''}`} onClick={sync} disabled={busy} aria-label="Sincronizar EVA"><Icon name="sync" size={18} /><span className="lbl">{busy ? 'Sincronizando…' : 'Sincronizar EVA'}</span></button>
         <button className="btn primary" onClick={() => setCreating(true)} aria-label="Nueva tarea"><Icon name="plus" size={18} /><span className="lbl">Nueva</span></button>
       </PageHead>
-      <Segmented label="Filtrar tareas" value={filter} onChange={(f) => { setFilter(f); setDay(null); }} options={[{ id: 'pendientes', label: 'Pendientes' }, { id: 'plan', label: 'Plan' }, { id: 'mes', label: 'Mes' }, { id: 'hechas', label: 'Entregadas' }, { id: 'todas', label: 'Todas' }]} />
+      <Segmented label="Filtrar tareas" value={filter} onChange={(f) => { setFilter(f); setDay(null); }} options={[{ id: 'pendientes', label: 'Pendientes' }, { id: 'mes', label: 'Mes' }, { id: 'plan', label: 'Plan' }, { id: 'hechas', label: 'Entregadas' }]} />
 
       {filter === 'pendientes' && tasks.data && <WeekStrip tasks={list} selected={day} onSelect={setDay} />}
       {filter === 'mes' && tasks.data && <MonthView tasks={list} onOpen={setOpen} onToggle={toggle} />}

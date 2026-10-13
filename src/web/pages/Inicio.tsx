@@ -73,7 +73,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   return (
     <>
       <PullIndicator pull={pull} refreshing={refreshing} />
-      <PageHead eyebrow={d.today} title={`${greeting()}${d.name ? ', ' + d.name : ''}`}>
+      <PageHead eyebrow={`${greeting()} · ${d.today}`} title={d.name ? d.name.split(' ')[0] : 'Tu día'}>
         <button className="avatar hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
       </PageHead>
 
@@ -81,7 +81,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
       {d.freshGrade && <FreshGrade g={d.freshGrade} onDone={reload} />}
       {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
 
-      <nav className="quick-row" aria-label="Accesos rápidos">
+      <nav className="quick-row hide-mobile" aria-label="Accesos rápidos">
         <button className="quick" onClick={() => go('asistente')}><span className="q-ic grad"><Icon name="spark" size={19} /></span>Hablar con Rumbo</button>
         <button className="quick" onClick={() => { haptic(8); setCreating(true); }}><span className="q-ic blue"><Icon name="plus" size={19} /></span>Nueva tarea</button>
         <button className="quick" onClick={() => go('tareas')}><span className="q-ic violet"><Icon name="calendar" size={19} /></span>Mi semana</button>
@@ -149,8 +149,6 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         </div>
       </section>
 
-      <GoalsCard goals={d.goals || []} ids={d.goalIds || []} onChanged={reload} />
-      <AchievementsCard />
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 
@@ -236,6 +234,12 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             <div className="pay-legend"><span>{p.paid ? `Pagaste la cuota de este mes` : p.state === 'open' ? `Abrió el ${p.openDay} · cierra el ${p.closeDay}` : `Abre el ${p.openDay} · cierra el ${p.closeDay}`}</span><b className="num">{p.paid ? '✓' : p.state === 'open' ? `${p.daysToClose} d` : `en ${p.daysToOpen} d`}</b></div>
           </button>
         </div>
+      </section>
+
+      {/* Lo motivacional va al final: primero lo que hay que hacer */}
+      <section className="grid2 extras-row">
+        <GoalsCard goals={d.goals || []} ids={d.goalIds || []} onChanged={reload} />
+        <AchievementsCard />
       </section>
 
       {creating && <TaskModal task={{}} courses={d.courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); reload(); }} />}

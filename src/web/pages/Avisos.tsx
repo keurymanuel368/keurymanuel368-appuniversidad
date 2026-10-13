@@ -18,6 +18,19 @@ const KIND: Record<string, { label: string; icon: string; tone: string }> = {
 };
 const SOURCE: Record<string, string> = { rumbo: 'Novedad de Rumbo', notas: 'Calificación del EVA', avisos: 'Foro de avisos', eva: 'Notificación del EVA', correo: 'Correo UAPA' };
 
+// Notificaciones automáticas del EVA que casi nunca importan: inicios de sesión, mensajes de foros, confirmaciones de entrega.
+// (Los mensajes de foros traen «de Fulano - martes, 29 de septiembre…» al principio del título o del texto.)
+const NOISE = /inicio de sesi[oó]n|confirmaci[oó]n de entrega|(^|\n)de [^\n]{3,80} - (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i;
+const isNoise = (n: News) => n.source === 'eva' && NOISE.test(`${n.title.trim()}\n${(n.body || '').trim().slice(0, 200)}`);
+const DAY = (s: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date(s * 1000));
+function bucket(sec: number): string {
+  const today = DAY(Date.now() / 1000), yest = DAY(Date.now() / 1000 - 86400), d = DAY(sec);
+  if (d === today) return 'Hoy';
+  if (d === yest) return 'Ayer';
+  if (Date.now() / 1000 - sec < 7 * 86400) return 'Esta semana';
+  return 'Antes';
+}
+
 function ago(sec: number) {
   const m = Math.round((Date.now() / 1000 - sec) / 60);
   if (m < 60) return `hace ${Math.max(1, m)} min`;
@@ -38,6 +51,11 @@ export function Avisos() {
   const rumbo = filtered.filter((n) => n.source === 'rumbo');
   const shown = filter === 'todo' && !allRumbo ? filtered.filter((n) => n.source !== 'rumbo' || n.id === rumbo[0]?.id) : filtered;
   const unread = list.filter((n) => !n.read).length;
+  const [showActivity, setShowActivity] = useState(false);
+  const main = shown.filter((n) => !isNoise(n));
+  const activity = shown.filter(isNoise);
+  const groups: { title: string; items: News[] }[] = [];
+  for (const n of main) { const b = bucket(n.created_at); const g = groups.find((x) => x.title === b); if (g) g.items.push(n); else groups.push({ title: b, items: [n] }); }
   const refresh = useCallback(async () => {
     try { await runSync(); toast('Avisos al día'); } catch (e) { toast('Error: ' + (e as Error).message, 'err'); }
     data.reload();
@@ -73,7 +91,7 @@ export function Avisos() {
   return (
     <>
       <PullIndicator pull={pull} refreshing={refreshing} />
-      <PageHead eyebrow="Novedades de la UAPA y tus asignaturas" title="Avisos">
+      <PageHead eyebrow="De la UAPA y tus asignaturas" title="Avisos">
         {unread > 0 && <button className="btn line" onClick={markAll} aria-label="Marcar todo como leído"><Icon name="check" size={18} /><span className="lbl">Marcar leídos</span></button>}
       </PageHead>
       <Segmented label="Filtrar avisos" value={filter} onChange={setFilter} options={[
@@ -87,8 +105,11 @@ export function Avisos() {
         </Empty></div>
       ) : (
         <>
+        {groups.map((g) => (
+        <div key={g.title} className="news-group">
+        <h3 className="news-day">{g.title}</h3>
         <div className="news-list stagger">
-          {shown.map((n) => {
+          {g.items.map((n) => {
             const k = KIND[n.kind] || KIND.aviso;
             return (
               <button key={n.id} className={`news ${n.read ? '' : 'unread'}`} onClick={() => openItem(n)}>
@@ -102,6 +123,26 @@ export function Avisos() {
             );
           })}
         </div>
+        </div>
+        ))}
+        {activity.length > 0 && (
+          <div className="news-group">
+            <button className="activity-toggle" onClick={() => { haptic(5); setShowActivity((v) => !v); }} aria-expanded={showActivity}>
+              <span className="news-ic gray"><Icon name="bell" size={18} /></span>
+              <span className="news-copy"><b>Actividad del EVA</b><small>{activity.length} notificaciones automáticas: mensajes de foros, entregas confirmadas e inicios de sesión</small></span>
+              <Icon name="chevron" size={18} className="row-chevron" style={{ transform: showActivity ? 'rotate(90deg)' : undefined }} />
+            </button>
+            {showActivity && (
+              <div className="news-list compact">
+                {activity.map((n) => (
+                  <button key={n.id} className={`news mini ${n.read ? '' : 'unread'}`} onClick={() => openItem(n)}>
+                    <span className="news-copy"><span className="news-title">{newsTitle(n.title, n.body)}</span><span className="news-meta"><span>{ago(n.created_at)}</span></span></span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {filter === 'todo' && rumbo.length > 1 && <button className="link-btn center-self more-rumbo" onClick={() => setAllRumbo((v) => !v)}>{allRumbo ? 'Ocultar novedades de Rumbo' : `Ver las ${rumbo.length - 1} novedades anteriores de Rumbo`}</button>}
         </>
       )}
