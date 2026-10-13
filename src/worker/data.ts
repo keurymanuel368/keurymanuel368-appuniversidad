@@ -57,7 +57,7 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
       c.name AS course_name, c.short_name AS course_short, c.color AS course_color,
       COALESCE(NULLIF(c.facilitator, ''), c.facilitator_eva) AS facilitator,
       g.grade AS grade, g.grade_max AS grade_max, g.feedback AS grade_feedback, g.source AS grade_source,
-      t.moodle_key, t.forum_posts, t.forum_replies, t.forum_needed,${opts.id !== undefined ? ' t.attachments,' : ''}
+      t.moodle_key, t.forum_posts, t.forum_replies, t.forum_needed${opts.id !== undefined ? ', t.attachments' : ''}
     FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
     -- Un foro trae dos renglones de nota («calificación» y «foro completo»): se usa el que tiene nota.
     LEFT JOIN grades g ON g.id = (SELECT g2.id FROM grades g2 WHERE g2.user_id = t.user_id AND g2.moodle_key = t.moodle_key ORDER BY g2.grade IS NULL, g2.updated_at DESC LIMIT 1)
