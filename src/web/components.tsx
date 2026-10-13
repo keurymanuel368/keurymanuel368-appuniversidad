@@ -13,7 +13,7 @@ export const haptic = (ms = 8) => { try { navigator.vibrate?.(ms); } catch { /* 
 
 // ----- Avisos flotantes (toasts) -----
 type ToastAction = { label: string; run: () => void };
-type ToastT = { id: number; text: string; kind: 'ok' | 'err'; action?: ToastAction };
+type ToastT = { id: number; text: string; kind: 'ok' | 'err'; action?: ToastAction; out?: boolean };
 const toastListeners = new Set<(t: ToastT) => void>();
 export function toast(text: string, kind: 'ok' | 'err' = 'ok', action?: ToastAction) {
   const t = { id: Date.now() + Math.random(), text, kind, action };
@@ -67,14 +67,17 @@ export function Toaster() {
   useEffect(() => {
     const l = (t: ToastT) => {
       setList((x) => [...x.slice(-2), t]);
-      setTimeout(() => setList((x) => x.filter((y) => y.id !== t.id)), t.action ? 6000 : 4000);
+      const life = t.action ? 6000 : 4000;
+      // Primero sale por el mismo camino por el que entró; después se quita.
+      setTimeout(() => setList((x) => x.map((y) => (y.id === t.id ? { ...y, out: true } : y))), life);
+      setTimeout(() => setList((x) => x.filter((y) => y.id !== t.id)), life + 260);
     };
     toastListeners.add(l);
     return () => { toastListeners.delete(l); };
   }, []);
   return (
     <div className="toasts" aria-live="polite" aria-atomic="false">
-      {list.map((t) => <div key={t.id} className={`toast ${t.kind}`} role={t.kind === 'err' ? 'alert' : 'status'}><span className="toast-ic"><Icon name={t.kind === 'ok' ? 'check' : 'alert'} size={16} style={{ strokeWidth: 2.6 }} /></span><span className="toast-txt">{t.text}</span>
+      {list.map((t) => <div key={t.id} className={`toast ${t.kind} ${t.out ? 'out' : ''}`} role={t.kind === 'err' ? 'alert' : 'status'}><span className="toast-ic"><Icon name={t.kind === 'ok' ? 'check' : 'alert'} size={16} style={{ strokeWidth: 2.6 }} /></span><span className="toast-txt">{t.text}</span>
         {t.action && <button className="toast-act" onClick={() => { haptic(6); t.action!.run(); setList((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}</div>)}
     </div>
   );
@@ -84,7 +87,19 @@ export function Toaster() {
 const modalStack: RefObject<HTMLDivElement | null>[] = [];
 export function Modal({ title, onClose, children, bare = false }: { title: string; onClose: () => void; children: ReactNode; bare?: boolean }) {
   const sheet = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ y: number; dy: number } | null>(null);
+  const drag = useRef<{ y: number; dy: number; hist: { y: number; t: number }[] } | null>(null);
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  // Cerrar: la hoja baja por el mismo camino por el que subió y después se quita.
+  const close = useRef(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { onCloseRef.current(); return; }
+    setClosing(true);
+    setTimeout(() => onCloseRef.current(), 250);
+  }).current;
   useEffect(() => {
     // Accesibilidad: el foco entra a la ventana, no se escapa con Tab, Escape cierra solo la de arriba
     // y al cerrar vuelve al botón que la abrió.
@@ -99,7 +114,7 @@ export function Modal({ title, onClose, children, bare = false }: { title: strin
     });
     const k = (e: KeyboardEvent) => {
       if (modalStack[modalStack.length - 1] !== sheet) return;
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
       if (e.key !== 'Tab') return;
       const f = focusables();
       if (!f.length) { e.preventDefault(); return; }
@@ -115,37 +130,64 @@ export function Modal({ title, onClose, children, bare = false }: { title: strin
       modalStack.splice(modalStack.indexOf(sheet), 1);
       if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
     };
-  }, [onClose]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // En móvil la hoja se cierra arrastrándola hacia abajo desde la parte superior.
+  // En móvil la hoja sigue al dedo 1:1. Al soltar se proyecta adónde iba (como un lanzamiento):
+  // si va a quedar más abajo de un tercio, o se lanzó rápido hacia abajo, se cierra con esa velocidad;
+  // si no, vuelve a su sitio con resorte. Hacia arriba resiste como una goma.
   const onStart = (e: React.TouchEvent) => {
-    if ((sheet.current?.scrollTop ?? 0) > 0) return;
-    drag.current = { y: e.touches[0].clientY, dy: 0 };
+    if ((sheet.current?.scrollTop ?? 0) > 0 || closingRef.current) return;
+    const y = e.touches[0].clientY;
+    drag.current = { y, dy: 0, hist: [{ y, t: performance.now() }] };
+    sheet.current?.classList.add('dragging');
   };
   const onMove = (e: React.TouchEvent) => {
     if (!drag.current || !sheet.current) return;
-    const dy = Math.max(0, e.touches[0].clientY - drag.current.y);
+    const y = e.touches[0].clientY;
+    const raw = y - drag.current.y;
+    const h = sheet.current.offsetHeight || 600;
+    const dy = raw >= 0 ? raw : -((-raw * h * 0.55) / (h + 0.55 * -raw)) * 0.35; // goma hacia arriba
     drag.current.dy = dy;
+    drag.current.hist.push({ y, t: performance.now() });
+    if (drag.current.hist.length > 6) drag.current.hist.shift();
+    sheet.current.style.animation = 'none';
     sheet.current.style.transition = 'none';
     sheet.current.style.transform = `translateY(${dy}px)`;
   };
   const onEnd = () => {
-    if (!drag.current || !sheet.current) return;
-    const { dy } = drag.current;
+    const d = drag.current, el = sheet.current;
+    if (!d || !el) return;
     drag.current = null;
-    sheet.current.style.transition = '';
-    if (dy > 110) { haptic(6); onClose(); } else sheet.current.style.transform = '';
+    el.classList.remove('dragging');
+    const a = d.hist[0], b = d.hist[d.hist.length - 1];
+    const v = b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0; // px/s
+    const projected = d.dy + ((v / 1000) * 0.99) / (1 - 0.99);
+    const h = el.offsetHeight || 600;
+    if (d.dy > 8 && (projected > h * 0.35 || v > 900)) {
+      haptic(6);
+      closingRef.current = true;
+      const left = h - d.dy;
+      const dur = Math.min(0.32, Math.max(0.14, left / Math.max(v, 1400)));
+      el.style.transition = `transform ${dur}s cubic-bezier(.25, .9, .4, 1)`;
+      el.style.transform = `translateY(${h + 20}px)`;
+      el.parentElement?.classList.add('closing');
+      setTimeout(() => onCloseRef.current(), dur * 1000);
+    } else {
+      el.style.transition = 'transform .5s var(--spring-snappy)';
+      el.style.transform = '';
+    }
   };
 
   // Se dibuja directo en <body> (portal): así ninguna animación de la página puede esconderla.
   return createPortal(
-    <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={sheet} tabIndex={-1} className={`modal ${bare ? 'bare' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+    <div className={`backdrop ${closing ? 'closing' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && close()} onClick={(e) => e.target === e.currentTarget && close()}>
+      <div ref={sheet} tabIndex={-1} className={`modal ${bare ? 'bare' : ''} ${closing ? 'closing' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="drag-zone" onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}>
           <div className="grabber" aria-hidden="true" />
           {bare
-            ? <button className="icon-btn soft modal-x" onClick={onClose} aria-label="Cerrar"><Icon name="x" size={18} /></button>
-            : <div className="modal-head"><h2>{title}</h2><button className="icon-btn soft" onClick={onClose} aria-label="Cerrar"><Icon name="x" size={18} /></button></div>}
+            ? <button className="icon-btn soft modal-x" onClick={close} aria-label="Cerrar"><Icon name="x" size={18} /></button>
+            : <div className="modal-head"><h2>{title}</h2><button className="icon-btn soft" onClick={close} aria-label="Cerrar"><Icon name="x" size={18} /></button></div>}
         </div>
         {children}
       </div>

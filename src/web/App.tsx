@@ -55,6 +55,7 @@ export function App() {
   const [creating, setCreating] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [version, setVersion] = useState(0);
+  const pageRef = useRef('');
   const [welcome, setWelcome] = useState(() => { try { return !localStorage.getItem("rumbo-welcome"); } catch { return false; } });
   useEffect(() => { const on = () => setWelcome(true); window.addEventListener('rumbo:tour', on); return () => window.removeEventListener('rumbo:tour', on); }, []);
   // Numeritos rojos: avisos/correos sin leer y tareas que vencen hoy o ya vencieron.
@@ -111,6 +112,9 @@ export function App() {
     api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch((e) => setAuth(e instanceof ApiError && e.status === 401 ? 'out' : 'in'));
     const onHash = () => {
       // «#tareas/12» estando ya en Tareas: se vuelve a montar la pantalla para que abra ese elemento.
+      const ORDER = ['inicio', 'tareas', 'asistente', 'asignaturas', 'avisos', 'pensum', 'pagos', 'ajustes', 'ayuda', 'conectar', 'companeros'];
+      const from = ORDER.indexOf(pageRef.current), to = ORDER.indexOf(currentPage());
+      document.documentElement.dataset.nav = to < from ? 'back' : 'fwd';
       const apply = () => { setPage(currentPage()); setMore(false); if (location.hash.includes('/')) setVersion((v) => v + 1); window.scrollTo({ top: 0 }); };
       // Transición suave entre pantallas donde el navegador la soporta (Chrome/Android, Safari 18+).
       const d = document as Document & { startViewTransition?: (cb: () => void) => unknown };
@@ -147,6 +151,7 @@ export function App() {
     return () => { window.removeEventListener('rumbo:search', open); window.removeEventListener('keydown', key); };
   }, []);
 
+  pageRef.current = page;
   const go = (p: string) => { haptic(5); if (location.hash === '#' + p) { setMore(false); window.scrollTo({ top: 0, behavior: 'smooth' }); } else location.hash = p; };
   async function logout() {
     await api('/logout', { method: 'POST' });
@@ -236,6 +241,9 @@ export function App() {
       </main>
 
       <nav className={`tabbar ${barHidden ? 'hidden' : ''}`} aria-label="Navegación">
+        {/* Píldora que se desliza hasta la pestaña activa (el asistente tiene su propio botón) */}
+        <span className="tab-glider" aria-hidden="true" data-off={page === 'asistente' ? '1' : '0'}
+          style={{ ['--i' as string]: page === 'inicio' ? 0 : page === 'tareas' ? 1 : page === 'asistente' ? 2 : page === 'asignaturas' ? 3 : 4 }} />
         {TABS_LEFT.map(tab)}
         <button className={`fab ${page === 'asistente' ? 'on' : ''}`} onClick={() => go('asistente')} aria-label="Asistente" aria-current={page === 'asistente' ? 'page' : undefined}>
           <Icon name="spark" size={26} style={{ strokeWidth: 2 }} />

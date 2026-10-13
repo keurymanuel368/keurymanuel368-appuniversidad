@@ -1990,3 +1990,131 @@ label.icon-btn { cursor: pointer; display: inline-flex; align-items: center; jus
 .goal { display: flex; flex-direction: column; gap: 6px; }
 .goal-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14.5px; }
 .goal small { color: var(--muted); font-size: 12.5px; }
+
+/* ==========================================================================
+   Rumbo Fluid (v33): movimiento con física de resorte, materiales y respuesta inmediata.
+   Curvas: respuesta de un resorte real (amortiguación ζ y respuesta T) convertida a linear().
+   - smooth: ζ 1.0, T .38 s (sin rebote: aparecer, moverse)
+   - snappy: ζ .82, T .36 s (hojas, pestañas, interruptores: un toque de vida)
+   - bouncy: ζ .68, T .42 s (solo momentos de logro: marcar hecha, nota nueva)
+   ========================================================================== */
+:root {
+  --spring-smooth: cubic-bezier(.22, 1, .36, 1);
+  --spring-snappy: cubic-bezier(.3, 1.2, .5, 1);
+  --spring-bouncy: cubic-bezier(.34, 1.56, .64, 1);
+  --t-smooth: .52s; --t-snappy: .46s; --t-bouncy: .64s;
+  --press: cubic-bezier(.2, 0, .2, 1);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --spring-smooth: linear(0, 0.024, 0.081, 0.158, 0.242, 0.329, 0.412, 0.49, 0.561, 0.625, 0.681, 0.73, 0.773, 0.809, 0.84, 0.867, 0.889, 0.908, 0.924, 0.937, 0.948, 0.957, 0.965, 0.971, 0.976, 0.981, 0.984, 0.987, 0.99, 0.991, 0.993, 0.994, 0.995, 0.996, 0.997, 0.998, 1);
+    --spring-snappy: linear(0, 0.022, 0.079, 0.157, 0.246, 0.34, 0.433, 0.521, 0.602, 0.674, 0.738, 0.794, 0.841, 0.88, 0.912, 0.938, 0.958, 0.974, 0.987, 0.995, 1.002, 1.006, 1.009, 1.01, 1.011, 1.011, 1.011, 1.01, 1.009, 1.008, 1.007, 1.006, 1.005, 1.004, 1.003, 1.003, 1);
+    --spring-bouncy: linear(0, 0.031, 0.111, 0.219, 0.34, 0.464, 0.582, 0.689, 0.781, 0.859, 0.921, 0.969, 1.004, 1.029, 1.044, 1.052, 1.054, 1.053, 1.049, 1.043, 1.036, 1.029, 1.023, 1.017, 1.012, 1.008, 1.004, 1.002, 1, 0.999, 0.998, 0.997, 0.997, 0.997, 0.997, 0.998, 1);
+    --ease: var(--spring-smooth);
+    --spring: var(--spring-bouncy);
+  }
+}
+
+/* Tipografía: títulos grandes con tracking negativo, cuerpo neutro */
+h1, h2, .hero h2, .now-title b, .fg-score b { letter-spacing: -0.022em; }
+h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
+.topbar h1 { letter-spacing: -0.028em; }
+
+/* Respuesta al tocar: se hunde al presionar (rápido) y vuelve con resorte (al soltar). */
+:where(button, a.btn, .btn, label.icon-btn, .course, .stat, .news, .tile, .sr-row, .fb-item, .goal-opt, .file-row, .mg-day, .theme-opt, .chip-btn) {
+  transition: transform var(--t-snappy) var(--spring-snappy), background-color .2s, color .2s, border-color .2s, box-shadow .3s, opacity .2s;
+}
+:where(button, a.btn, .btn, label.icon-btn, .tile, .sr-row, .goal-opt, .file-row, .mg-day, .theme-opt, .chip-btn):not(:disabled):active {
+  transform: scale(.965); transition: transform .12s var(--press);
+}
+:where(.course, .stat, .news, .fb-item, .goals-empty, button.card):active { transform: scale(.98); transition: transform .14s var(--press); }
+
+/* Interruptor, segmentado, barras de progreso: todo con resorte */
+.switch::after { transition: transform var(--t-snappy) var(--spring-snappy); }
+.seg-thumb { transition: transform var(--t-snappy) var(--spring-snappy), width var(--t-snappy) var(--spring-snappy) !important; }
+.progress > div, .hero-bar > div, .plan-bar > div, .ts-bar > div { transition: width .9s var(--spring-smooth); }
+
+/* Materiales: vidrio con borde superior que atrapa la luz */
+.tabbar { box-shadow: 0 12px 36px -10px rgba(14, 38, 92, .30), 0 2px 6px rgba(14, 38, 92, .06), inset 0 1px 0 rgba(255, 255, 255, .95) !important; }
+.toast { background: rgba(10, 26, 56, .8) !important; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: 0 18px 40px -14px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .12); }
+.card { box-shadow: var(--sh-2), inset 0 1px 0 rgba(255, 255, 255, .7); }
+:root[data-mode="dark"] .card { box-shadow: var(--sh-2), inset 0 1px 0 rgba(255, 255, 255, .04); }
+@media (prefers-reduced-transparency: reduce) {
+  .tabbar, .mini-bar, .toast, .sidebar { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .tabbar, .mini-bar, .sidebar { background: var(--surface) !important; }
+  .toast { background: #0A1A38 !important; }
+}
+
+/* Pestañas: una píldora que se desliza con resorte hasta la pestaña activa */
+.tab-glider { display: none; }
+@media (max-width: 900px) {
+  .tab-glider { display: block; position: absolute; top: 11px; left: 6px; width: calc((100% - 12px) / 5); height: 30px; pointer-events: none; z-index: 0;
+    transform: translateX(calc(var(--i, 0) * 100%)); transition: transform var(--t-snappy) var(--spring-snappy), opacity .2s; }
+  .tab-glider::before { content: ""; position: absolute; left: 50%; top: 0; width: 46px; height: 30px; margin-left: -23px; border-radius: 99px; background: var(--blue-soft); }
+  .tab-glider[data-off="1"] { opacity: 0; }
+  .tabbar > button { position: relative; z-index: 1; }
+  .tabbar > button.active .tab-ic { background: transparent !important; animation: tabPop var(--t-bouncy) var(--spring-bouncy); }
+  @keyframes tabPop { 0% { transform: scale(.8); } 100% { transform: translateY(-1px) scale(1); } }
+}
+
+/* Título grande que se encoge al bajar (donde el navegador lo soporta) */
+@supports (animation-timeline: scroll()) {
+  .topbar-copy { animation: largeTitle linear both; animation-timeline: scroll(root); animation-range: 0 90px; transform-origin: left bottom; }
+  @keyframes largeTitle { to { opacity: 0; transform: translateY(-8px) scale(.94); } }
+}
+.mini-bar { transition: transform var(--t-snappy) var(--spring-snappy), opacity .25s !important; }
+
+/* Transiciones entre pantallas: la página se desliza en la dirección en que navegas; barras y menú quedan quietos. */
+.main { view-transition-name: pagina; }
+.tabbar { view-transition-name: pestanas; }
+.sidebar { view-transition-name: menu; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-group(pagina) { animation-duration: .5s; }
+::view-transition-old(pagina) { animation: vtOut .2s ease-in both; }
+::view-transition-new(pagina) { animation: vtIn .52s var(--spring-smooth) both; }
+:root[data-nav="back"]::view-transition-new(pagina) { animation-name: vtInBack; }
+:root[data-nav="back"]::view-transition-old(pagina) { animation-name: vtOutBack; }
+@keyframes vtIn { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes vtInBack { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+@keyframes vtOut { to { opacity: 0; transform: translateX(-12px); } }
+@keyframes vtOutBack { to { opacity: 0; transform: translateX(12px); } }
+
+/* Hojas: suben con resorte y bajan por el mismo camino; el fondo se oscurece en sincronía */
+.modal { animation: pop var(--t-snappy) var(--spring-snappy) both; }
+.backdrop.closing { animation: fadeOut .26s ease-in both; }
+.modal.closing { animation: popOut .2s ease-in both; }
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes popOut { to { opacity: 0; transform: translateY(6px) scale(.97); } }
+@media (max-width: 900px) {
+  .modal { animation: sheetUp .56s var(--spring-snappy) both; }
+  .modal.closing { animation: sheetDown .28s cubic-bezier(.4, 0, 1, 1) both; }
+  @keyframes sheetDown { to { transform: translateY(105%); } }
+  .grabber { transition: width .3s var(--spring-snappy), background-color .2s; }
+  .modal.dragging .grabber { width: 56px; background: #B9C5DA; }
+}
+
+/* Avisos flotantes: entran con resorte desde arriba y se van por el mismo camino */
+.toast { animation: toastIn var(--t-snappy) var(--spring-snappy) both; }
+.toast.out { animation: toastOut .24s ease-in both; }
+@keyframes toastOut { to { opacity: 0; transform: translateY(-12px) scale(.96); } }
+
+/* Entrada escalonada (solo opacidad: en Android un transform aquí movería elementos fijos) */
+.stagger > * { animation: pageIn .5s var(--spring-smooth) both; }
+.stagger > *:nth-child(5) { animation-delay: .2s; }
+.stagger > *:nth-child(6) { animation-delay: .25s; }
+.stagger > *:nth-child(n+7) { animation-delay: .3s; }
+
+/* Momentos de logro con rebote */
+.fresh-grade { animation: pop var(--t-bouncy) var(--spring-bouncy) both; }
+.check.on { animation: checkPop var(--t-bouncy) var(--spring-bouncy); }
+
+/* Hover suave solo con mouse */
+@media (hover: hover) and (pointer: fine) {
+  .card:is(button, a):hover, .course:hover, .stat:not(.static):hover { transform: translateY(-2px); transition: transform var(--t-smooth) var(--spring-smooth), box-shadow .3s; }
+}
+
+/* Movimiento reducido: sin desplazamientos ni rebotes */
+@media (prefers-reduced-motion: reduce) {
+  .topbar-copy { animation: none !important; }
+  ::view-transition-old(pagina), ::view-transition-new(pagina) { animation: none !important; }
+}

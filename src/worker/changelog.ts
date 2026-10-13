@@ -10,6 +10,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 33,
+    date: '2026-10-13',
+    title: '✨ Rumbo más fluido',
+    items: [
+      'Todo se mueve con física de resorte, como en el iPhone: botones que se hunden al tocarlos y vuelven, interruptores y pestañas que se acomodan con vida.',
+      'Las hojas siguen tu dedo: si las lanzas hacia abajo se cierran a la velocidad del gesto; si no, vuelven a su sitio. Al cerrarlas bajan por el mismo camino por el que subieron.',
+      'La pestaña activa tiene una píldora que se desliza hasta donde tocas, y las pantallas entran desde el lado hacia el que navegas.',
+      'El título grande se encoge suavemente al bajar, los avisos flotantes entran y salen animados, y las notas nuevas aparecen con un pequeño rebote.',
+      'Si en tu teléfono activaste «Reducir movimiento» o «Reducir transparencia», Rumbo lo respeta.',
+    ],
+  },
+  {
     version: 32,
     date: '2026-10-13',
     title: '💬 Foros y entregas desde Rumbo',
