@@ -292,3 +292,60 @@ h1, h2, h3, .hero h2 { font-family: var(--display); letter-spacing: -.022em; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
   .task, .news, .course, .tile, .action-row, .subj, .topbar-copy { animation: none !important; }
 }
+
+/* ==========================================================================
+   ÍCONOS (Phosphor): contorno normal y versión rellena para lo seleccionado,
+   como los SF Symbols de iOS.
+   ========================================================================== */
+.ic .ph-r, .ic .ph-f { fill: currentColor; stroke: none !important; }
+.ic .ph-f { display: none; }
+.tabbar > button.active .ic .ph-r, .nav button.active .ic .ph-r,
+.stat-ic .ic .ph-r, .set-ic .ic .ph-r, .q-ic .ic .ph-r, .tile-ic .ic .ph-r, .news-ic .ic .ph-r, .fab .ic .ph-r { display: none; }
+.tabbar > button.active .ic .ph-f, .nav button.active .ic .ph-f,
+.stat-ic .ic .ph-f, .set-ic .ic .ph-f, .q-ic .ic .ph-f, .tile-ic .ic .ph-f, .news-ic .ic .ph-f, .fab .ic .ph-f { display: inline; }
+.row-chevron, .ic.row-chevron { color: #C7C7CC !important; }
+:root[data-mode=dark] .row-chevron { color: #48484A !important; }
+
+/* Íconos de Ajustes como en iOS: cuadrito de color sólido con símbolo blanco */
+.set-ic { width: 30px !important; height: 30px !important; border-radius: 8px !important; color: #fff !important; }
+.set-ic.blue { background: #0A84FF !important; }
+.set-ic.green { background: #34C759 !important; }
+.set-ic.orange { background: #FF9500 !important; }
+.set-ic.violet { background: #AF52DE !important; }
+.set-ic.red { background: #FF3B30 !important; }
+.set-ic.gray { background: #8E8E93 !important; }
+.set-ic .ic { width: 18px !important; height: 18px !important; }
+
+/* Estadísticas: ícono relleno sobre fondo suave */
+.stat-ic { border-radius: 10px !important; }
+
+/* Cambio de ícono con un pequeño giro al seleccionar */
+.tabbar > button .tab-ic .ic, .nav button .ic { transition: transform .45s var(--spring-ios), color .2s; }
+.tabbar > button.active .tab-ic .ic { animation: rumbo-icon-in .5s var(--spring-ios); }
+@keyframes rumbo-icon-in { 0% { transform: scale(.6) rotate(-12deg); opacity: .4; } 60% { transform: scale(1.12) rotate(3deg); opacity: 1; } 100% { transform: none; } }
+
+/* El ícono de sincronizar gira mientras trabaja */
+.spinning .ic, .btn.spinning .ic { animation: rumbo-spin .9s linear infinite; }
+@keyframes rumbo-spin { to { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   PULIDO DE UX
+   ========================================================================== */
+/* Toques más cómodos: nada se selecciona por accidente y los objetivos son grandes */
+button, .btn, .stat, .course, .task .body, .news, .tile, .action-row { -webkit-user-select: none; user-select: none; }
+.icon-btn { min-width: 44px; min-height: 44px; }
+/* Foco visible y bonito al usar teclado */
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 55%, transparent) !important; outline-offset: 2px; }
+h1:focus, h1:focus-visible, h2:focus, [tabindex="-1"]:focus, [tabindex="-1"]:focus-visible, main:focus, .page:focus { outline: none !important; }
+/* Textos largos: se cortan con elegancia */
+.task .title, .news-title, .course .name { text-wrap: pretty; }
+.topbar h1, .hero h2, h2 { text-wrap: balance; }
+/* Separación vertical más ordenada entre secciones */
+.page { gap: 20px !important; }
+.section-head { margin-top: 4px; }
+/* Tarjetas vacías más amables */
+.empty, .goals-empty { color: var(--muted); }
+/* Insignias numéricas con "pop" cuando cambian */
+.badge { animation: rumbo-pop .45s var(--spring-ios) both; }
+/* Barras de progreso con relleno animado */
+.mini-bar i, .ts-bar > div, .progress > i, .meter > i, .hero-bar > i { transition: width .9s var(--spring-ios) !important; }
