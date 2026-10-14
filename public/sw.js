@@ -1,5 +1,5 @@
-// Service worker: guarda la app en caché (la API siempre va a la red) y muestra las notificaciones.
-const CACHE = 'rumbo-v34';
+// Service worker: guarda la app en caché, muestra los datos guardados al instante (y los actualiza por detrás) y muestra las notificaciones.
+const CACHE = 'rumbo-v35';
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon-192.png']))); self.skipWaiting(); });
 // Datos de la API guardados (tareas, notas, avisos…) para verlos sin internet.
 const API_CACHE = 'rumbo-api-v1';
@@ -7,21 +7,48 @@ const API_CACHE = 'rumbo-api-v1';
 const NO_CACHE = /^\/api\/(version|backups|tts|widget|calendar|assistant|ai|login|logout|release|me$|health)/;
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE && k !== API_CACHE).map((k) => caches.delete(k))))); self.clients.claim(); });
 // Al cerrar sesión la app pide borrar los datos guardados.
-self.addEventListener('message', (e) => { if (e.data === 'clear-api') e.waitUntil(caches.delete(API_CACHE)); });
+self.addEventListener('message', (e) => {
+  if (e.data === 'clear-api') e.waitUntil(caches.delete(API_CACHE));
+  if (e.data === 'api-dirty') dirtyAt = Date.now();
+});
+// Rutas que siempre van a la red (cosas en vivo o de administración).
+const SWR_SKIP = /^\/api\/(live|sync|notify|telegram|admin|llaves|exportar|cron)/;
+let dirtyAt = 0;
+const tellClients = (msg) => self.clients.matchAll({ type: 'window' }).then((cs) => cs.forEach((cl) => cl.postMessage(msg)));
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  if (url.origin === location.origin && e.request.method !== 'GET' && url.pathname.startsWith('/api/')) { dirtyAt = Date.now(); return; }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.startsWith('/api/')) {
     if (NO_CACHE.test(url.pathname)) return;
-    // Primero la red; si no hay internet, lo último que se guardó (marcado para que la app lo sepa).
-    e.respondWith(fetch(e.request).then((res) => {
-      if (res.ok) { const copy = res.clone(); caches.open(API_CACHE).then((c) => c.put(e.request, copy)); }
-      return res;
-    }).catch(() => caches.open(API_CACHE).then((c) => c.match(e.request)).then((r) => {
+    const offline = (c) => c.match(e.request).then((r) => {
       if (!r) return new Response(JSON.stringify({ error: 'Sin conexión' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
       const h = new Headers(r.headers); h.set('X-Rumbo-Offline', '1');
       return r.blob().then((b) => new Response(b, { status: 200, headers: h }));
-    })));
+    });
+    // Recién cambiaste algo (o llegó un cambio en vivo): primero la red, para no mostrar datos viejos.
+    if (Date.now() - dirtyAt < 4000 || SWR_SKIP.test(url.pathname)) {
+      e.respondWith(fetch(e.request).then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(API_CACHE).then((c) => c.put(e.request, copy)); }
+        return res;
+      }).catch(() => caches.open(API_CACHE).then(offline)));
+      return;
+    }
+    // Instantáneo: si hay copia guardada se muestra ya y se actualiza por detrás; si cambió, la app recarga sola.
+    e.respondWith(caches.open(API_CACHE).then(async (c) => {
+      const hit = await c.match(e.request);
+      const net = fetch(e.request).then(async (res) => {
+        if (res.ok) {
+          const fresh = await res.clone().text();
+          const old = hit ? await hit.clone().text() : null;
+          await c.put(e.request, res.clone());
+          if (hit && old !== fresh) tellClients({ t: 'api-updated', path: url.pathname });
+        }
+        return res;
+      });
+      if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
+      return net.catch(() => offline(c));
+    }));
     return;
   }
   e.respondWith(fetch(e.request).then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return res; }).catch(() => caches.match(e.request).then((r) => r || caches.match('/'))));

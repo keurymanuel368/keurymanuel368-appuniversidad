@@ -2119,10 +2119,14 @@ async function courseSummaries(env) {
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
     FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all();
   const rows = await bestGrades(env);
+  const { results: pen } = await env.DB.prepare("SELECT code, name, credits FROM pensum WHERE user_id = ?").bind(env.UID).all().catch(() => ({ results: [] }));
+  // Mismo emparejamiento que la pantalla de Notas: por código o por nombre; si no aparece en el pensum, 3 créditos.
+  const nz = /* @__PURE__ */ __name((t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(), "nz");
+  const creditsOf = /* @__PURE__ */ __name((c) => pen.find((f) => c.code && f.code === c.code || nz(f.name).length > 6 && (nz(f.name).includes(nz(c.name)) || nz(c.name).includes(nz(f.name))))?.credits || 3, "creditsOf");
   return results.map((r) => {
     const mine = rows.filter((g) => g.course_id === r.id);
     const { avg, weighted } = courseAverage(mine);
-    return { ...r, graded: mine.filter((g) => g.grade !== null).length, total: mine.length, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
+    return { ...r, credits: creditsOf(r), graded: mine.filter((g) => g.grade !== null).length, total: mine.length, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
   });
 }
 __name(courseSummaries, "courseSummaries");
@@ -2134,10 +2138,12 @@ async function allGrades(env) {
   return results;
 }
 __name(allGrades, "allGrades");
+// Índice del trimestre: promedio ponderado por créditos (igual que en la pantalla de Notas).
 function overallAverage(courses) {
-  const vals = courses.map((c) => c.average).filter((v) => v !== null);
-  if (!vals.length) return null;
-  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10;
+  const g = courses.filter((c) => c.average !== null && c.average !== void 0);
+  if (!g.length) return null;
+  const w = g.reduce((a, c) => a + (c.credits || 3), 0);
+  return Math.round(g.reduce((a, c) => a + c.average * (c.credits || 3), 0) / w * 10) / 10;
 }
 __name(overallAverage, "overallAverage");
 async function payWindow(env, settings) {
