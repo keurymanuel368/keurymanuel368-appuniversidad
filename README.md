@@ -6,7 +6,7 @@ Funciona en **Cloudflare Workers** con una base de datos **D1**.
 
 ## Qué hay en este repositorio
 
-| Carpeta o archivo | Qué es |  
+| Carpeta o archivo | Qué es |
 |---|---|
 | `src/index.js` | El servidor (la API, el bot de Telegram, las tareas programadas). Es el código que estaba publicado en Cloudflare. |
 | `public/` | La app que ve el usuario (páginas, estilos, íconos, `rumbo-widget.apk`). |
@@ -27,6 +27,29 @@ También puedes llegar desde la app, en **Ajustes → Acciones → Llaves y conf
 
 - Las claves secretas se ven ocultas. Para verlas completas te pide tu contraseña.
 - Lo que guardes ahí manda sobre lo que hay en Cloudflare. Si borras un valor de la app, Rumbo vuelve a usar el de Cloudflare.
+
+## Tiempo real
+
+Cuando algo cambia, Rumbo se actualiza solo en todos tus dispositivos abiertos. Eso pasa cuando:
+
+- le pides algo al bot;
+- marcas una tarea en el celular;
+- se sincroniza la EVA.
+
+Funciona con un Durable Object (`RumboLive`) y WebSockets. El archivo `public/live.js` es el que escucha y le avisa a la app que recargue los datos.
+
+## Bot de Telegram: funciones
+
+- **Respuestas con formato y botones:** /hoy, /tareas, /notas, /pagos, /semana y /necesito.
+- **Avisos automáticos:**
+  - resumen de la mañana;
+  - nota nueva;
+  - recordatorios con «Ya la entregué», «+1 h», «+3 h» y «Esta noche»;
+  - cierre de la semana, los domingos a las 7 p. m.
+- **Fotos:** mándale una foto y la explica o resuelve. Usa Gemini, Groq o Workers AI.
+- **PDF:** mándale un PDF y te da un resumen con 5 preguntas de repaso.
+- **Notas de voz:** le hablas y entiende; también crea tareas («ponme el foro de ética para el viernes»).
+- **Botones «Abrir Rumbo» y «Llamar a Rumbo»:** abren la app dentro de Telegram y entran solos si tu Telegram está vinculado.
 
 ## Bot de Telegram
 

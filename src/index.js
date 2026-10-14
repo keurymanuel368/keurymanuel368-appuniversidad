@@ -1866,7 +1866,7 @@ function daysBetween(env, fromSec, toSec) {
 __name(daysBetween, "daysBetween");
 
 // src/worker/db.ts
-var GLOBAL = /* @__PURE__ */ new Set(["vapid_keys", "app_origin", "tts_chars", "tts_day", "tg_secret", "tg_bot_token", "tg_username", "wa_display_number", "wa_last_error", "ai_fail_at", "ai_fail_detail"]);
+var GLOBAL = /* @__PURE__ */ new Set(["vapid_keys", "app_origin", "tts_chars", "tts_day", "tg_secret", "tg_bot_token", "tg_username", "tg_hook_v", "wa_display_number", "wa_last_error", "ai_fail_at", "ai_fail_detail"]);
 var isGlobal = /* @__PURE__ */ __name((key) => GLOBAL.has(key) || key.startsWith("llm_") || key.startsWith("cfg:"), "isGlobal");
 var prefix = /* @__PURE__ */ __name((env) => `u${env.UID || 0}:`, "prefix");
 var fullKey = /* @__PURE__ */ __name((env, key) => isGlobal(key) ? key : prefix(env) + key, "fullKey");
@@ -2562,11 +2562,19 @@ function toHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\*([^*\n]+)\*/g, "<b>$1</b>").replace(/(^|\s)_([^_\n]+)_(?=\s|$|[.,;:!?])/g, "$1<i>$2</i>");
 }
 __name(toHtml, "toHtml");
-async function sendTelegram(env, text, chatId) {
+async function sendTelegram(env, text, chatId, opts = {}) {
   const chat = chatId ?? await getSetting(env, "tg_chat_id");
   if (!telegramReady(env) || !chat) return { ok: false, error: "Telegram no est\xE1 conectado" };
   try {
-    await tgCall(env, "sendMessage", { chat_id: chat, text: toHtml(text).slice(0, 4e3), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+    const html = opts.html ? text : tgFormat(text);
+    const body = { chat_id: chat, text: html.slice(0, 4096), parse_mode: "HTML", link_preview_options: { is_disabled: true } };
+    if (opts.kb) body.reply_markup = { inline_keyboard: opts.kb };
+    await tgCall(env, "sendMessage", body).catch(async (e) => {
+      if (!/parse|entities|tag/i.test(e.message)) throw e;
+      delete body.parse_mode;
+      body.text = String(text).replace(/<[^>]+>/g, "").slice(0, 4096);
+      await tgCall(env, "sendMessage", body);
+    });
     await env.DB.prepare("INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)").bind(env.UID, "out", "telegram", text.slice(0, 4e3)).run();
     return { ok: true };
   } catch (e) {
@@ -2576,9 +2584,9 @@ async function sendTelegram(env, text, chatId) {
 __name(sendTelegram, "sendTelegram");
 async function downloadTelegramFile(env, fileId) {
   const f = await tgCall(env, "getFile", { file_id: fileId });
-  if (!f.file_path) throw new Error("Telegram no entreg\xF3 el audio.");
+  if (!f.file_path) throw new Error("Telegram no entreg\xF3 el archivo.");
   const res = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${f.file_path}`);
-  if (!res.ok) throw new Error(`No pude descargar el audio (${res.status}).`);
+  if (!res.ok) throw new Error(`No pude descargar el archivo (${res.status}).`);
   return new Uint8Array(await res.arrayBuffer());
 }
 __name(downloadTelegramFile, "downloadTelegramFile");
@@ -2598,12 +2606,15 @@ async function setupTelegram(env, origin) {
     code = randomHex2(8);
     await setSetting(env, "tg_link_code", code);
   }
-  await tgCall(env, "setWebhook", { url: `${origin}/api/telegram/webhook`, secret_token: secret, allowed_updates: ["message"], drop_pending_updates: true });
+  await tgCall(env, "setWebhook", { url: `${origin}/api/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
+  await tgMenu(env, origin);
+  await setSetting({ ...env, UID: 0 }, "tg_hook_v", "3");
   await tgCall(env, "setMyCommands", { commands: [
     { command: "hoy", description: "Tu resumen del d\xEDa" },
     { command: "tareas", description: "Entregas pendientes" },
     { command: "notas", description: "Promedio por asignatura" },
     { command: "pagos", description: "Estado de la cuota" },
+    { command: "entregadas", description: "Lo \xFAltimo que entregaste" },
     { command: "ayuda", description: "Lo que puedo hacer" }
   ] }).catch(() => {
   });
@@ -2611,6 +2622,486 @@ async function setupTelegram(env, origin) {
   return { username: me.username, link: `https://t.me/${me.username}?start=${code}`, connected: !!await getSetting(env, "tg_chat_id") };
 }
 __name(setupTelegram, "setupTelegram");
+
+// src/worker/telegram-ui.ts — mensajes con formato bonito y botones para Telegram
+var tgEsc = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "tgEsc");
+var tgAttr = /* @__PURE__ */ __name((s) => tgEsc(s).replace(/"/g, "&quot;"), "tgAttr");
+function tgBar(pct, n = 10) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const k = Math.round(p / 100 * n);
+  return "▰".repeat(k) + "▱".repeat(n - k);
+}
+__name(tgBar, "tgBar");
+var tgGradeIcon = /* @__PURE__ */ __name((v) => v === null || v === void 0 ? "⚪" : v >= 90 ? "\u{1F7E2}" : v >= 80 ? "\u{1F535}" : v >= 70 ? "\u{1F7E1}" : "\u{1F534}", "tgGradeIcon");
+var TG_NAV = [
+  [{ text: "\u{1F3E0} Hoy", callback_data: "c:hoy" }, { text: "\u{1F4DD} Tareas", callback_data: "c:tareas" }, { text: "\u{1F4CA} Notas", callback_data: "c:notas" }],
+  [{ text: "\u{1F4B3} Pagos", callback_data: "c:pagos" }, { text: "✅ Entregadas", callback_data: "c:entregadas" }, { text: "❔ Ayuda", callback_data: "c:ayuda" }]
+];
+var TG_MINI = [[{ text: "\u{1F3E0} Hoy", callback_data: "c:hoy" }, { text: "\u{1F4DD} Tareas", callback_data: "c:tareas" }, { text: "\u{1F4CA} Notas", callback_data: "c:notas" }]];
+var TG_RULE = "──────────────";
+function tgDayDiff(env, dueSec) {
+  const now = localDate(env), due = localDate(env, dueSec);
+  return Math.round((Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate()) - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) / 864e5);
+}
+__name(tgDayDiff, "tgDayDiff");
+function tgUrg(env, t, now) {
+  if (t.due_at === null || t.due_at === void 0) return "⚪";
+  if (t.due_at < now) return "\u{1F534}";
+  const d = tgDayDiff(env, t.due_at);
+  return d <= 0 ? "\u{1F7E0}" : d <= 2 ? "\u{1F7E1}" : "\u{1F7E2}";
+}
+__name(tgUrg, "tgUrg");
+function tgTaskLine(env, t, now, withId = true) {
+  const when = t.due_at === null || t.due_at === void 0 ? "sin fecha" : t.due_at < now ? "venci\xF3 " + cuandoTexto(env, t.due_at) : cuandoTexto(env, t.due_at);
+  const course = t.course_short || t.course_name || "";
+  const link = t.url ? ` \xB7 <a href="${tgAttr(t.url)}">abrir</a>` : "";
+  return `${tgUrg(env, t, now)} <b>${tgEsc(t.title)}</b>${withId ? ` <code>#${t.id}</code>` : ""}
+      <i>${tgEsc(course)}${course ? " \xB7 " : ""}⏰ ${tgEsc(when)}</i>${link}`;
+}
+__name(tgTaskLine, "tgTaskLine");
+async function tgHoy(env) {
+  const d = await dashboard(env);
+  const now = nowSec();
+  const hr = localDate(env).getUTCHours();
+  const [ico, saludo] = hr < 12 ? ["☀️", "Buenos d\xEDas"] : hr < 19 ? ["\u{1F324}️", "Buenas tardes"] : ["\u{1F319}", "Buenas noches"];
+  const out = [`${ico} <b>${saludo}${d.name ? ", " + tgEsc(d.name) : ""}</b>`, `<i>${tgEsc(d.today)}</i>`, ""];
+  out.push(`\u{1F4CC} Hoy <b>${d.counts.today}</b>   \u{1F4C5} Semana <b>${d.counts.week}</b>   ${d.counts.overdue ? "⚠️" : "✅"} Vencidas <b>${d.counts.overdue}</b>`);
+  const wp = d.weekProgress || { total: 0, done: 0 };
+  if (wp.total) out.push(`\u{1F3AF} Semana <code>${tgBar(wp.done / wp.total * 100)}</code> ${wp.done}/${wp.total}`);
+  out.push("", TG_RULE);
+  const overdue = d.tasks.filter((t) => t.due_at !== null && t.due_at < now);
+  const upcoming = d.tasks.filter((t) => t.due_at === null || t.due_at >= now);
+  if (overdue.length) {
+    out.push("", "\u{1F6A8} <b>Vencidas sin marcar</b>");
+    overdue.slice(0, 4).forEach((t) => out.push(tgTaskLine(env, t, now)));
+  }
+  out.push("", "\u{1F4DD} <b>Lo que viene</b>");
+  if (upcoming.length) upcoming.slice(0, 6).forEach((t) => out.push(tgTaskLine(env, t, now)));
+  else out.push("<i>Nada pendiente. \xA1Buen trabajo! \u{1F389}</i>");
+  const p = d.pay;
+  out.push("", TG_RULE, "");
+  if (p.paid) out.push(`\u{1F4B3} <b>Cuota</b> \xB7 ${tgEsc(periodLabel(p.period))} pagada ✅`);
+  else if (p.state === "open") out.push(`\u{1F4B3} <b>Cuota</b> \xB7 ventana abierta, cierra en <b>${p.daysToClose} d\xEDa${p.daysToClose === 1 ? "" : "s"}</b>${p.amount ? ` \xB7 ${tgEsc(money(p.amount))}` : ""}`);
+  else if (p.daysToOpen <= 7) out.push(`\u{1F4B3} <b>Cuota</b> \xB7 abre en ${p.daysToOpen} d\xEDa${p.daysToOpen === 1 ? "" : "s"}`);
+  if (d.average !== null) out.push(`\u{1F4CA} <b>Promedio</b> ${tgGradeIcon(d.average)} <b>${d.average}</b>  <code>${tgBar(d.average)}</code>`);
+  return { html: out.join("\n").replace(/\n{3,}/g, "\n\n"), kb: TG_NAV };
+}
+__name(tgHoy, "tgHoy");
+async function tgTareas(env) {
+  const now = nowSec();
+  const tasks = await listTasks(env, { status: "pending", from: now - 3 * 86400, limit: 30 });
+  if (!tasks.length) return { html: "\u{1F389} <b>\xA1Sin tareas pendientes!</b>\n\n<i>Disfruta el descanso. Te aviso cuando salga algo nuevo.</i>", kb: TG_NAV };
+  const groups = [["\u{1F6A8} Vencidas", []], ["\u{1F7E0} Hoy", []], ["\u{1F7E1} Ma\xF1ana", []], ["\u{1F4C5} Esta semana", []], ["\u{1F5D3}️ M\xE1s adelante", []], ["⚪ Sin fecha", []]];
+  for (const t of tasks) {
+    if (t.due_at === null) groups[5][1].push(t);
+    else if (t.due_at < now) groups[0][1].push(t);
+    else {
+      const dd = tgDayDiff(env, t.due_at);
+      groups[dd <= 0 ? 1 : dd === 1 ? 2 : dd < 7 ? 3 : 4][1].push(t);
+    }
+  }
+  const out = [`\u{1F4DD} <b>Tareas pendientes</b> \xB7 ${tasks.length}`];
+  for (const [title, list] of groups) {
+    if (!list.length) continue;
+    out.push("", `<b>${title}</b>`);
+    list.forEach((t) => out.push(tgTaskLine(env, t, now).replace(/^\S+ /, "• ")));
+  }
+  out.push("", "<i>Toca ✅ cuando entregues una.</i>");
+  const btns = tasks.slice(0, 9).map((t) => ({ text: `✅ #${t.id}`, callback_data: `d:${t.id}` }));
+  const rows = [];
+  for (let i = 0; i < btns.length; i += 3) rows.push(btns.slice(i, i + 3));
+  return { html: out.join("\n"), kb: [...rows, ...TG_NAV] };
+}
+__name(tgTareas, "tgTareas");
+async function tgNotas(env) {
+  const courses = await courseSummaries(env);
+  if (!courses.length) return { html: "\u{1F4DA} <b>A\xFAn no hay asignaturas</b>\n\nEscr\xEDbeme <code>sincronizar</code> para traerlas del EVA.", kb: TG_NAV };
+  const out = ["\u{1F4CA} <b>Notas por asignatura</b>", ""];
+  for (const c of courses) {
+    out.push(`${tgGradeIcon(c.average)} <b>${tgEsc(c.name)}</b>`);
+    out.push(c.average === null ? "      <i>sin notas todav\xEDa</i>" : `      <code>${tgBar(c.average)}</code> <b>${c.average}</b>${c.total ? ` <i>\xB7 ${c.graded}/${c.total} actividades</i>` : ""}`);
+  }
+  const avg = overallAverage(courses);
+  if (avg !== null) out.push("", `<blockquote>\u{1F393} <b>Promedio general: ${avg}</b>
+<code>${tgBar(avg, 14)}</code></blockquote>`);
+  out.push("<i>\u{1F7E2} 90+ \xB7 \u{1F535} 80+ \xB7 \u{1F7E1} 70+ \xB7 \u{1F534} menos de 70</i>");
+  return { html: out.join("\n"), kb: TG_NAV };
+}
+__name(tgNotas, "tgNotas");
+async function tgPagos(env) {
+  const p = await payWindow(env);
+  const cierre = fechaCorta(localDate(env, p.closesAt));
+  const apertura = fechaCorta(localDate(env, p.opensAt));
+  let html;
+  let kb = TG_NAV;
+  if (p.paid) html = `✅ <b>Cuota de ${tgEsc(periodLabel(p.period))} pagada</b>
+
+<i>No te enviar\xE9 m\xE1s avisos de pago este per\xEDodo.</i>`;
+  else if (p.state === "open") {
+    html = `\u{1F4B3} <b>Ventana de pago abierta</b>
+
+<blockquote>\u{1F5D3}️ Cierra: <b>${tgEsc(cierre)}</b>
+⏳ Faltan: <b>${p.daysToClose} d\xEDa${p.daysToClose === 1 ? "" : "s"}</b>${p.amount ? `
+\u{1F4B5} Monto: <b>${tgEsc(money(p.amount))}</b>` : ""}</blockquote>
+<i>Cuando pagues, toca el bot\xF3n y dejo de recordarte.</i>`;
+    kb = [[{ text: "\u{1F4B5} Ya pagu\xE9", callback_data: "c:pague" }], ...TG_NAV];
+  } else html = `\u{1F4C6} <b>Pr\xF3xima ventana de pago</b>
+
+<blockquote>\u{1F7E2} Abre: <b>${tgEsc(apertura)}</b> <i>(en ${p.daysToOpen} d\xEDa${p.daysToOpen === 1 ? "" : "s"})</i>
+\u{1F534} Cierra: <b>${tgEsc(cierre)}</b></blockquote>`;
+  return { html, kb };
+}
+__name(tgPagos, "tgPagos");
+async function tgEntregadas(env) {
+  const done = await listTasks(env, { status: "done", limit: 12 });
+  if (!done.length) return { html: "\u{1F4ED} <b>Todav\xEDa no hay entregas</b>\n\nEscr\xEDbeme <code>sincronizar</code> para revisar el EVA.", kb: TG_NAV };
+  const out = ["✅ <b>\xDAltimas entregas</b>", ""];
+  for (const t of done) {
+    const g = t.grade !== null && t.grade !== void 0 ? ` \xB7 ${tgGradeIcon(t.grade / (t.grade_max || 100) * 100)} <b>${Math.round(t.grade * 100) / 100}/${t.grade_max}</b>` : t.notes === "Plazo cerrado en el EVA" ? " \xB7 <i>plazo cerrado</i>" : " \xB7 <i>sin nota a\xFAn</i>";
+    out.push(`• <b>${tgEsc(t.title)}</b>
+      <i>${tgEsc(t.course_short || t.course_name || "")}</i>${g}`);
+  }
+  return { html: out.join("\n"), kb: TG_NAV };
+}
+__name(tgEntregadas, "tgEntregadas");
+function tgAyuda() {
+  return { html: `\u{1F9ED} <b>Rumbo en Telegram</b>
+<i>Tu trimestre, en un chat.</i>
+
+<b>Toca un bot\xF3n</b> o escr\xEDbeme como a una persona:
+
+<blockquote expandable>\u{1F3E0} <code>hoy</code> — tu resumen del d\xEDa
+\u{1F4DD} <code>tareas</code> — entregas pendientes
+\u{1F4CA} <code>notas</code> — promedio por asignatura
+\u{1F4B3} <code>pagos</code> — estado de la cuota
+✅ <code>entregadas</code> — lo \xFAltimo que entregaste
+\u{1F468}‍\u{1F3EB} <code>facilitadores</code> — qui\xE9n da cada materia
+\u{1F504} <code>sincronizar</code> — traer lo nuevo del EVA</blockquote>
+
+<b>Acciones r\xE1pidas</b>
+<blockquote expandable>✅ <code>listo 12</code> — marcar la tarea #12 como hecha
+➕ <code>nueva</code> Informe ma\xF1ana 18:00 — agregar tarea
+⏰ <code>recu\xE9rdame</code> ma\xF1ana 6pm entregar el video
+\u{1F50E} <code>nota de</code> examen final — buscar una nota
+\u{1F4B5} <code>pagu\xE9</code> — registrar el pago
+\u{1F9EE} <code>necesito 80 c\xE1lculo</code> — cu\xE1nto te falta sacar
+\u{1F4C6} <code>semana</code> — el cierre de tu semana</blockquote>
+
+<b>M\xE1ndame archivos</b>
+<blockquote expandable>\u{1F4F8} <b>Una foto</b> de la pizarra, apuntes o un ejercicio: te lo explico o lo resuelvo
+\u{1F4C4} <b>Un PDF</b>: te hago el resumen y 5 preguntas de repaso
+\u270D\uFE0F Escribe una pregunta en el pie de la foto o del PDF para algo puntual</blockquote>
+
+\u{1F3A4} <b>Nota de voz:</b> <i>\xABponme el foro de \xE9tica para el viernes en la tarde\xBB</i>
+\u{1F4DE} <b>Llamada:</b> toca <i>Llamar a Rumbo</i> y habla como en una llamada`, kb: TG_NAV };
+}
+__name(tgAyuda, "tgAyuda");
+async function tgRich(env, input) {
+  const r = await tgRich0(env, input);
+  return r && r.noApp ? r : tgWithApp(env, r);
+}
+__name(tgRich, "tgRich");
+async function tgRich0(env, input) {
+  const t = normalize(String(input || "").replace(/^\//, "").replace(/@\w+$/, "").replace(/[¿?¡!,;.]/g, " "));
+  let mn;
+  if (mn = t.match(/^(?:cuanto\s+)?necesito(?:\s+(?:sacar|para|un|una|llegar a|tener))*\s+(\d{1,3})(?:\s+(?:en|de|para))?\s*(.*)$/)) return tgNecesito(env, mn[1], mn[2]);
+  if (/^(calculadora|necesito)$/.test(t)) return tgNecesito(env, 70, "");
+  if (/^(semana|cierre|cierre de semana|resumen semanal)$/.test(t)) return tgSemana(env);
+  if (/^(llamar|llamada|llamame|voz|hablar)$/.test(t)) return tgLlamar(env);
+  if (/^(hoy|resumen|dia)$/.test(t)) return tgHoy(env);
+  if (/^(tareas?|pendientes?)$/.test(t)) return tgTareas(env);
+  if (/^(notas?|calificaciones|promedio)$/.test(t)) return tgNotas(env);
+  if (/^(pagos?|cuota)$/.test(t)) return tgPagos(env);
+  if (/^(entregadas?|hechas?|historial)$/.test(t)) return tgEntregadas(env);
+  if (!t || /^(hola|menu|ayuda|help|comandos|start)$/.test(t)) return tgAyuda();
+  return null;
+}
+__name(tgRich0, "tgRich0");
+// Convierte texto con estilo WhatsApp/Markdown (de la IA o de los avisos) en HTML de Telegram.
+function tgFormat(text) {
+  let s = tgEsc(text);
+  const code = [];
+  s = s.replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (_, c) => (code.push(`<pre>${c.trim()}</pre>`), `\0${code.length - 1}\0`));
+  s = s.replace(/`([^`\n]+)`/g, (_, c) => (code.push(`<code>${c}</code>`), `\0${code.length - 1}\0`));
+  s = s.replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>");
+  s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
+  s = s.replace(/\|\|([^|\n]+)\|\|/g, "<tg-spoiler>$1</tg-spoiler>");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+  s = s.replace(/\*([^*\n]+)\*/g, "<b>$1</b>");
+  s = s.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,;:!?]|$)/gm, "$1<i>$2</i>");
+  s = s.replace(/(^|\s)~([^~\n]+)~(?=\s|$|[.,;:!?])/g, "$1<s>$2</s>");
+  s = s.replace(/^[-*]\s+/gm, "• ");
+  s = s.replace(/(^&gt; .*(?:\n&gt; .*)*)/gm, (blk) => `<blockquote>${blk.replace(/^&gt; /gm, "")}</blockquote>`);
+  s = s.replace(/\0(\d+)\0/g, (_, i) => code[Number(i)]);
+  return s;
+}
+__name(tgFormat, "tgFormat");
+async function tgEdit(env, chat, msgId, html, kb) {
+  return tgCall(env, "editMessageText", { chat_id: chat, message_id: msgId, text: html.slice(0, 4096), parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: kb ? { inline_keyboard: kb } : void 0 }).catch((e) => {
+    if (!/not modified/i.test(e.message)) throw e;
+  });
+}
+__name(tgEdit, "tgEdit");
+async function answerTelegramCallback(sys, cq) {
+  const chat = String(cq.message?.chat?.id || "");
+  const ack = /* @__PURE__ */ __name((text = "", alert = false) => tgCall(sys, "answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: alert }).catch(() => {
+  }), "ack");
+  const uid = chat && await userBySetting(sys, "tg_chat_id", chat);
+  if (!uid) return ack("Primero vincula tu cuenta desde la app.", true);
+  const env = await forUser(sys, uid);
+  const data = String(cq.data || "");
+  const msgId = cq.message.message_id;
+  try {
+    if (data.startsWith("d:")) {
+      const res = await handleCommand(env, "listo " + data.slice(2), "telegram");
+      const ok = /^Hecho/.test(res);
+      await ack(ok ? "✅ \xA1Marcada como hecha!" : res.slice(0, 190), !ok);
+      const r = await tgTareas(env);
+      await tgEdit(env, chat, msgId, r.html, r.kb);
+      return;
+    }
+    if (data === "x") return ack();
+    if (data.startsWith("dr:")) {
+      const res = await handleCommand(env, "listo " + data.slice(3), "telegram");
+      const ok = /^Hecho/.test(res);
+      await ack(ok ? "\u2705 \xA1Marcada como hecha!" : res.slice(0, 190), !ok);
+      await tgCall(env, "editMessageReplyMarkup", { chat_id: chat, message_id: msgId, reply_markup: { inline_keyboard: [[{ text: ok ? "\u2705 Entregada" : "\u2139\uFE0F Ya estaba marcada", callback_data: "x" }]] } }).catch(() => {
+      });
+      return;
+    }
+    if (data.startsWith("s:")) {
+      const [, id, kind] = data.split(":");
+      const t = await env.DB.prepare("SELECT title, due_at FROM tasks WHERE id = ? AND user_id = ?").bind(Number(id), env.UID).first();
+      if (!t) return ack("No encontr\xE9 esa tarea.", true);
+      const at = tgSnoozeAt(env, kind);
+      await env.DB.prepare("INSERT INTO reminders (user_id, text, remind_at) VALUES (?, ?, ?)").bind(env.UID, `\u{1F4CC} ${t.title}${t.due_at ? " \xB7 vence " + cuandoTexto(env, t.due_at) : ""}`, at).run();
+      const when = horaTexto(localDate(env, at));
+      await ack(`\u23F0 Te aviso a las ${when}`);
+      await tgCall(env, "editMessageReplyMarkup", { chat_id: chat, message_id: msgId, reply_markup: { inline_keyboard: [[{ text: `\u23F0 Te aviso a las ${when}`, callback_data: "x" }], [{ text: "\u2705 Ya la entregu\xE9", callback_data: `dr:${id}` }]] } }).catch(() => {
+      });
+      return;
+    }
+    if (data === "c:pague") {
+      await handleCommand(env, "pague", "telegram");
+      await ack("\u{1F4B5} Pago registrado");
+      const r = await tgPagos(env);
+      await tgEdit(env, chat, msgId, r.html, r.kb);
+      return;
+    }
+    if (data.startsWith("c:")) {
+      await ack();
+      const r = await tgRich(env, data.slice(2));
+      if (r) await tgEdit(env, chat, msgId, r.html, r.kb);
+      return;
+    }
+    await ack();
+  } catch (e) {
+    await ack("No pude hacerlo: " + String(e.message || e).slice(0, 150), true);
+  }
+}
+__name(answerTelegramCallback, "answerTelegramCallback");
+async function tgMenu(env, base) {
+  if (!/^https:/.test(base || "")) return;
+  await tgCall(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "Abrir Rumbo", web_app: { url: `${base}/?go=inicio` } } }).catch(() => {
+  });
+  await tgCall(env, "setMyCommands", { commands: [
+    { command: "hoy", description: "Tu resumen del d\xEDa" },
+    { command: "tareas", description: "Entregas pendientes" },
+    { command: "notas", description: "Promedio por asignatura" },
+    { command: "pagos", description: "Estado de la cuota" },
+    { command: "semana", description: "Cierre de tu semana" },
+    { command: "necesito", description: "Cu\xE1nto te falta para una nota" },
+    { command: "llamar", description: "Hablar con Rumbo por voz" },
+    { command: "ayuda", description: "Todo lo que puedo hacer" }
+  ] }).catch(() => {
+  });
+}
+__name(tgMenu, "tgMenu");
+// Si el webhook se registró con una versión vieja (sin botones), lo actualiza una sola vez.
+async function ensureTgWebhook(env, origin) {
+  if (!telegramReady(env)) return;
+  const sys = { ...env, UID: 0 };
+  if (await getSetting(sys, "tg_hook_v") === "3") return;
+  const secret = await getSetting(sys, "tg_secret");
+  const base = (origin || env.APP_URL || await getSetting(sys, "app_origin") || "").replace(/\/$/, "");
+  if (!secret || !base) return;
+  await tgCall(env, "setWebhook", { url: `${base}/api/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "callback_query"] });
+  await tgMenu(env, base);
+  await setSetting(sys, "tg_hook_v", "3");
+}
+__name(ensureTgWebhook, "ensureTgWebhook");
+
+// src/worker/telegram-extra.ts — Mini App, fotos, PDF, calculadora de nota, cierre semanal y avisos con botones
+var tgOrigin = /* @__PURE__ */ __name((env) => /^https:\/\//.test(env.APP_URL || "") ? env.APP_URL.replace(/\/$/, "") : "", "tgOrigin");
+function tgAppRow(env) {
+  const o = tgOrigin(env);
+  return o ? [[{ text: "\u{1F4F1} Abrir Rumbo", web_app: { url: `${o}/?go=inicio` } }, { text: "\u{1F4DE} Llamar a Rumbo", web_app: { url: `${o}/?go=llamada` } }]] : [];
+}
+__name(tgAppRow, "tgAppRow");
+var tgWithApp = /* @__PURE__ */ __name((env, r) => r ? { ...r, kb: [...r.kb || [], ...tgAppRow(env)] } : r, "tgWithApp");
+function tgLlamar(env) {
+  const o = tgOrigin(env);
+  if (!o) return { html: "\u{1F4DE} Para llamar a Rumbo, abre la app → <b>Asistente</b> → bot\xF3n del micr\xF3fono.", kb: TG_MINI };
+  return { html: `\u{1F4DE} <b>Habla con Rumbo por voz</b>
+
+Toca <b>Llamar a Rumbo</b>: se abre dentro de Telegram y conversas como en una llamada. Cuando te calles, te responde con voz.
+
+<i>La primera vez, Telegram te pedir\xE1 permiso para el micr\xF3fono.</i>
+
+\u{1F3A4} \xBFPrefieres notas de voz? Mant\xE9n presionado el micr\xF3fono de Telegram y h\xE1blame: \xABponme el foro de \xE9tica para el viernes\xBB.`, kb: [[{ text: "\u{1F4DE} Llamar a Rumbo", web_app: { url: `${o}/?go=llamada` } }], [{ text: "\u{1F4F1} Abrir Rumbo", web_app: { url: `${o}/?go=inicio` } }]], noApp: true };
+}
+__name(tgLlamar, "tgLlamar");
+// ---------- Calculadora: cuánto necesito para llegar a X ----------
+async function tgNecesito(env, target, query) {
+  const courses = await courseSummaries(env);
+  if (!courses.length) return { html: "\u{1F4DA} A\xFAn no tengo tus asignaturas. Escr\xEDbeme <code>sincronizar</code>.", kb: TG_MINI };
+  const goal = Math.max(1, Math.min(100, Number(target) || 70));
+  const calc = /* @__PURE__ */ __name(async (c) => {
+    const rows = await bestGrades(env, c.id);
+    const graded = rows.filter((r) => r.grade !== null && r.grade_max > 0);
+    const left = rows.filter((r) => r.grade === null);
+    if (!rows.length) return { c, msg: "sin actividades todav\xEDa" };
+    const pct = /* @__PURE__ */ __name((r) => r.grade / r.grade_max * 100, "pct");
+    const weighted = rows.every((r) => (r.weight ?? 0) > 0);
+    let need;
+    if (!left.length) return { c, done: true, now: c.average };
+    if (weighted) {
+      const W = rows.reduce((a, r) => a + r.weight, 0), earned = graded.reduce((a, r) => a + pct(r) * r.weight, 0), rem = left.reduce((a, r) => a + r.weight, 0);
+      need = (goal * W - earned) / rem;
+    } else need = (goal * rows.length - graded.reduce((a, r) => a + pct(r), 0)) / left.length;
+    return { c, need: Math.round(need * 10) / 10, left: left.length };
+  }, "calc");
+  const words = keywords(query || "");
+  let list = courses;
+  if (words.length) {
+    const scored = courses.map((c) => ({ c, s: words.filter((w) => normalize(`${c.name} ${c.short_name || ""} ${c.code || ""}`).includes(w)).length })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+    if (scored.length) list = [scored[0].c];
+  }
+  const res = await Promise.all(list.map(calc));
+  const out = [`\u{1F9EE} <b>\xBFCu\xE1nto necesito para ${goal}?</b>`, ""];
+  for (const r of res) {
+    out.push(`<b>${tgEsc(r.c.name)}</b>${r.c.average !== null ? ` \xB7 vas con <b>${r.c.average}</b>` : ""}`);
+    if (r.msg) out.push(`      <i>${r.msg}</i>`);
+    else if (r.done) out.push(`      <i>Ya no quedan actividades por calificar.</i> ${r.now !== null && r.now >= goal ? "✅" : "❌"}`);
+    else if (r.need <= 0) out.push(`      ✅ <b>Ya lo tienes asegurado</b>, aunque saques 0 en lo que queda.`);
+    else if (r.need > 100) out.push(`      \u{1F534} Necesitar\xEDas <b>${r.need}</b> en promedio: <i>no alcanza ${r.left === 1 ? "con la actividad que queda" : `con las ${r.left} actividades que quedan`}</i>.`);
+    else out.push(`      ${r.need >= 90 ? "\u{1F7E0}" : r.need >= 75 ? "\u{1F7E1}" : "\u{1F7E2}"} Necesitas <b>${r.need}</b> ${r.left === 1 ? "en la actividad que falta" : `de promedio en las <b>${r.left}</b> actividades que faltan`}.`);
+  }
+  if (!words.length) out.push("", `<i>Para una sola materia: <code>necesito 85 c\xE1lculo</code></i>`);
+  return { html: out.join("\n"), kb: TG_MINI };
+}
+__name(tgNecesito, "tgNecesito");
+// ---------- Cierre de la semana ----------
+async function tgSemana(env) {
+  const now = nowSec(), weekAgo = now - 7 * 86400;
+  const s = await getSettings(env);
+  const { results: done } = await env.DB.prepare(`SELECT t.title, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id WHERE t.user_id = ? AND t.status = 'done' AND COALESCE(t.submitted_at, t.updated_at) >= ? ORDER BY COALESCE(t.submitted_at, t.updated_at) DESC LIMIT 20`).bind(env.UID, weekAgo).all();
+  const { results: grades } = await env.DB.prepare(`SELECT g.item_name, g.grade, g.grade_max, c.short_name AS course, c.name AS course_name FROM grades g JOIN courses c ON c.id = g.course_id WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.grade_max > 0 AND g.updated_at >= ? ORDER BY g.updated_at DESC LIMIT 10`).bind(env.UID, weekAgo).all();
+  const next = await listTasks(env, { status: "pending", from: now, to: now + 7 * 86400, limit: 30 });
+  const courses = await courseSummaries(env);
+  const withAvg = courses.filter((c) => c.average !== null).sort((a, b) => a.average - b.average);
+  const name = (s.student_name || "").split(" ")[0];
+  const out = [`\u{1F4C6} <b>Cierre de la semana${name ? ", " + tgEsc(name) : ""}</b>`, ""];
+  out.push(`✅ Entregaste <b>${done.length}</b> ${done.length === 1 ? "tarea" : "tareas"}`);
+  if (grades.length) {
+    const avg = Math.round(grades.reduce((a, g) => a + g.grade / g.grade_max * 100, 0) / grades.length * 10) / 10;
+    out.push(`\u{1F4CA} <b>${grades.length}</b> nota${grades.length === 1 ? "" : "s"} nueva${grades.length === 1 ? "" : "s"} \xB7 promedio ${tgGradeIcon(avg)} <b>${avg}</b>`);
+    out.push(`<blockquote expandable>${grades.map((g) => `${tgGradeIcon(g.grade / g.grade_max * 100)} ${tgEsc(g.item_name)} \xB7 <b>${Math.round(g.grade * 100) / 100}/${g.grade_max}</b> <i>${tgEsc(g.course || g.course_name || "")}</i>`).join("\n")}</blockquote>`);
+  } else out.push("\u{1F4CA} Sin notas nuevas esta semana");
+  if (withAvg.length) {
+    const best = withAvg[withAvg.length - 1], low = withAvg[0];
+    out.push("", `\u{1F3C6} Tu mejor materia: <b>${tgEsc(best.name)}</b> (${best.average})`);
+    if (low !== best && low.average < 80) out.push(`\u{1F4AA} Para reforzar: <b>${tgEsc(low.name)}</b> (${low.average})`);
+  }
+  out.push("", `\u{1F5D3}️ <b>La pr\xF3xima semana</b> \xB7 ${next.length} entrega${next.length === 1 ? "" : "s"}`);
+  next.slice(0, 5).forEach((t) => out.push(tgTaskLine(env, t, now, false)));
+  if (!next.length) out.push("<i>Nada por ahora. Buen momento para adelantar \u{1F60C}</i>");
+  out.push("", done.length >= 3 ? "<i>\xA1Gran semana! Sigue as\xED \u{1F525}</i>" : "<i>Nueva semana, nuevo arranque. T\xFA puedes \u{1F4AA}</i>");
+  const plain = out.join("\n").replace(/<blockquote[^>]*>/g, "").replace(/<\/blockquote>/g, "").replace(/<b>|<\/b>/g, "*").replace(/<i>|<\/i>/g, "_").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  return { html: out.join("\n").replace(/\n{3,}/g, "\n\n"), kb: [[{ text: "\u{1F4DD} Ver tareas", callback_data: "c:tareas" }, { text: "\u{1F4CA} Ver notas", callback_data: "c:notas" }]], plain, short: `${done.length} entregadas \xB7 ${next.length} para la pr\xF3xima semana` };
+}
+__name(tgSemana, "tgSemana");
+// ---------- Fotos ----------
+async function visionAnswer(env, bytes, mime, question) {
+  const b64 = toBase64(bytes);
+  const prompt = `Eres Rumbo, el asistente de estudio de un estudiante universitario de la UAPA (Rep\xFAblica Dominicana). Responde en espa\xF1ol, claro y en pocas l\xEDneas, con vi\xF1etas si ayudan.
+${question ? `El estudiante pregunta: \xAB${question}\xBB` : "Explica qu\xE9 hay en la imagen. Si es un ejercicio o problema, resu\xE9lvelo paso a paso. Si son apuntes o una pizarra, haz un resumen ordenado. Si es un horario o calendario, extrae fechas y tareas."}
+Usa *negritas* para lo importante.`;
+  const tries = [];
+  if (env.GEMINI_API_KEY) tries.push({ url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: env.GEMINI_API_KEY, model: env.GEMINI_VISION_MODEL || "gemini-2.5-flash" });
+  if (env.GROQ_API_KEY) tries.push({ url: "https://api.groq.com/openai/v1/chat/completions", key: env.GROQ_API_KEY, model: "meta-llama/llama-4-scout-17b-16e-instruct" });
+  if (env.OPENROUTER_API_KEY) tries.push({ url: "https://openrouter.ai/api/v1/chat/completions", key: env.OPENROUTER_API_KEY, model: "google/gemini-2.0-flash-exp:free" });
+  let lastErr = "";
+  for (const t of tries) {
+    try {
+      const res = await fetch(t.url, { method: "POST", headers: { Authorization: `Bearer ${t.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: t.model, max_tokens: 900, temperature: 0.3, messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } }] }] }) });
+      const j = await res.json().catch(() => ({}));
+      const txt = j.choices?.[0]?.message?.content;
+      if (res.ok && txt) return txt;
+      lastErr = j.error?.message || `HTTP ${res.status}`;
+    } catch (e) {
+      lastErr = e.message;
+    }
+  }
+  if (env.AI) {
+    try {
+      const img = [...bytes];
+      let out = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt, image: img, max_tokens: 800 }).catch(async (e) => {
+        if (!/agree|license/i.test(e.message)) throw e;
+        await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt: "agree" });
+        return env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt, image: img, max_tokens: 800 });
+      });
+      if (out?.response) return out.response;
+    } catch (e) {
+      lastErr = e.message;
+    }
+  }
+  throw new Error(lastErr || "No hay un motor de IA con visi\xF3n configurado (pon una clave de Gemini o Groq en /llaves).");
+}
+__name(visionAnswer, "visionAnswer");
+// ---------- PDF ----------
+async function pdfAnswer(env, bytes, fileName, question) {
+  if (!env.AI?.toMarkdown) throw new Error("Falta Workers AI para leer PDF.");
+  const conv = await env.AI.toMarkdown([{ name: fileName || "documento.pdf", blob: new Blob([bytes], { type: "application/pdf" }) }]);
+  const md = String((Array.isArray(conv) ? conv[0] : conv)?.data || "").trim();
+  if (md.length < 40) throw new Error("No pude leer texto en ese PDF (puede ser una imagen escaneada). M\xE1ndamelo como foto.");
+  const doc = md.slice(0, 24e3);
+  const ask = question ? `Responde esta pregunta sobre el documento: \xAB${question}\xBB. Luego, en 3 vi\xF1etas, lo m\xE1s importante.` : `Haz esto:
+1. *Resumen* en 5 a 8 vi\xF1etas cortas.
+2. *Ideas clave*: 3 conceptos con su definici\xF3n en una l\xEDnea.
+3. *Preguntas de repaso*: 5 preguntas numeradas; despu\xE9s de cada una escribe la respuesta corta entre || y || (por ejemplo: 1. \xBFQu\xE9 es X? ||Es Y||).`;
+  const text = await llmComplete(env, [
+    { role: "system", content: "Eres Rumbo, asistente de estudio de un estudiante de la UAPA. Respondes en espa\xF1ol dominicano neutro, claro y ordenado. Usa *negritas* para t\xEDtulos y conceptos. No inventes datos que no est\xE9n en el documento." },
+    { role: "user", content: `${ask}
+
+DOCUMENTO \xAB${fileName || "documento"}\xBB${md.length > doc.length ? " (recortado)" : ""}:
+${doc}` }
+  ], { maxTokens: 1100, temperature: 0.3 });
+  return { text, pages: (md.match(/\f/g) || []).length };
+}
+__name(pdfAnswer, "pdfAnswer");
+// ---------- Avisos de Telegram con botones ----------
+function tgGradeCard(env, g, changed, cheer, courseAvg) {
+  const pct = g.max ? g.grade / g.max * 100 : null;
+  const fmt2 = /* @__PURE__ */ __name((n) => Math.round(Number(n) * 100) / 100, "fmt2");
+  const lines = [`${tgGradeIcon(pct)} <b>${changed ? "Te cambiaron una nota" : "\xA1Te calificaron!"}</b>`, "", `<b>${tgEsc(g.item)}</b>`, `\u{1F4DA} <i>${tgEsc(courseLabel(g.course))}</i>`, "", `\u{1F4CA} <b>${fmt2(g.grade)}/${fmt2(g.max)}</b>${changed && g.prev !== void 0 && g.prev !== null ? ` <i>(antes ${fmt2(g.prev)})</i>` : ""}`];
+  if (pct !== null) lines.push(`<code>${tgBar(pct, 12)}</code> ${Math.round(pct)}%`);
+  if (courseAvg !== null && courseAvg !== void 0) lines.push(`\u{1F4C8} Promedio de la materia: <b>${courseAvg}</b>`);
+  if (g.feedback) lines.push("", `\u{1F4AC} <i>Comentario del facilitador:</i>`, `<blockquote expandable>${tgEsc(g.feedback.slice(0, 900))}</blockquote>`);
+  if (cheer) lines.push("", `<i>${tgEsc(cheer)}</i>`);
+  return lines.join("\n");
+}
+__name(tgGradeCard, "tgGradeCard");
+function tgSnoozeAt(env, kind) {
+  const now = nowSec();
+  if (kind === "1h") return now + 3600;
+  if (kind === "3h") return now + 3 * 3600;
+  const d = localDate(env);
+  let at = localToUnix(env, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 20, 0);
+  if (at <= now + 900) at = now + 3600;
+  return at;
+}
+__name(tgSnoozeAt, "tgSnoozeAt");
 
 // src/worker/notify.ts
 var GRAPH = "https://graph.facebook.com/v21.0";
@@ -2733,7 +3224,9 @@ async function sendToMe(env, text, opts = {}) {
   const errors = [];
   if (opts.type && await getSetting(env, `notify_${opts.type}`, "1") === "0") return { ok: true, channels };
   if (telegramReady(env) && await getSetting(env, "tg_chat_id")) {
-    const t = await sendTelegram(env, text);
+    const origin0 = (env.APP_URL || "").replace(/\/$/, "");
+    const kb = opts.url && /^https:/.test(origin0) ? [[{ text: "\u{1F517} Abrir en Rumbo", url: `${origin0}/${opts.url.replace(/^\//, "")}` }], ...TG_MINI] : TG_MINI;
+    const t = opts.tg ? await sendTelegram(env, opts.tg.html, void 0, { html: true, kb: opts.tg.kb || kb }) : await sendTelegram(env, text, void 0, { kb });
     if (t.ok) channels.push("telegram");
     else errors.push("Telegram: " + t.error);
   }
@@ -2808,7 +3301,8 @@ ${g.feedback.slice(0, 500).split("\n").filter((l) => l.trim()).map((l) => `> ${l
       tag: `grade-${g.courseId}-${g.itemId}`,
       url: task ? `/#tareas/${task.id}` : "/#asignaturas",
       pushBody: `${head}${g.feedback ? " \xB7 \u{1F4AC} " + g.feedback.slice(0, 120) : " \xB7 " + cheer}`,
-      type: "notas"
+      type: "notas",
+      tg: { html: tgGradeCard(env, g, changed, cheer, (await courseSummaries(env).catch(() => [])).find((c) => c.name === g.course)?.average), kb: [[{ text: "\u{1F4CA} Mis notas", callback_data: "c:notas" }, { text: "\u{1F9EE} \xBFCu\xE1nto necesito?", callback_data: "c:necesito" }]] }
     });
     if (r.ok) sent++;
   }
@@ -5722,6 +6216,7 @@ __name(registerExtras, "registerExtras");
 // src/worker/cron.ts
 async function runScheduled(env) {
   const log2 = [];
+  await ensureTgWebhook(env).catch((e) => log2.push("tg webhook: " + e.message));
   const users = await activeUsers(env);
   const envs = await Promise.all(users.map((u) => forUser(env, u.id, u.role)));
   let syncUid = 0, worst = 0;
@@ -5747,6 +6242,7 @@ async function runScheduled(env) {
   for (const ue of envs) {
     try {
       const l = await runForUser(ue, ue.UID === syncUid, ue.ROLE === "admin" ? backupError : void 0);
+      if (ue.UID === syncUid || l.some((x) => /^(Recordatorio|Tarea)/.test(x))) await notifyLive(ue, ue.UID, "eva");
       if (l.length) log2.push(`[${ue.UID}] ${l.join(" \xB7 ")}`);
     } catch (e) {
       log2.push(`[${ue.UID}] error: ${e.message}`);
@@ -5790,9 +6286,16 @@ async function runForUser(env, syncNow, backupError) {
   const hour = Number(s.summary_hour || 7);
   if (s.summary_enabled !== "0" && local.getUTCHours() >= hour && !await wasSent(env, `summary:${today}`)) {
     await markSent(env, `summary:${today}`);
-    const r = await sendToMe(env, await summaryAlert(env), { title: "\u2600\uFE0F Tu resumen de hoy", tag: "summary", url: "/#inicio", pushBody: await summaryShort(env), type: "resumen" });
+    const r = await sendToMe(env, await summaryAlert(env), { title: "\u2600\uFE0F Tu resumen de hoy", tag: "summary", url: "/#inicio", pushBody: await summaryShort(env), type: "resumen", tg: tgWithApp(env, await tgHoy(env)) });
     if (!r.ok) await unmarkSent(env, `summary:${today}`);
     log2.push(`Resumen: ${r.ok ? "enviado por " + r.channels.join(" + ") : r.error}`);
+  }
+  if (s.week_close !== "0" && local.getUTCDay() === 0 && local.getUTCHours() >= 19 && !await wasSent(env, `semana:${today}`)) {
+    await markSent(env, `semana:${today}`);
+    const sem = await tgSemana(env);
+    const r = await sendToMe(env, sem.plain, { title: "\u{1F4C6} Cierre de la semana", tag: "week", url: "/#inicio", pushBody: sem.short, type: "resumen", tg: sem });
+    if (!r.ok) await unmarkSent(env, `semana:${today}`);
+    log2.push(`Cierre semanal: ${r.ok ? "ok" : r.error}`);
   }
   const thresholds = (s.task_reminders || "72,24,3").split(",").map(Number).filter((n) => n > 0).sort((a, b) => a - b);
   if (thresholds.length) {
@@ -5812,7 +6315,10 @@ async function runForUser(env, syncNow, backupError) {
         `${urgent ? "\u{1F6A8}" : "\u{1F4CC}"} *${urgent ? "\xA1Vence pronto!" : "Recordatorio de entrega"}*`,
         [`*${t.title}*`, curso && `\u{1F4DA} ${curso}`, `\u23F0 Vence *${cuandoTexto(env, t.due_at)}*`, `\u23F3 ${timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase())}`].filter(Boolean).join("\n"),
         "_Cuando la entregues, m\xE1rcala como hecha en Rumbo._"
-      ), { title: `\u{1F4CC} ${t.title}`, pushBody: `${curso ? curso + " \xB7 " : ""}vence ${cuandoTexto(env, t.due_at)}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: "tareas" });
+      ), { title: `\u{1F4CC} ${t.title}`, pushBody: `${curso ? curso + " \xB7 " : ""}vence ${cuandoTexto(env, t.due_at)}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: "tareas", tg: {
+        html: [`${urgent ? "\u{1F6A8}" : "\u{1F4CC}"} <b>${urgent ? "\xA1Vence pronto!" : "Recordatorio de entrega"}</b>`, "", `<b>${tgEsc(t.title)}</b>`, curso && `\u{1F4DA} <i>${tgEsc(curso)}</i>`, `\u23F0 Vence <b>${tgEsc(cuandoTexto(env, t.due_at))}</b>`, `\u23F3 ${tgEsc(timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase()))}`].filter(Boolean).join("\n"),
+        kb: [[{ text: "\u2705 Ya la entregu\xE9", callback_data: `dr:${t.id}` }], [{ text: "\u23F0 +1 h", callback_data: `s:${t.id}:1h` }, { text: "\u23F0 +3 h", callback_data: `s:${t.id}:3h` }, { text: "\u{1F319} Esta noche", callback_data: `s:${t.id}:night` }]]
+      } });
       if (!r.ok) for (const x of thresholds.filter((x2) => x2 >= h)) await unmarkSent(env, `task:${t.id}:${x}`);
       log2.push(`Tarea ${t.id} (${h} h): ${r.ok ? "ok" : r.error}`);
     }
@@ -5908,6 +6414,79 @@ var TELEGRAM_PAGE = "<!doctype html>\n<html lang=\"es\"><head><meta charset=\"ut
 var EXPORT_PAGE = "<!doctype html>\n<html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Descargar la app \u00b7 Rumbo</title>\n<style>\n:root{--bg:#F5F6F8;--card:#fff;--ink:#0B1020;--muted:#6E7385;--line:#E6E8EE;--blue:#3454D1;--ok:#138A5A;--bad:#D0342C}\n@media (prefers-color-scheme:dark){:root{--bg:#0B0F1A;--card:#141A28;--ink:#F2F4F8;--muted:#8E95A5;--line:#252C3D}}\n*{box-sizing:border-box}body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,Inter,\"Segoe UI\",system-ui,sans-serif;background:var(--bg);color:var(--ink)}\n.wrap{max-width:640px;margin:0 auto;padding:28px 16px 60px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:14px}\nh1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}p{margin:0 0 12px;color:var(--muted)}\n.btn{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 22px;border-radius:99px;border:0;background:var(--blue);color:#fff;font:600 15px inherit;font-family:inherit;cursor:pointer;width:100%}.btn[disabled]{opacity:.6}\n.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin:14px 0 6px}.bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .2s}\n#log{font:12.5px ui-monospace,Menlo,monospace;max-height:280px;overflow:auto;white-space:pre-wrap;color:var(--muted);margin-top:10px}\n.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}\n</style></head><body><div class=\"wrap\">\n<div class=\"card\"><h1>Descargar la app de Rumbo</h1>\n<p>Esto junta todos los archivos de la app que ve el usuario (p\u00e1ginas, estilos, \u00edconos, el APK del widget) en un .zip. Ese contenido va en la carpeta <b>public</b> del repositorio.</p>\n<button class=\"btn\" id=\"go\" type=\"button\">Descargar rumbo-public.zip</button>\n<div class=\"bar\"><i id=\"bar\"></i></div><div id=\"msg\" class=\"muted\"></div><div id=\"log\"></div></div>\n</div>\n<script>\nconst ORIGIN = location.origin;\nconst EXT = /\\.(?:m?js|css|html?|png|jpe?g|gif|svg|webp|avif|ico|json|webmanifest|woff2?|ttf|otf|apk|mp3|wav|ogg|mp4|txt|xml|map)$/i;\nconst TEXT = /\\.(?:m?js|css|html?|json|webmanifest|svg|txt|xml)$/i;\nconst SEED = ['/', '/manifest.webmanifest', '/manifest.json', '/site.webmanifest', '/sw.js', '/service-worker.js', '/favicon.ico', '/favicon.svg', '/robots.txt', '/rumbo-widget.apk', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];\nconst log = t => { const l = document.getElementById('log'); l.textContent += t + '\\n'; l.scrollTop = l.scrollHeight; };\nfunction refs(text, base) {\n  const out = new Set();\n  const add = s => {\n    if (!s || /^(data:|blob:|mailto:|tel:|javascript:|#)/i.test(s)) return;\n    try { const u = new URL(s, base); if (u.origin !== ORIGIN) return; const p = u.pathname; if (p.startsWith('/api/') || p === '/telegram' || p === '/exportar') return; if (EXT.test(p) || p === '/') out.add(p); } catch (e) {}\n  };\n  for (const m of text.matchAll(/(?:src|href|content)\\s*=\\s*[\"']([^\"']+)[\"']/gi)) add(m[1]);\n  for (const m of text.matchAll(/url\\(\\s*[\"']?([^\"')]+)[\"']?\\s*\\)/gi)) add(m[1]);\n  for (const m of text.matchAll(/[\"'`]((?:\\.{0,2}\\/)?[\\w@\\-./]+\\.(?:m?js|css|png|jpe?g|gif|svg|webp|avif|ico|json|webmanifest|woff2?|ttf|otf|apk|mp3|wav|ogg|mp4|html))(?:\\?[^\"'`]*)?[\"'`]/gi)) add(m[1]);\n  for (const m of text.matchAll(/import\\(\\s*[\"'`]([^\"'`]+)[\"'`]\\s*\\)/g)) add(m[1]);\n  return out;\n}\nconst DOSD = ((new Date().getFullYear() - 1980) << 9) | ((new Date().getMonth() + 1) << 5) | new Date().getDate();\nlet crcT; function crc32(b) { if (!crcT) { crcT = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; crcT[n] = c >>> 0; } } let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }\nfunction zip(files) {\n  const enc = new TextEncoder(); const parts = []; const central = []; let off = 0;\n  for (const f of files) {\n    const name = enc.encode(f.name), data = f.data, crc = crc32(data);\n    const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true); h.setUint16(12, DOSD, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);\n    parts.push(new Uint8Array(h.buffer), name, data);\n    const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, DOSD, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);\n    central.push(new Uint8Array(c.buffer), name); off += 30 + name.length + data.length;\n  }\n  const cs = central.reduce((a, b) => a + b.length, 0);\n  const e = new DataView(new ArrayBuffer(22)); e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cs, true); e.setUint32(16, off, true);\n  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/zip' });\n}\ndocument.getElementById('go').onclick = async () => {\n  const btn = document.getElementById('go'); btn.disabled = true; btn.textContent = 'Buscando archivos\u2026';\n  const queue = [...SEED], seen = new Set(), files = []; let indexHtml = '';\n  while (queue.length) {\n    const p = queue.shift(); if (seen.has(p)) continue; seen.add(p);\n    document.getElementById('bar').style.width = Math.min(95, seen.size / (seen.size + queue.length) * 100) + '%';\n    let r; try { r = await fetch(p, { cache: 'no-store', credentials: 'omit' }); } catch (e) { continue; }\n    if (!r.ok) { if (!SEED.includes(p)) log('\u2717 ' + p + ' (' + r.status + ')'); continue; }\n    const ct = r.headers.get('content-type') || '';\n    const buf = new Uint8Array(await r.arrayBuffer());\n    const txt = TEXT.test(p) || p === '/' || /text|javascript|json|svg|xml/.test(ct) ? new TextDecoder().decode(buf) : '';\n    if (p === '/') indexHtml = txt;\n    else if (/text\\/html/.test(ct) && !/\\.html?$/i.test(p) && txt === indexHtml) continue; // la app devolvi\u00f3 su p\u00e1gina principal: ese archivo no existe\n    files.push({ name: p === '/' ? 'index.html' : p.replace(/^\\//, ''), data: buf });\n    log('\u2713 ' + (p === '/' ? '/index.html' : p) + '  ' + (buf.length / 1024).toFixed(1) + ' KB');\n    if (txt) for (const x of refs(txt, new URL(p, ORIGIN))) if (!seen.has(x)) queue.push(x);\n  }\n  const uniq = []; const names = new Set(); for (const f of files) if (!names.has(f.name)) { names.add(f.name); uniq.push(f); }\n  const blob = zip(uniq); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rumbo-public.zip'; document.body.appendChild(a); a.click();\n  document.getElementById('bar').style.width = '100%';\n  document.getElementById('msg').innerHTML = '<span class=\"ok\">Listo: ' + uniq.length + ' archivos (' + (blob.size / 1048576).toFixed(1) + ' MB).</span> Revisa tus descargas.';\n  btn.disabled = false; btn.textContent = 'Descargar otra vez';\n};\n</script></body></html>\n";
 
 var KEYS_PAGE = "<!doctype html>\n<html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>Llaves y configuraci\u00f3n \u00b7 Rumbo</title><meta name=\"theme-color\" content=\"#0B1220\">\n<style>\n:root{--bg:#F3F7FE;--card:#fff;--ink:#0B1220;--ink2:#3A4152;--muted:#6E7385;--line:#E3E8F2;--blue:#2F6BFF;--soft:#EAF1FF;--ok:#138A5A;--oksoft:#E5F6EE;--bad:#D0342C;--badsoft:#FDECEB;--warn:#A15F00;--warnsoft:#FFF3DD;--r:18px}\n@media (prefers-color-scheme:dark){:root{--bg:#0B1220;--card:#121A2B;--ink:#F2F4F8;--ink2:#C9CEDA;--muted:#8E95A5;--line:#232C40;--soft:#16264A;--oksoft:#10291F;--badsoft:#2E1514;--warnsoft:#2B2312}}\n*{box-sizing:border-box}html,body{margin:0}body{font:15px/1.5 Figtree,-apple-system,BlinkMacSystemFont,\"Segoe UI\",system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}\n.wrap{max-width:760px;margin:0 auto;padding:22px 16px 70px}\n.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px}.top a{color:var(--muted);text-decoration:none;font-size:14px}.top a:hover{color:var(--ink)}\nh1{font:700 28px/1.15 Sora,-apple-system,system-ui,sans-serif;letter-spacing:-.02em;margin:0 0 6px}.sub{color:var(--muted);margin:0 0 16px}\n.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}\n.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px;overflow:hidden}\n.card h2{font:600 15px Sora,system-ui,sans-serif;margin:0;padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}\n.row{padding:14px 18px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center}.row:last-child{border-bottom:0}\n.row b{font-weight:600}.name{font:600 11.5px \"JetBrains Mono\",ui-monospace,Menlo,monospace;color:var(--muted)}\n.val{grid-column:1/-1;font:500 13.5px \"JetBrains Mono\",ui-monospace,Menlo,monospace;color:var(--ink2);word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:38px;display:flex;align-items:center}\n.val.empty{color:var(--muted);font-family:inherit;font-style:italic}\n.help{grid-column:1/-1;font-size:12.5px;color:var(--muted)}\n.pill{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap}.pill.app{background:var(--soft);color:var(--blue)}.pill.cf{background:var(--oksoft);color:var(--ok)}.pill.none{background:var(--bg);color:var(--muted);border:1px solid var(--line)}\n.acts{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}\n.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 13.5px inherit;font-family:inherit;cursor:pointer;text-decoration:none}\n.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn.danger{color:var(--bad)}.btn.lg{height:44px;padding:0 20px;font-size:14.5px}.btn[disabled]{opacity:.55;pointer-events:none}\ninput.in{grid-column:1/-1;width:100%;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 12px;font:500 13.5px \"JetBrains Mono\",ui-monospace,Menlo,monospace}\ninput.in:focus{outline:2px solid var(--blue);outline-offset:1px}\n.note{padding:12px 14px;border-radius:12px;background:var(--warnsoft);color:var(--ink2);font-size:13.5px;margin-bottom:14px}\n.err{grid-column:1/-1;color:var(--bad);font-size:13px}\n.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0B1220;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none}.toast.on{opacity:1}\n.modal{position:fixed;inset:0;background:rgba(6,10,28,.45);display:none;align-items:center;justify-content:center;padding:16px}.modal.on{display:flex}\n.modal .box{background:var(--card);border-radius:18px;padding:20px;max-width:380px;width:100%}.modal h3{margin:0 0 6px;font:600 18px Sora,system-ui,sans-serif}.modal p{margin:0 0 10px;color:var(--muted);font-size:14px}\n.hide{display:none!important}.danger-txt{color:var(--warn);font-size:12.5px;grid-column:1/-1}\n</style></head><body><div class=\"wrap\">\n<div class=\"top\"><a href=\"/\">\u2190 Volver a Rumbo</a><a href=\"/telegram\">Telegram \u2192</a></div>\n<h1>Llaves y configuraci\u00f3n</h1>\n<p class=\"sub\">Aqu\u00ed ves y cambias las claves de Rumbo sin terminal. Lo que guardes aqu\u00ed manda sobre lo que hay en Cloudflare.</p>\n<div id=\"msg\" class=\"card hide\" style=\"padding:18px\"></div>\n<div id=\"main\" class=\"hide\">\n  <div class=\"bar\"><button class=\"btn lg\" id=\"reveal\" type=\"button\">\ud83d\udc41 Mostrar las claves</button><span class=\"name\" id=\"revealHint\">Las claves secretas se ven ocultas hasta que pongas tu contrase\u00f1a.</span></div>\n  <div class=\"note\"><b>Fuente:</b> <span class=\"pill app\">App</span> guardada aqu\u00ed \u00b7 <span class=\"pill cf\">Cloudflare</span> viene de Variables y secretos de Cloudflare \u00b7 <span class=\"pill none\">Vac\u00eda</span> no est\u00e1 puesta. Los cambios se aplican en menos de un minuto.</div>\n  <div id=\"groups\"></div>\n</div>\n</div>\n<div class=\"modal\" id=\"pw\"><form class=\"box\" id=\"pwForm\"><h3>Confirma que eres t\u00fa</h3><p>Escribe tu contrase\u00f1a de Rumbo para ver las claves completas.</p><input class=\"in\" type=\"password\" id=\"pwIn\" autocomplete=\"current-password\" placeholder=\"Contrase\u00f1a\" style=\"margin-bottom:10px\"><div class=\"err\" id=\"pwErr\"></div><div style=\"display:flex;gap:8px;justify-content:flex-end;margin-top:6px\"><button class=\"btn\" type=\"button\" id=\"pwCancel\">Cancelar</button><button class=\"btn primary\" type=\"submit\">Mostrar</button></div></form></div>\n<div class=\"toast\" id=\"toast\"></div>\n<script>\nconst $ = s => document.querySelector(s);\nlet keys = [], revealed = false, editing = null;\nconst esc = s => String(s ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' })[c]);\nfunction toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 2200); }\nasync function api(path, body) {\n  const r = await fetch(path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });\n  const j = await r.json().catch(() => ({}));\n  if (r.status === 401) throw Object.assign(new Error('login'), { code: 401 });\n  if (r.status === 403) throw Object.assign(new Error(j.error || 'Solo el administrador.'), { code: 403 });\n  if (!r.ok) throw new Error(j.error || 'Algo sali\u00f3 mal (' + r.status + ')');\n  return j;\n}\nfunction src(k) { return k.source === 'app' ? '<span class=\"pill app\">App</span>' : k.source === 'cloudflare' ? '<span class=\"pill cf\">Cloudflare</span>' : '<span class=\"pill none\">Vac\u00eda</span>'; }\nfunction render() {\n  const groups = {};\n  keys.forEach(k => { (groups[k.g] = groups[k.g] || []).push(k); });\n  $('#groups').innerHTML = Object.entries(groups).map(([g, list]) => `<div class=\"card\"><h2>${esc(g)}<span class=\"name\">${list.filter(k => k.set).length}/${list.length}</span></h2>${list.map(row).join('')}</div>`).join('');\n}\nfunction row(k) {\n  const isEd = editing === k.k;\n  const v = k.set ? `<div class=\"val\">${esc(k.value)}</div>` : `<div class=\"val empty\">Sin valor</div>`;\n  let acts = '';\n  if (k.tg) acts = `<a class=\"btn\" href=\"/telegram\">Configurar en Telegram</a>`;\n  else if (isEd) acts = `<button class=\"btn primary\" data-save=\"${k.k}\" type=\"button\">Guardar</button><button class=\"btn\" data-cancel type=\"button\">Cancelar</button>`;\n  else acts = `<button class=\"btn\" data-edit=\"${k.k}\" type=\"button\">${k.set ? 'Cambiar' : 'Poner valor'}</button>${k.source === 'app' ? `<button class=\"btn danger\" data-reset=\"${k.k}\" type=\"button\">${k.cloudflare ? 'Volver al de Cloudflare' : 'Borrar'}</button>` : ''}${k.set && (!k.secret || revealed) ? `<button class=\"btn\" data-copy=\"${k.k}\" type=\"button\">Copiar</button>` : ''}`;\n  return `<div class=\"row\"><div><b>${esc(k.l)}</b><div class=\"name\">${esc(k.k)}</div></div>${src(k)}\n    ${isEd ? `<input class=\"in\" id=\"in-${k.k}\" ${k.secret ? 'type=\"password\"' : ''} value=\"${esc(revealed || !k.secret ? k.value : '')}\" placeholder=\"${k.secret ? 'Pega la nueva clave' : 'Nuevo valor'}\" autocomplete=\"off\" spellcheck=\"false\">${k.secret ? '<label class=\"name\" style=\"grid-column:1/-1\"><input type=\"checkbox\" data-show=\"' + k.k + '\"> ver lo que escribo</label>' : ''}<div class=\"err\" id=\"err-${k.k}\"></div>` : v}\n    ${k.help ? `<div class=\"help\">${esc(k.help)}</div>` : ''}${k.danger ? '<div class=\"danger-txt\">\u26a0 Al cambiarla se cierran todas las sesiones.</div>' : ''}\n    <div class=\"acts\">${acts}</div></div>`;\n}\nasync function load() {\n  try { const r = await api('/api/admin/config'); keys = r.keys; $('#main').classList.remove('hide'); $('#msg').classList.add('hide'); render(); }\n  catch (e) {\n    const m = $('#msg'); m.classList.remove('hide');\n    m.innerHTML = e.code === 401 ? '<b>Primero entra a Rumbo.</b><p class=\"sub\" style=\"margin:6px 0 12px\">Esta p\u00e1gina usa tu sesi\u00f3n de administrador.</p><a class=\"btn primary lg\" href=\"/\">Entrar a Rumbo</a>' : e.code === 403 ? '<b>Solo el administrador puede ver esta p\u00e1gina.</b>' : esc(e.message);\n  }\n}\ndocument.addEventListener('click', async e => {\n  const t = e.target.closest('button,[data-show]'); if (!t) return;\n  if (t.dataset.edit) { editing = t.dataset.edit; render(); const i = $('#in-' + editing); i && i.focus(); }\n  if (t.dataset.cancel !== undefined) { editing = null; render(); }\n  if (t.dataset.show) { const i = $('#in-' + t.dataset.show); i.type = t.checked ? 'text' : 'password'; }\n  if (t.dataset.copy) { const k = keys.find(x => x.k === t.dataset.copy); try { await navigator.clipboard.writeText(k.value); toast('Copiado'); } catch (_) { toast('No se pudo copiar'); } }\n  if (t.dataset.save) {\n    const k = t.dataset.save, v = $('#in-' + k).value.trim(), err = $('#err-' + k); err.textContent = '';\n    if (k === 'SESSION_SECRET' && !confirm('Al cambiar esta clave se cierran todas las sesiones, incluida la tuya. \u00bfSeguir?')) return;\n    t.disabled = true;\n    try { const r = await api('/api/admin/config', { name: k, value: v }); editing = null; toast('Guardado'); if (r.relogin) { setTimeout(() => { location.href = '/'; }, 1200); return; } await refresh(); }\n    catch (x) { err.textContent = x.message; t.disabled = false; }\n  }\n  if (t.dataset.reset) {\n    const k = keys.find(x => x.k === t.dataset.reset);\n    if (!confirm(k.cloudflare ? '\u00bfDejar de usar el valor de la app y volver al de Cloudflare?' : '\u00bfBorrar este valor?')) return;\n    try { await api('/api/admin/config', { name: k.k, reset: true }); toast('Listo'); await refresh(); } catch (x) { alert(x.message); }\n  }\n});\nlet lastPw = '';\nasync function refresh() {\n  // Los cambios tardan unos segundos en verse (cach\u00e9 de 1 minuto en el servidor); mostramos lo guardado ya.\n  await new Promise(r => setTimeout(r, 400));\n  if (revealed && lastPw) { try { keys = (await api('/api/admin/config/reveal', { password: lastPw })).keys; render(); return; } catch (_) {} }\n  await load();\n}\n$('#reveal').onclick = () => { if (revealed) { revealed = false; lastPw = ''; $('#reveal').textContent = '\ud83d\udc41 Mostrar las claves'; load(); return; } $('#pw').classList.add('on'); $('#pwIn').value = ''; $('#pwErr').textContent = ''; setTimeout(() => $('#pwIn').focus(), 50); };\n$('#pwCancel').onclick = () => $('#pw').classList.remove('on');\n$('#pwForm').onsubmit = async e => {\n  e.preventDefault();\n  try { const pw = $('#pwIn').value; const r = await api('/api/admin/config/reveal', { password: pw }); lastPw = pw; keys = r.keys; revealed = true; $('#pw').classList.remove('on'); $('#reveal').textContent = '\ud83d\ude48 Ocultar las claves'; render(); }\n  catch (x) { $('#pwErr').textContent = x.message; }\n};\nload();\n</script></body></html>\n";
+
+// src/worker/live.ts — sincronización en tiempo real (un Durable Object por usuario con WebSockets)
+var RumboLive = class {
+  constructor(state, env) {
+    this.state = state;
+    try {
+      state.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    } catch {
+    }
+  }
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === "/notify") {
+      const msg = await req.text();
+      let n = 0;
+      for (const ws of this.state.getWebSockets()) {
+        try {
+          ws.send(msg);
+          n++;
+        } catch {
+        }
+      }
+      return new Response(String(n));
+    }
+    if (req.headers.get("Upgrade") !== "websocket") return new Response("Se esperaba un WebSocket", { status: 426 });
+    const pair = new WebSocketPair();
+    this.state.acceptWebSocket(pair[1]);
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+  async webSocketMessage(ws, msg) {
+    if (msg === "ping") ws.send("pong");
+  }
+  async webSocketClose(ws, code, reason) {
+    try {
+      ws.close(code, reason);
+    } catch {
+    }
+  }
+  async webSocketError() {
+  }
+};
+__name(RumboLive, "RumboLive");
+async function notifyLive(env, uid, src = "app", what = "") {
+  if (!env.LIVE || !uid) return;
+  try {
+    await env.LIVE.get(env.LIVE.idFromName("u" + uid)).fetch("https://live/notify", { method: "POST", body: JSON.stringify({ t: "change", src, what, at: Date.now() }) });
+  } catch (e) {
+    console.log("live: " + e.message);
+  }
+}
+__name(notifyLive, "notifyLive");
+// Verifica los datos que Telegram le pasa a la Mini App (initData) con el token del bot.
+async function tgVerifyInitData(env, initData) {
+  if (!env.TELEGRAM_BOT_TOKEN || !initData) return null;
+  const params = new URLSearchParams(initData);
+  const hash = params.get("hash");
+  if (!hash) return null;
+  params.delete("hash");
+  const check = [...params.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join("\n");
+  const te = new TextEncoder();
+  const k1 = await crypto.subtle.importKey("raw", te.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const secret = await crypto.subtle.sign("HMAC", k1, te.encode(env.TELEGRAM_BOT_TOKEN));
+  const k2 = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = [...new Uint8Array(await crypto.subtle.sign("HMAC", k2, te.encode(check)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (!safeEqual(sig, hash)) return null;
+  if (nowSec() - Number(params.get("auth_date") || 0) > 86400) return null;
+  try {
+    return JSON.parse(params.get("user") || "null");
+  } catch {
+    return null;
+  }
+}
+__name(tgVerifyInitData, "tgVerifyInitData");
 
 // src/worker/index.ts
 var app = new Hono3();
@@ -6095,13 +6674,30 @@ app.post("/api/mail/ingest", async (c) => {
   }
   return c.json({ ok: true, received: msgs.length, saved });
 });
+app.post("/api/telegram/webapp-login", async (c) => {
+  const { initData } = await c.req.json().catch(() => ({ initData: "" }));
+  const user = await tgVerifyInitData(c.env, initData);
+  if (!user?.id) return c.json({ error: "No pude verificar que vienes de Telegram." }, 401);
+  const uid = await userBySetting({ ...c.env, UID: 0 }, "tg_chat_id", String(user.id));
+  if (!uid) return c.json({ error: "Tu Telegram no est\xE1 vinculado a una cuenta de Rumbo. Entra con tu contrase\xF1a y vincula el bot en /telegram." }, 404);
+  const u = await c.env.DB.prepare("SELECT active FROM users WHERE id = ?").bind(uid).first();
+  if (!u?.active) return c.json({ error: "Cuenta desactivada." }, 403);
+  c.header("Set-Cookie", await createSessionCookie(c.env, uid));
+  return c.json({ ok: true });
+});
 app.post("/api/telegram/webhook", async (c) => {
   const secret = await getSettings(c.env).then((s) => s.tg_secret || "");
   if (!secret || !safeEqual(c.req.header("x-telegram-bot-api-secret-token") || "", secret)) return c.text("Forbidden", 403);
   const update = await c.req.json().catch(() => null);
+  if (update?.callback_query) {
+    if (await markSent({ ...c.env, UID: 0 }, `tg:${update.update_id}`)) c.executionCtx.waitUntil(answerTelegramCallback(c.env, update.callback_query).then(() => userBySetting({ ...c.env, UID: 0 }, "tg_chat_id", String(update.callback_query.message?.chat?.id || ""))).then((uid) => notifyLive(c.env, uid, "telegram")).catch(() => {
+    }));
+    return c.json({ ok: true });
+  }
   const m = update?.message;
   if (!m || !await markSent({ ...c.env, UID: 0 }, `tg:${update.update_id}`)) return c.json({ ok: true });
-  c.executionCtx.waitUntil(answerTelegram(c.env, m));
+  c.executionCtx.waitUntil(answerTelegram(c.env, m).then(() => userBySetting({ ...c.env, UID: 0 }, "tg_chat_id", String(m.chat.id))).then((uid) => notifyLive(c.env, uid, "telegram")).catch(() => {
+  }));
   return c.json({ ok: true });
 });
 async function answerTelegram(sys, m) {
@@ -6124,7 +6720,8 @@ Preg\xFAntame lo que quieras de tu trimestre, m\xE1ndame una *nota de voz*, o es
     } else if (s.tg_chat_id !== chat) {
       await sendTelegram(env, "Este es un bot privado de Rumbo. Para vincularlo, abre el enlace desde Ajustes \u2192 Telegram en la app.", chat);
     } else {
-      await sendTelegram(env, await handleCommand(env, "ayuda"), chat);
+      const r = tgAyuda();
+      await sendTelegram(env, r.html, chat, { html: true, kb: r.kb });
     }
     return;
   }
@@ -6135,6 +6732,31 @@ Preg\xFAntame lo que quieras de tu trimestre, m\xE1ndame una *nota de voz*, o es
   try {
     await tgCall(env, "sendChatAction", { chat_id: chat, action: "typing" }).catch(() => {
     });
+    const photo = m.photo?.length ? m.photo[m.photo.length - 1] : null;
+    const doc = m.document || null;
+    if (photo || doc && /^image\//.test(doc.mime_type || "")) {
+      await env.DB.prepare("INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)").bind(env.UID, "in", "telegram", `\u{1F4F8} Foto${m.caption ? ": " + m.caption : ""}`).run();
+      const f = photo || doc;
+      if ((f.file_size || 0) > 15e6) return sendTelegram(env, "La imagen pesa mucho. M\xE1ndamela como foto normal (no como archivo).", chat);
+      const ans = await visionAnswer(env, await downloadTelegramFile(env, f.file_id), doc?.mime_type || "image/jpeg", m.caption || "");
+      await sendTelegram(env, `\u{1F4F8} <b>${m.caption ? tgEsc(m.caption.slice(0, 80)) : "Lo que veo en tu foto"}</b>
+
+${tgFormat(ans)}`, chat, { html: true, kb: TG_MINI });
+      return;
+    }
+    if (doc && (/pdf/i.test(doc.mime_type || "") || /\.pdf$/i.test(doc.file_name || ""))) {
+      await env.DB.prepare("INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)").bind(env.UID, "in", "telegram", `\u{1F4C4} ${doc.file_name || "PDF"}${m.caption ? ": " + m.caption : ""}`).run();
+      if ((doc.file_size || 0) > 2e7) return sendTelegram(env, "Ese PDF pasa de 20 MB, el l\xEDmite de Telegram para bots. Prueba con uno m\xE1s liviano.", chat);
+      await sendTelegram(env, `\u{1F4C4} Leyendo <b>${tgEsc(doc.file_name || "tu PDF")}</b>\u2026 dame unos segundos.`, chat, { html: true });
+      const r = await pdfAnswer(env, await downloadTelegramFile(env, doc.file_id), doc.file_name, m.caption || "");
+      await sendTelegram(env, `\u{1F4C4} <b>${tgEsc(doc.file_name || "Tu PDF")}</b>
+
+${tgFormat(r.text)}
+
+<i>Toca las respuestas ocultas para verlas.</i>`, chat, { html: true, kb: TG_MINI });
+      return;
+    }
+    if (doc) return sendTelegram(env, "Por ahora leo *fotos* y *PDF*. Si es un Word, gu\xE1rdalo como PDF y m\xE1ndamelo.", chat);
     const fileId = m.voice?.file_id || m.audio?.file_id;
     if (fileId) {
       const heard = await transcribeAudio(env, await downloadTelegramFile(env, fileId));
@@ -6143,9 +6765,13 @@ Preg\xFAntame lo que quieras de tu trimestre, m\xE1ndame una *nota de voz*, o es
         await sendTelegram(env, "No logr\xE9 entender el audio \u{1F605}. \xBFMe lo repites o me lo escribes?", chat);
         return;
       }
-      await sendTelegram(env, `\u{1F3A4} _"${heard}"_
+      const rv = await tgRich(env, heard);
+      if (rv) await sendTelegram(env, `\u{1F3A4} <i>\xAB${tgEsc(heard)}\xBB</i>
 
-${await handleCommand(env, heard, "telegram")}`, chat);
+${rv.html}`, chat, { html: true, kb: rv.kb });
+      else await sendTelegram(env, `\u{1F3A4} <i>\xAB${tgEsc(heard)}\xBB</i>
+
+${tgFormat(await handleCommand(env, heard, "telegram"))}`, chat, { html: true, kb: TG_MINI });
       return;
     }
     if (!text) {
@@ -6153,7 +6779,9 @@ ${await handleCommand(env, heard, "telegram")}`, chat);
       return;
     }
     await env.DB.prepare("INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)").bind(env.UID, "in", "telegram", text).run();
-    await sendTelegram(env, await handleCommand(env, text.replace(/^\//, ""), "telegram"), chat);
+    const rich = await tgRich(env, text);
+    if (rich) await sendTelegram(env, rich.html, chat, { html: true, kb: rich.kb });
+    else await sendTelegram(env, await handleCommand(env, text.replace(/^\//, ""), "telegram"), chat, { kb: TG_MINI });
   } catch (e) {
     await sendTelegram(env, `No pude responder: ${e.message}`, chat);
   }
@@ -6179,6 +6807,24 @@ app.use("/api/*", async (c, next) => {
   c.env = await forUser(c.env, uid);
   await next();
 });
+app.get("/api/live", (c) => {
+  if (!c.env.LIVE) return c.json({ error: "Falta el enlace LIVE (Durable Object)." }, 501);
+  if (c.req.header("upgrade") !== "websocket") return c.json({ ok: true });
+  return c.env.LIVE.get(c.env.LIVE.idFromName("u" + c.env.UID)).fetch(c.req.raw);
+});
+var LIVE_SKIP = /^\/api\/(live|tts|transcribe|push|login|logout|me$|telegram\/setup|assistant\/(voice|transcribe))/;
+app.use("/api/*", async (c, next) => {
+  await next();
+  const m = c.req.method;
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS" || !c.env.UID || c.res.status >= 400 || LIVE_SKIP.test(c.req.path)) return;
+  const uid = c.env.UID, env = c.env;
+  const dev = /^[a-z0-9]{4,16}$/.test(c.req.header("x-rumbo-device") || "") ? "dev:" + c.req.header("x-rumbo-device") : "app";
+  if (/stream/.test(c.req.path)) {
+    c.executionCtx.waitUntil(new Promise((r) => setTimeout(r, 7e3)).then(() => notifyLive(env, uid, dev)));
+    c.executionCtx.waitUntil(new Promise((r) => setTimeout(r, 2e4)).then(() => notifyLive(env, uid, dev)));
+  } else c.executionCtx.waitUntil(notifyLive(env, uid, dev));
+});
+
 app.get("/api/me", async (c) => {
   const u = await c.env.DB.prepare("SELECT id, login, name, role, pass_hash IS NOT NULL AS has_password FROM users WHERE id = ?").bind(c.env.UID).first();
   c.executionCtx.waitUntil(c.env.DB.prepare("UPDATE users SET last_seen = ? WHERE id = ?").bind(nowSec(), c.env.UID).run().then(() => void 0));
@@ -6407,6 +7053,8 @@ app.post("/api/telegram/setup", async (c) => {
   }
 });
 app.get("/api/telegram/status", async (c) => {
+  await ensureTgWebhook(c.env, new URL(c.req.url).origin).catch(() => {
+  });
   const s = await getSettings(c.env);
   return c.json({ configured: telegramReady(c.env), connected: !!s.tg_chat_id, username: s.tg_username || "", admin: c.env.ROLE === "admin", source: c.env.TG_TOKEN_SOURCE || "" });
 });
@@ -6966,6 +7614,7 @@ var index_default = {
   }
 };
 export {
+  RumboLive,
   index_default as default
 };
 //# sourceMappingURL=index.js.map

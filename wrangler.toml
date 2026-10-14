@@ -29,6 +29,15 @@ id = "ae58212e218447b9bee6016159d31556"
 [ai]
 binding = "AI"
 
+# Tiempo real: un Durable Object por usuario mantiene los WebSockets de sus dispositivos
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "RumboLive"
+
+[[migrations]]
+tag = "v1-live"
+new_sqlite_classes = ["RumboLive"]
+
 [vars]
 APP_URL = "https://rumbo.gestori.workers.dev"
 MOODLE_URL = "https://eva.uapa.edu.do"
