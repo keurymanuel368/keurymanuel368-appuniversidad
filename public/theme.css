@@ -1,0 +1,257 @@
+/* Rumbo · rediseño 2026 ("Aurora")
+   Capa de estilo encima de la app: colores más profundos, tarjetas más limpias,
+   barra inferior tipo cápsula, transiciones suaves y menos ruido visual.
+   Si algo no te gusta, quita la línea <link href="/theme.css"> de index.html y vuelve el diseño anterior. */
+
+:root {
+  --bg: #F4F6FC;
+  --surface: #FFFFFF;
+  --surface-2: #F8F9FE;
+  --ink: #0B1330;
+  --ink-2: #27304F;
+  --muted: #646D8C;
+  --faint: #7A82A0;
+  --line: #E7EAF4;
+  --line-2: #F0F2F9;
+  --blue: #3355FF;
+  --blue-2: #4F6BFF;
+  --blue-dark: #2238C9;
+  --blue-soft: #EBEEFF;
+  --blue-tint: #F3F5FF;
+  --violet: #7C4DFF;
+  --violet-soft: #F1ECFF;
+  --grad: linear-gradient(135deg, #2F5BFF 0%, #4B47F5 48%, #7C4DFF 100%);
+  --grad-deep: linear-gradient(150deg, #0A1238 0%, #1B2580 52%, #4A33C9 100%);
+  --sh-1: 0 1px 2px rgba(17, 24, 64, .04);
+  --sh-2: 0 1px 2px rgba(17, 24, 64, .04), 0 8px 24px -10px rgba(17, 24, 64, .10);
+  --sh-3: 0 2px 8px rgba(17, 24, 64, .06), 0 24px 56px -16px rgba(17, 24, 64, .24);
+  --sh-blue: 0 14px 30px -12px rgba(63, 72, 245, .55);
+  --r-sm: 14px;
+  --r: 20px;
+  --r-lg: 26px;
+  --rumbo-glow-1: rgba(79, 107, 255, .18);
+  --rumbo-glow-2: rgba(124, 77, 255, .14);
+  --rumbo-glow-3: rgba(0, 199, 190, .10);
+}
+:root[data-mode=dark] {
+  --bg: #070B1A;
+  --surface: #0E1430;
+  --surface-2: #121A3A;
+  --ink: #EEF1FF;
+  --ink-2: #C7CDEA;
+  --muted: #8C95B8;
+  --faint: #7B84A8;
+  --line: rgba(255, 255, 255, .07);
+  --line-2: rgba(255, 255, 255, .04);
+  --blue: #7C93FF;
+  --blue-2: #8FA2FF;
+  --blue-dark: #A9B6FF;
+  --blue-soft: rgba(124, 147, 255, .14);
+  --blue-tint: rgba(124, 147, 255, .08);
+  --sh-2: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 10px 30px -14px rgba(0, 0, 0, .6);
+  --sh-3: 0 24px 60px -20px rgba(0, 0, 0, .7);
+  --rumbo-glow-1: rgba(79, 107, 255, .20);
+  --rumbo-glow-2: rgba(124, 77, 255, .16);
+  --rumbo-glow-3: rgba(0, 199, 190, .07);
+}
+
+/* ---------- Fondo aurora ---------- */
+body { background: var(--bg) !important; }
+body::before {
+  content: ""; position: fixed; inset: -20vh -20vw auto -20vw; height: 85vh; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(40% 55% at 85% 10%, var(--rumbo-glow-1), transparent 70%),
+    radial-gradient(35% 50% at 15% 0%, var(--rumbo-glow-2), transparent 70%),
+    radial-gradient(30% 40% at 55% 40%, var(--rumbo-glow-3), transparent 70%);
+  filter: saturate(120%);
+}
+::selection { background: color-mix(in srgb, var(--blue) 24%, transparent); }
+
+/* ---------- Tipografía ---------- */
+.topbar h1 { font-size: 34px; letter-spacing: -.035em; font-weight: 800; }
+.topbar .eyebrow { text-transform: uppercase; font-size: 11.5px; letter-spacing: .1em; font-weight: 800; color: var(--faint); }
+h1, h2, h3 { letter-spacing: -.02em; }
+.section-head h3 { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; letter-spacing: .12em; color: var(--faint); }
+.section-head h3::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--grad); box-shadow: 0 0 0 3px var(--blue-soft); }
+
+/* ---------- Tarjetas ---------- */
+.card, .stat, .now-card, .setup-banner, .summary-strip, .quick {
+  border-color: var(--line) !important;
+  box-shadow: var(--sh-2);
+}
+.card, .now-card { border-radius: var(--r-lg); }
+.stat { border-radius: 22px; position: relative; overflow: hidden; }
+.stat::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .9), transparent); pointer-events: none; }
+:root[data-mode=dark] .stat::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .12), transparent); }
+.stat .value { font-size: 30px; letter-spacing: -.03em; }
+.stat .stat-ic, .q-ic, .set-ic, .tile-ic { border-radius: 14px; }
+@media (hover: hover) {
+  button.card:hover, .stat:hover, .quick:hover { transform: translateY(-2px); box-shadow: var(--sh-3); }
+}
+button.card:active, .stat:active, .quick:active, .action-row:active { transform: scale(.985); }
+
+/* ---------- Héroes ---------- */
+.hero, .pay-hero, .ts-hero, .career-hero {
+  background: var(--grad) !important;
+  box-shadow: var(--sh-blue), inset 0 1px rgba(255, 255, 255, .28) !important;
+  isolation: isolate;
+}
+.hero::before, .pay-hero::before, .ts-hero::before, .career-hero::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background:
+    radial-gradient(60% 80% at 100% 0%, rgba(255, 255, 255, .22), transparent 60%),
+    radial-gradient(50% 70% at 0% 100%, rgba(0, 220, 200, .18), transparent 60%);
+  animation: rumbo-aurora 14s ease-in-out infinite alternate;
+}
+@keyframes rumbo-aurora { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-4%, 3%, 0); } }
+.ts-hero { background: var(--grad-deep) !important; }
+
+/* ---------- Botones ---------- */
+.btn { border-radius: 14px; letter-spacing: -.005em; }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--grad); box-shadow: var(--sh-blue), inset 0 1px rgba(255, 255, 255, .3); position: relative; overflow: hidden; }
+.btn.primary::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .28) 50%, transparent 70%); transform: translateX(-120%); transition: transform .8s var(--ease); pointer-events: none; }
+@media (hover: hover) { .btn.primary:hover::after { transform: translateX(120%); } }
+.btn.soft { background: var(--blue-soft); color: var(--blue); }
+.icon-btn { box-shadow: var(--sh-1); border-color: var(--line) !important; }
+
+/* ---------- Campos ---------- */
+.input:focus, select.input:focus, textarea.input:focus {
+  border-color: color-mix(in srgb, var(--blue) 55%, transparent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 14%, transparent) !important;
+}
+
+/* ---------- Pestañas segmentadas ---------- */
+.seg { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 16px; }
+:root[data-mode=dark] .seg { background: rgba(255, 255, 255, .06); }
+.seg-thumb { border-radius: 12px; box-shadow: 0 1px 2px rgba(17, 24, 64, .08), 0 6px 14px -6px rgba(17, 24, 64, .2); }
+
+/* ---------- Barra inferior (celular): cápsula oscura ---------- */
+@media (max-width: 900px) {
+  .tabbar {
+    left: 16px !important; right: 16px !important; height: 66px; border-radius: 24px;
+    background: #0D1430 !important; border: 1px solid rgba(255, 255, 255, .06) !important;
+    box-shadow: 0 18px 40px -14px rgba(10, 16, 48, .55), inset 0 1px rgba(255, 255, 255, .08) !important;
+  }
+  :root[data-mode=dark] .tabbar { background: #141C3D !important; }
+  .tabbar > button:not(.fab) { color: rgba(225, 230, 255, .55) !important; font-weight: 600; }
+  .tabbar > button.active { color: #fff !important; }
+  .tab-glider::before { background: rgba(255, 255, 255, .12) !important; }
+  .fab {
+    width: 54px; height: 54px; border-radius: 18px; transform: translateY(-14px);
+    background: var(--grad) !important;
+    box-shadow: 0 12px 26px -8px rgba(75, 71, 245, .8), inset 0 1px rgba(255, 255, 255, .35), 0 0 0 5px var(--bg) !important;
+  }
+  .fab:active { transform: translateY(-14px) scale(.92); }
+}
+
+/* ---------- Barra lateral (computadora) ---------- */
+.sidebar { border-right-color: var(--line) !important; }
+.nav button { border-radius: 14px; font-weight: 600; }
+.nav button.active { background: var(--grad) !important; color: #fff !important; box-shadow: var(--sh-blue); }
+.nav button.active .ic { color: #fff; }
+.nav button:not(.active):hover { background: var(--blue-tint); }
+
+/* ---------- Tareas ---------- */
+.task { border-radius: 16px; transition: background .2s, opacity .35s; }
+@media (hover: hover) { .task:hover { background: var(--blue-tint); } }
+.check { transition: transform .25s var(--spring), background .2s, border-color .2s; }
+.task.done .check, .check.on { background: var(--grad) !important; border-color: transparent !important; }
+.task:active .check { transform: scale(.9); }
+
+/* ---------- Pills, chips y badges ---------- */
+.pill, .chip, .day-pill { border-radius: 999px; }
+.chip.on, .day-pill.on { background: var(--ink) !important; color: var(--bg) !important; border-color: transparent !important; }
+:root[data-mode=dark] .chip.on, :root[data-mode=dark] .day-pill.on { background: #fff !important; color: #0B1330 !important; }
+.badge { box-shadow: 0 0 0 2px var(--surface); }
+
+/* ---------- Modales y hojas ---------- */
+.modal { border-radius: 28px 28px 0 0; box-shadow: var(--sh-3); }
+@media (min-width: 901px) { .modal { border-radius: 28px; } }
+.backdrop { background: rgba(7, 11, 26, .42) !important; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.toast { border-radius: 16px; box-shadow: var(--sh-3); }
+
+/* ---------- Mascota: menos invasiva ---------- */
+.buddy { transform-origin: bottom right; }
+@media (max-width: 900px) { .buddy { transform: scale(.82); } .tabbar.hidden ~ .buddy { transform: translateY(78px) scale(.82); } }
+.buddy-say { font-size: 13px; padding: 9px 12px; border-radius: 16px 16px 4px 16px; animation: say-in .42s var(--spring) both, rumbo-say-out .5s ease 5.5s forwards !important; }
+@keyframes rumbo-say-out { to { opacity: 0; transform: translateY(6px) scale(.96); visibility: hidden; } }
+
+/* ---------- Entrada de pantallas ---------- */
+.page { animation: rumbo-in .5s var(--ease) both !important; }
+@keyframes rumbo-in { from { opacity: 0; transform: translateY(12px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.stagger > * { animation-duration: .5s !important; }
+
+/* ---------- Esqueletos de carga ---------- */
+.sk { background: linear-gradient(90deg, var(--line-2) 0%, var(--line) 40%, var(--line-2) 80%) !important; background-size: 200% 100% !important; animation: rumbo-shimmer 1.3s linear infinite !important; }
+@keyframes rumbo-shimmer { to { background-position: -200% 0; } }
+
+/* ---------- Barras de desplazamiento ---------- */
+@media (hover: hover) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 99px; border: 3px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* ---------- Dentro de Telegram ---------- */
+.in-telegram .main { padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero::before, .pay-hero::before, .ts-hero::before, .career-hero::before, .sk { animation: none !important; }
+  .page { animation: none !important; }
+}
+
+/* =====================  Segunda capa: más personalidad  ===================== */
+
+/* Saludo con degradado */
+.topbar h1 {
+  background: linear-gradient(100deg, var(--ink) 0%, #3355FF 55%, #7C4DFF 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  padding-bottom: 2px;
+}
+:root[data-mode=dark] .topbar h1 { background-image: linear-gradient(100deg, #fff 0%, #9DB0FF 60%, #C5A8FF 100%); }
+.avatar { background: var(--grad); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px color-mix(in srgb, #4B47F5 35%, transparent), var(--sh-blue); }
+
+/* Tarjeta de nota nueva: blanca con brillo de color y número protagonista */
+.fresh-grade {
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--green-2) 18%, transparent), transparent 55%), var(--surface) !important;
+  border: 1px solid color-mix(in srgb, var(--green-2) 28%, var(--line));
+  box-shadow: var(--sh-2);
+}
+.fresh-grade.bad { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--orange) 20%, transparent), transparent 55%), var(--surface) !important; border-color: color-mix(in srgb, var(--orange) 30%, var(--line)); }
+.fg-score b { font-size: 52px; background: linear-gradient(160deg, var(--ink), color-mix(in srgb, var(--green-2) 70%, var(--ink))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.fresh-grade.bad .fg-score b { background-image: linear-gradient(160deg, var(--ink), color-mix(in srgb, var(--orange) 75%, var(--ink))); }
+:root[data-mode=dark] .fg-score b { background-image: linear-gradient(160deg, #fff, #7CE3B4); }
+:root[data-mode=dark] .fresh-grade.bad .fg-score b { background-image: linear-gradient(160deg, #fff, #FFC27A); }
+
+/* Tarjeta de "vence hoy": blanca con franja y halo del color de la materia */
+.now-card { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--cc, #4B47F5) 14%, transparent), transparent 55%), var(--surface) !important; }
+.now-card.late { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--red) 16%, transparent), transparent 55%), var(--surface) !important; border: 1px solid color-mix(in srgb, var(--red) 24%, var(--line)) !important; }
+.now-card::before { width: 4px !important; border-radius: 0 4px 4px 0; top: 14px !important; bottom: 14px !important; }
+
+/* Aviso de configuración */
+.setup-banner { background: linear-gradient(135deg, var(--blue-tint), var(--surface) 60%) !important; }
+
+/* Estadísticas: icono con degradado suave */
+.stat .stat-ic { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 16%, transparent); }
+
+/* Calendario de la semana en Tareas */
+.day-pill { border-radius: 18px !important; transition: transform .2s var(--spring), background .2s; }
+.day-pill.on { background: var(--grad) !important; border-color: transparent !important; box-shadow: var(--sh-blue); }
+.day-pill.on .dw { color: rgba(255, 255, 255, .8) !important; }
+.day-pill.on .dots i { box-shadow: 0 0 0 1.5px #fff !important; }
+.day.on { background: var(--grad); }
+
+/* Materias */
+.course { border-radius: 22px !important; overflow: hidden; }
+.course::before { height: 5px !important; background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 40%, #fff)) !important; }
+.course .grade { font-size: 24px; }
+
+/* Pensum */
+.subj.en_curso { background: var(--grad) !important; }
+
+/* Lista de tareas: separadores más suaves */
+.task + .task { border-top-color: var(--line-2) !important; }
+
+/* Íconos de la barra inferior un poco más grandes */
+@media (max-width: 900px) { .tab-ic .ic { width: 23px; height: 23px; } }
