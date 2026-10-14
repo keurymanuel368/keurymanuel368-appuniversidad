@@ -1,0 +1,42 @@
+# Compila el widget de Android cada vez que cambias algo en la carpeta widget/
+# y deja el APK nuevo en public/rumbo-widget.apk (Cloudflare lo publica solo).
+name: Widget de Android
+
+on:
+  push:
+    branches: [main]
+    paths: ['widget/**', '.github/workflows/widget.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Compilar APK
+        working-directory: widget
+        run: gradle assembleRelease --no-daemon
+
+      - name: Copiar a public/
+        run: cp widget/app/build/outputs/apk/release/app-release.apk public/rumbo-widget.apk
+
+      - name: Guardar el APK en el repositorio
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Widget: APK compilado automáticamente'
+          file_pattern: public/rumbo-widget.apk
