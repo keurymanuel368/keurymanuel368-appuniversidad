@@ -2146,6 +2146,63 @@ function overallAverage(courses) {
   return Math.round(g.reduce((a, c) => a + c.average * (c.credits || 3), 0) / w * 10) / 10;
 }
 __name(overallAverage, "overallAverage");
+// Historial del índice: guarda un punto cada vez que cambia, para decir "subió de X a Y".
+async function indexTrend(env) {
+  const now = overallAverage(await courseSummaries(env));
+  let hist = [];
+  try { hist = JSON.parse(await getSetting(env, "avg_hist", "[]")) || []; } catch (e) { hist = []; }
+  if (now !== null && (!hist.length || Math.abs(hist[hist.length - 1].v - now) >= 0.05)) {
+    hist.push({ t: nowSec(), v: now });
+    hist = hist.slice(-40);
+    await setSetting(env, "avg_hist", JSON.stringify(hist));
+  }
+  const prev = hist.length >= 2 ? hist[hist.length - 2] : null;
+  return { now, prev: prev ? prev.v : null, prevAt: prev ? prev.t : null, changedAt: hist.length ? hist[hist.length - 1].t : null, hist: hist.slice(-12) };
+}
+__name(indexTrend, "indexTrend");
+function trendText(tr) {
+  if (!tr || tr.now === null || tr.prev === null || Math.abs(tr.now - tr.prev) < 0.05) return null;
+  const d = Math.round((tr.now - tr.prev) * 10) / 10;
+  return `Tu índice ${d > 0 ? "subió" : "bajó"} de ${tr.prev} a ${tr.now} (${d > 0 ? "+" : ""}${d})`;
+}
+__name(trendText, "trendText");
+async function weekStory(env) {
+  const now = nowSec(), from = now - 7 * 86400;
+  const s = await getSettings(env);
+  const { results: done } = await env.DB.prepare(`SELECT t.title, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id WHERE t.user_id = ? AND t.status = 'done' AND COALESCE(t.submitted_at, t.updated_at) >= ? ORDER BY COALESCE(t.submitted_at, t.updated_at) DESC`).bind(env.UID, from).all();
+  const { results: grades } = await env.DB.prepare(`SELECT g.item_name AS item, g.grade, g.grade_max AS max, c.short_name AS course, c.color FROM grades g JOIN courses c ON c.id = g.course_id WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.updated_at >= ? ORDER BY g.grade / g.grade_max DESC`).bind(env.UID, from).all();
+  const { results: next } = await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'pending' AND due_at BETWEEN ? AND ?`).bind(env.UID, now, now + 7 * 86400).all();
+  const tr = await indexTrend(env);
+  const g = grades.map((r) => ({ item: String(r.item || "").replace(/\s+(calificaci[oó]n|foro completo)$/i, ""), grade: Math.round(r.grade * 100) / 100, max: r.max, course: r.course, color: r.color }));
+  const avgWeek = g.length ? Math.round(g.reduce((a, x) => a + x.grade / x.max * 100, 0) / g.length * 10) / 10 : null;
+  return {
+    name: (s.student_name || "").split(" ")[0],
+    range: `${fechaCorta(localDate(env, from + 86400))} – ${fechaCorta(localDate(env, now))}`,
+    done: done.length,
+    doneList: done.slice(0, 4).map((d) => ({ title: d.title, course: d.course || "Personal" })),
+    grades: g.slice(0, 4),
+    gradesCount: g.length,
+    avgWeek,
+    index: tr.now,
+    indexPrev: tr.prev,
+    trend: trendText(tr),
+    streak: await streak(env),
+    nextWeek: next[0]?.n || 0
+  };
+}
+__name(weekStory, "weekStory");
+// Asignaturas sin nada nuevo en el EVA desde hace días (solo si la sincronización funciona).
+async function staleCourses(env, days = 10) {
+  const now = nowSec();
+  const { results } = await env.DB.prepare(`
+    SELECT c.id, c.name, c.short_name,
+      MAX(COALESCE((SELECT MAX(created_at) FROM tasks t WHERE t.course_id = c.id AND t.source = 'eva'), 0),
+          COALESCE((SELECT MAX(updated_at) FROM grades g WHERE g.course_id = c.id), 0),
+          COALESCE((SELECT MAX(created_at) FROM announcements a WHERE a.course_id = c.id), 0)) AS last
+    FROM courses c WHERE c.user_id = ? AND c.active = 1`).bind(env.UID).all();
+  return results.filter((r) => r.last > 0 && now - r.last > days * 86400).map((r) => ({ ...r, days: Math.floor((now - r.last) / 86400) }));
+}
+__name(staleCourses, "staleCourses");
 async function payWindow(env, settings) {
   const s = settings ?? await getSettings(env);
   const openDay = Number(s.pay_open_day || 25);
@@ -2546,6 +2603,7 @@ async function loadAppConfig(env) {
     env[k] = row.value;
     env.CFG_SRC[k] = "app";
   }
+  if (!env.MOODLE_URL) env.MOODLE_URL = "https://eva.uapa.edu.do";
   env.TG_TOKEN_SOURCE = env.CFG_SRC.TELEGRAM_BOT_TOKEN === "cloudflare" ? "secreto" : env.CFG_SRC.TELEGRAM_BOT_TOKEN || "";
   return env;
 }
@@ -3294,6 +3352,7 @@ ${cheer}${fb}`;
 __name(gradeMessage, "gradeMessage");
 async function notifyGrades(env, grades) {
   let sent = 0;
+  const trend = trendText(await indexTrend(env).catch(() => null));
   for (const g of grades.slice(0, 8)) {
     const m = gradeMessage(g);
     const { icon, cheer, changed, title, head, body } = m;
@@ -3308,14 +3367,15 @@ ${g.feedback.slice(0, 500).split("\n").filter((l) => l.trim()).map((l) => `> ${l
       `${icon} *${changed ? "Te cambiaron una nota" : "\xA1Te calificaron!"}*`,
       [`*${g.item}*`, `\u{1F4DA} ${courseLabel(g.course)}`, `\u{1F4CA} Nota: *${fmt(g.grade)}/${fmt(g.max)}*${changed ? ` _(antes ${fmt(g.prev)})_` : ""}`].join("\n"),
       quote,
+      trend ? `\u{1F4C8} ${trend}` : "",
       cheer
     ), {
       title,
       tag: `grade-${g.courseId}-${g.itemId}`,
       url: task ? `/#tareas/${task.id}` : "/#asignaturas",
-      pushBody: `${head}${g.feedback ? " \xB7 \u{1F4AC} " + g.feedback.slice(0, 120) : " \xB7 " + cheer}`,
+      pushBody: `${head}${trend ? " \xB7 " + trend : ""}${g.feedback ? " \xB7 \u{1F4AC} " + g.feedback.slice(0, 120) : " \xB7 " + cheer}`,
       type: "notas",
-      tg: { html: tgGradeCard(env, g, changed, cheer, (await courseSummaries(env).catch(() => [])).find((c) => c.name === g.course)?.average), kb: [[{ text: "\u{1F4CA} Mis notas", callback_data: "c:notas" }, { text: "\u{1F9EE} \xBFCu\xE1nto necesito?", callback_data: "c:necesito" }]] }
+      tg: { html: tgGradeCard(env, g, changed, cheer, (await courseSummaries(env).catch(() => [])).find((c) => c.name === g.course)?.average) + (trend ? `\n\n\u{1F4C8} <b>${tgEsc(trend)}</b>` : ""), kb: [[{ text: "\u{1F4CA} Mis notas", callback_data: "c:notas" }, { text: "\u{1F9EE} \xBFCu\xE1nto necesito?", callback_data: "c:necesito" }]] }
     });
     if (r.ok) sent++;
   }
@@ -4707,6 +4767,36 @@ __name(checkAchievements, "checkAchievements");
 
 // src/worker/changelog.ts
 var CHANGELOG = [
+  {
+    version: 37,
+    date: "2026-10-14",
+    title: "Rumbo se usa con gestos",
+    items: [
+      "Mant\xE9n presionada una tarea y sale un men\xFA: Ya la entregu\xE9, Posponer a ma\xF1ana, Modo enfoque, Abrir en el EVA y Preguntarle a Rumbo. En computadora, clic derecho.",
+      "Desliza una tarea a la izquierda para posponerla. Si la fecha la pone el EVA, Rumbo te la recuerda ma\xF1ana a las 8:00.",
+      "En Inicio, la tarjeta \xABTu d\xEDa\xBB junta lo que vence hoy y lo atrasado, con un bot\xF3n Empezar que abre el modo enfoque.",
+      "Cuando te califican, ves c\xF3mo cambi\xF3 tu \xEDndice (por ejemplo, de 84.1 a 84.4). Tambi\xE9n llega en el aviso.",
+      "El buscador ahora hace cosas: escribe \xABnueva tarea\xBB, \xABsincronizar\xBB, \xABmodo oscuro\xBB o \xABresumen\xBB.",
+      "Ajustes \u2192 Apariencia: elige el color de la app, el \xEDcono de tu pantalla de inicio y si la mascota sale solo en Inicio.",
+      "Resumen de tu semana tipo historia: el domingo en la noche (o tocando el calendario arriba en Inicio).",
+      "Si una asignatura pasa 10 d\xEDas sin nada nuevo en el EVA, Rumbo te avisa para que le eches un ojo.",
+      "El Plan muestra qu\xE9 tan cargado est\xE1 cada d\xEDa, y la pantalla de entrada tiene la br\xFAjula animada."
+    ]
+  },
+  {
+    version: 36,
+    date: "2026-10-14",
+    title: "Detalles que se notan",
+    items: [
+      "La ficha de cada tarea se lee bien: el t\xEDtulo ahora es blanco sobre el fondo oscuro.",
+      "Los botones de texto (Copiar para la IA, Editar tarea, Marcar todas) ya no tienen recuadro: se ven limpios, como en el iPhone.",
+      "La mascota es m\xE1s peque\xF1a en el celular y se aparta mientras bajas, para no tapar lo que lees.",
+      "Toca la pesta\xF1a en la que ya est\xE1s y subes al principio.",
+      "La barra de abajo se ve m\xE1s n\xEDtida y los t\xEDtulos de arriba caben completos.",
+      "\xA1Confeti! Al marcar una tarea como hecha sale una peque\xF1a lluvia de colores donde tocaste (y el tel\xE9fono vibra suave).",
+      "En Mi pensum, la leyenda ahora tiene sus colores: en curso, aprobada, disponible, con prerrequisito y optativa."
+    ]
+  },
   {
     version: 35,
     date: "2026-10-13",
@@ -6333,9 +6423,26 @@ async function runForUser(env, syncNow, backupError) {
   if (s.week_close !== "0" && local.getUTCDay() === 0 && local.getUTCHours() >= 19 && !await wasSent(env, `semana:${today}`)) {
     await markSent(env, `semana:${today}`);
     const sem = await tgSemana(env);
-    const r = await sendToMe(env, sem.plain, { title: "\u{1F4C6} Cierre de la semana", tag: "week", url: "/#inicio", pushBody: sem.short, type: "resumen", tg: sem });
+    const r = await sendToMe(env, sem.plain, { title: "\u{1F4C6} Cierre de la semana", tag: "week", url: "/#inicio/semana", pushBody: sem.short, type: "resumen", tg: sem });
     if (!r.ok) await unmarkSent(env, `semana:${today}`);
     log2.push(`Cierre semanal: ${r.ok ? "ok" : r.error}`);
+  }
+  if (s.stale_alerts !== "0" && local.getUTCHours() >= hour && Number(s.eva_last_sync || 0) > nowSec() - 2 * 86400 && !await wasSent(env, `stale:${today}`)) {
+    await markSent(env, `stale:${today}`);
+    for (const c of (await staleCourses(env).catch(() => [])).slice(0, 2)) {
+      const key = `stale_c${c.id}`;
+      if (Number(s[key] || 0) > nowSec() - 10 * 86400) continue;
+      await setSetting(env, key, String(nowSec()));
+      const name = c.short_name || c.name;
+      const text = `${name} lleva ${c.days} d\xEDas sin nada nuevo en el EVA. \xC9chale un ojo por si el facilitador public\xF3 algo que Rumbo no ve (un anuncio en el aula, un archivo o una videoconferencia).`;
+      await env.DB.prepare(`INSERT OR IGNORE INTO announcements (user_id, source, ext_id, course_id, title, body, author, kind, url, created_at) VALUES (?, 'rumbo', ?, ?, ?, ?, 'Rumbo', 'aviso', ?, ?)`).bind(env.UID, `stale:${c.id}:${today}`, c.id, `\u{1F4ED} ${name}: ${c.days} d\xEDas sin movimiento`, text, "/#asignaturas", nowSec()).run();
+      const r = await sendToMe(env, blocks("\u{1F4ED} *Asignatura sin movimiento*", text), { title: `\u{1F4ED} ${name} sin movimiento`, pushBody: text, tag: `stale-${c.id}`, url: "/#asignaturas", type: "avisos", tg: { html: `\u{1F4ED} <b>${tgEsc(name)}</b> lleva <b>${c.days} d\xEDas</b> sin nada nuevo en el EVA.\n\n<i>\xC9chale un ojo por si el facilitador public\xF3 algo que Rumbo no ve (un anuncio en el aula, un archivo o una videoconferencia).</i>` } });
+      log2.push(`Sin movimiento ${name}: ${r.ok ? "avisado" : r.error}`);
+    }
+  }
+  if (local.getUTCHours() >= hour && !await wasSent(env, `trend:${today}`)) {
+    await markSent(env, `trend:${today}`);
+    await indexTrend(env).catch(() => null);
   }
   const thresholds = (s.task_reminders || "72,24,3").split(",").map(Number).filter((n) => n > 0).sort((a, b) => a - b);
   if (thresholds.length) {
@@ -6841,6 +6948,23 @@ app.post("/api/release/announce", async (c) => {
   for (const u of await activeUsers(c.env)) await announceRelease(await forUser(c.env, u.id, u.role)).catch((e) => console.log(`Novedades (${u.id}): ${e.message}`));
   return c.json({ ok: true, version: CHANGELOG[0].version });
 });
+app.get("/api/manifest", (c) => {
+  const v = String(c.req.query("icon") || "");
+  const ok = ["noche", "atardecer", "menta", "morado"].includes(v);
+  const i192 = ok ? `/icons/${v}-192.png` : "/icon-192.png", i512 = ok ? `/icons/${v}-512.png` : "/icon-512.png", im = ok ? `/icons/${v}-maskable-512.png` : "/icon-maskable-512.png";
+  return c.json({
+    id: "/", name: "Rumbo \xB7 Tu universidad bajo control", short_name: "Rumbo",
+    description: "Tareas, notas, pensum y pagos de la UAPA en un solo lugar.",
+    start_url: "/", scope: "/", display: "standalone", orientation: "portrait",
+    background_color: v === "noche" ? "#000000" : "#F5F5F7", theme_color: v === "noche" ? "#000000" : "#F5F5F7", lang: "es-DO",
+    icons: [{ src: i192, sizes: "192x192", type: "image/png", purpose: "any" }, { src: i512, sizes: "512x512", type: "image/png", purpose: "any" }, { src: im, sizes: "512x512", type: "image/png", purpose: "maskable" }],
+    shortcuts: [
+      { name: "Tareas", short_name: "Tareas", url: "/#tareas", icons: [{ src: i192, sizes: "192x192" }] },
+      { name: "Notas", short_name: "Notas", url: "/#asignaturas", icons: [{ src: i192, sizes: "192x192" }] },
+      { name: "Asistente", short_name: "Asistente", url: "/#asistente", icons: [{ src: i192, sizes: "192x192" }] }
+    ]
+  }, 200, { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "public, max-age=300" });
+});
 app.use("/api/*", async (c, next) => {
   const uid = await sessionUser(c.env, c.req.header("cookie") || null);
   if (!uid) return c.json({ error: "No autorizado" }, 401);
@@ -7065,6 +7189,23 @@ app.patch("/api/tasks/:id", async (c) => {
   if ("course_id" in b) binds[fields.indexOf("course_id = ?")] = await ownCourse(c.env, b.course_id);
   await c.env.DB.prepare(`UPDATE tasks SET ${fields.join(", ")}, updated_at = ? WHERE id = ? AND user_id = ?`).bind(...binds, nowSec(), id, c.env.UID).run();
   return c.json({ ok: true });
+});
+app.get("/api/index-trend", async (c) => c.json(await indexTrend(c.env)));
+app.get("/api/week-story", async (c) => c.json(await weekStory(c.env)));
+app.post("/api/tasks/:id/postpone", async (c) => {
+  const id = Number(c.req.param("id"));
+  const t = await c.env.DB.prepare("SELECT id, title, due_at, source FROM tasks WHERE id = ? AND user_id = ?").bind(id, c.env.UID).first();
+  if (!t) return c.json({ error: "Tarea no encontrada." }, 404);
+  const now = nowSec();
+  if (t.source !== "eva" && t.due_at) {
+    const due = Math.max(t.due_at, now) + 86400;
+    await c.env.DB.prepare("UPDATE tasks SET due_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").bind(due, now, id, c.env.UID).run();
+    return c.json({ ok: true, mode: "due", message: `Movida para ${cuandoTexto(c.env, due)}` });
+  }
+  const d = localDate(c.env, now + 86400);
+  const at = localToUnix(c.env, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 8, 0);
+  await c.env.DB.prepare("INSERT INTO reminders (user_id, text, remind_at) VALUES (?, ?, ?)").bind(c.env.UID, `\u23F0 Retoma: ${t.title}${t.due_at ? " \xB7 vence " + cuandoTexto(c.env, t.due_at) : ""}`, at).run();
+  return c.json({ ok: true, mode: "reminder", message: "La fecha la pone el EVA: te la recuerdo ma\xF1ana a las 8:00 a. m." });
 });
 app.delete("/api/tasks/:id", async (c) => {
   await c.env.DB.prepare("DELETE FROM tasks WHERE id = ? AND user_id = ?").bind(Number(c.req.param("id")), c.env.UID).run();

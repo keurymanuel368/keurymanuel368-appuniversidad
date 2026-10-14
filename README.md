@@ -10,6 +10,8 @@ Funciona en **Cloudflare Workers** con una base de datos **D1**.
 |---|---|
 | `src/index.js` | El servidor (la API, el bot de Telegram, las tareas programadas). Es el código que estaba publicado en Cloudflare. |
 | `public/` | La app que ve el usuario (páginas, estilos, íconos, `rumbo-widget.apk`). |
+| `public/rumbo-plus.js` | Funciones extra: menú al mantener presionada una tarea, deslizar para posponer, buscador con acciones, tarjeta «Tu día», apariencia (color, ícono, mascota), resumen de la semana y carga por día en el Plan. |
+| `public/icons/` | Los íconos alternativos de la app (Noche, Atardecer, Menta, Morado). |
 | `wrangler.toml` | La configuración para Cloudflare: base de datos, respaldos, IA y horarios. |
 | `package.json` | Le dice a Cloudflare que publique con `wrangler`. |
 

@@ -1,5 +1,5 @@
 // Service worker: guarda la app en caché, muestra los datos guardados al instante (y los actualiza por detrás) y muestra las notificaciones.
-const CACHE = 'rumbo-v38';
+const CACHE = 'rumbo-v40';
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon-192.png']))); self.skipWaiting(); });
 // Datos de la API guardados (tareas, notas, avisos…) para verlos sin internet.
 const API_CACHE = 'rumbo-api-v2';

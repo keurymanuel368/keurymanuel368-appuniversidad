@@ -15,6 +15,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
     <title>Rumbo</title>
+    <script>try{var ac=localStorage.getItem("rumbo-accent");if(ac&&ac!=="azul")document.documentElement.setAttribute("data-accent",ac);var ic=localStorage.getItem("rumbo-icon")||"";var mf=document.querySelector("link[rel=manifest]");if(mf&&ic)mf.href="/api/manifest?icon="+ic;if(ic){var at=document.querySelector("link[rel=apple-touch-icon]");if(at)at.href="/icons/"+ic+"-180.png"}}catch(e){}</script>
     <script>try{var t=localStorage.getItem("rumbo-theme")||"auto";if(t==="dark"||(t==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.setAttribute("data-mode","dark")}catch(e){}</script>
     <style>
       .boot{--b1:#2F7BFF;--b2:#7A5CFF;--b3:#22C3EE;position:fixed;inset:0;z-index:9999;display:grid;place-items:center;overflow:hidden;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,system-ui,sans-serif;opacity:0;animation:bt-fade .4s cubic-bezier(.32,.72,0,1) .12s forwards;transition:opacity .5s cubic-bezier(.32,.72,0,1)}
@@ -54,6 +55,7 @@
       @media (prefers-reduced-motion:reduce){.boot *,.boot{animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important}}
     </style>
     <script src="/live.js"></script>
+    <script src="/rumbo-plus.js" defer></script>
     <script type="module" crossorigin src="/assets/index-C6D9V0_j.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-B5htGz5h.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
