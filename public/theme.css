@@ -373,3 +373,26 @@ h1:focus, h1:focus-visible, h2:focus, [tabindex="-1"]:focus, [tabindex="-1"]:foc
 .rumbo-wa.on .rw-switch i { transform: translateX(20px); }
 .rumbo-wa.on .rw-switch:active i { transform: translateX(15px); }
 .rumbo-wa { animation: rumbo-rise .3s var(--ios) both; }
+
+
+/* ============ Pulido final ============ */
+/* Accesos rápidos de Inicio: ocupan todo el ancho, parejos */
+@media (min-width: 901px) {
+  .quick-row { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .quick-row .quick { width: auto !important; min-width: 0; }
+}
+/* El saludo de arriba en una sola línea en el celular */
+.topbar .eyebrow { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* Burbuja de la mascota: más discreta y se va antes, para no tapar contenido */
+.buddy-say { max-width: min(210px, 62vw) !important; font-size: 13px !important; padding: 9px 12px !important;
+  background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  animation: rumbo-pop .5s var(--spring-ios) both, rumbo-say-out .35s var(--ios) 3s forwards !important; }
+/* Al tocar: feedback suave en cualquier botón */
+button, .btn, [role=button] { -webkit-tap-highlight-color: transparent; }
+/* Selección de texto con el color de la marca */
+::selection { background: color-mix(in srgb, #0A84FF 28%, transparent); }
+/* Barras de desplazamiento finas en computadora */
+@media (pointer: fine) {
+  * { scrollbar-width: thin; scrollbar-color: rgba(120,120,128,.35) transparent; }
+}

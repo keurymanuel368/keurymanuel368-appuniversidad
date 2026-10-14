@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Rumbo Widget</string>
     <string name="widget_name">Rumbo</string>
-    <string name="widget_desc">Tus entregas, tu índice y la cuenta regresiva de la próxima tarea.</string>
+    <string name="widget_desc">Tu día de un vistazo: entregas, semana, índice y cuenta regresiva en vivo. Cámbiale el tamaño para ver más.</string>
 </resources>

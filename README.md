@@ -66,8 +66,11 @@ El código está en la carpeta `widget/`, escrito en Java, sin librerías extra.
 
 Cuando cambias algo ahí, GitHub Actions compila el APK solo (`.github/workflows/widget.yml`). Lo guarda en `public/rumbo-widget.apk`, y Cloudflare lo publica.
 
-- **Tamaño mediano (4×2):** titular del día y cuenta regresiva en vivo de la próxima entrega. También 3 entregas con color de urgencia, botón para actualizar y datos rápidos (pendientes, índice y racha).
-- **Tamaño pequeño (2×2):** número grande de pendientes, la próxima entrega y su cuenta regresiva.
+- **Color según tu día:** azul si vas tranquilo, naranja si algo vence hoy, rojo si tienes algo atrasado y verde si estás al día.
+- **Pequeño (2×2):** número grande de pendientes, la próxima entrega y su cuenta regresiva.
+- **Mediano (4×2):** saludo del día, tu índice en un anillo y la próxima entrega con cuenta regresiva en vivo.
+- **Grande (4×4):** todo lo anterior, más tu semana (los días con entregas tienen un punto), la lista de próximas entregas y datos rápidos (pendientes, racha y última nota).
+- **Cambiar de tamaño:** mantén presionado el widget y estíralo; el diseño cambia solo.
 - **Tema:** claro y oscuro automático, igual que el teléfono.
 - **Actualización:** cada 30 minutos, o al tocar ↻.
 - **Firma:** el APK se firma con `widget/rumbo-widget.jks`, para que cada versión se instale encima de la anterior. No borres ese archivo.

@@ -4413,7 +4413,7 @@ async function calendarIcs(env) {
 __name(calendarIcs, "calendarIcs");
 
 // src/worker/widget.ts
-var WIDGET_VERSION = 5;
+var WIDGET_VERSION = 6;
 var dayKey = /* @__PURE__ */ __name((d) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`, "dayKey");
 var pick = /* @__PURE__ */ __name((arr, seed) => arr[seed % arr.length], "pick");
 var FRASES = [
@@ -4476,7 +4476,14 @@ async function widgetData(env) {
     headline = pick([`Todo al d\xEDa${hi} \u{1F389}`, "\xA1Nada pendiente! \u{1F64C}", `Vas volando${hi} \u{1F680}`], seed);
     sub = racha > 1 ? `Llevas ${racha} d\xEDas seguidos cumpliendo.` : "Aprovecha para adelantar o descansar.";
   }
-  const list = [...overdue, ...pending.filter((t) => t.due_at >= now)].slice(0, 3);
+  const list = [...overdue, ...pending.filter((t) => t.due_at >= now)].slice(0, 5);
+  const week = [];
+  for (let i = 0; i < 7; i++) {
+    const d = localDate(env, now + i * 86400);
+    const key = ymd(d);
+    const items = pending.filter((t) => ymd(localDate(env, t.due_at)) === key);
+    week.push({ d: "DLMXJVS"[d.getUTCDay()], n: d.getUTCDate(), count: items.length, today: i === 0 });
+  }
   const last = await env.DB.prepare(`SELECT g.item_name, g.grade, g.grade_max FROM grades g WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.updated_at > ? ORDER BY g.updated_at DESC LIMIT 1`).bind(env.UID, now - 5 * 86400).first();
   const gradeLine = last ? `\u{1F4CA} \xDAltima nota: ${Math.round(last.grade * 100) / 100}/${last.grade_max} \xB7 ${last.item_name.replace(/\s+(calificaci[oó]n|foro completo)$/i, "").slice(0, 40)}` : null;
   return {
@@ -4487,7 +4494,10 @@ async function widgetData(env) {
     pending: pending.length,
     today: dueToday.length,
     overdue: overdue.length,
-    tasks: list.map((t) => ({ title: t.title, when: t.due_at < now ? "Atrasada" : cuandoTexto(env, t.due_at), course: t.course_short || t.course_name || "", urgent: t.due_at < now + 86400 })),
+    tasks: list.map((t) => ({ title: t.title, when: t.due_at < now ? "Atrasada" : cuandoTexto(env, t.due_at), course: t.course_short || t.course_name || "", urgent: t.due_at < now + 86400, late: t.due_at < now })),
+    week,
+    name,
+    dayTitle: (() => { const d = localDate(env); const f = fechaLarga(d); return f.charAt(0).toUpperCase() + f.slice(1); })(),
     reminders: rem.map((r) => ({ text: r.text, when: cuandoTexto(env, r.remind_at) })),
     phrases: gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)),
     lastGrade: last ? { title: last.item_name, grade: last.grade, max: last.grade_max } : null,
@@ -4697,6 +4707,18 @@ __name(checkAchievements, "checkAchievements");
 
 // src/worker/changelog.ts
 var CHANGELOG = [
+  {
+    version: 35,
+    date: "2026-10-13",
+    title: "Rumbo, versi\xF3n final del dise\xF1o",
+    items: [
+      "Nueva pantalla de carga: la br\xFAjula de Rumbo gira y se acomoda, te saluda por tu nombre y te dice qu\xE9 est\xE1 preparando.",
+      "Widget nuevo para Android en tres tama\xF1os (peque\xF1o, mediano y grande). Cambia de color seg\xFAn c\xF3mo va tu d\xEDa, muestra tu \xEDndice en un anillo, tu semana y la cuenta regresiva en vivo.",
+      "WhatsApp se apaga y se enciende con un toque en Ajustes, o escribi\xE9ndole al bot \xABwhatsapp off\xBB.",
+      "El selector de Tareas (Pendientes, Mes, Plan, Entregadas) ya no se descentra al cambiar.",
+      "Detalles: la mascota habla menos tiempo y no tapa lo que lees, los accesos r\xE1pidos llenan el ancho y en Android sientes una vibraci\xF3n suave al tocar."
+    ]
+  },
   {
     version: 34,
     date: "2026-10-13",

@@ -16,22 +16,37 @@
         init.headers = h;
       }
     } catch (e) {}
-    return _fetch.call(this, input, init);
+    var pr = _fetch.call(this, input, init);
+    try {
+      if (/\/api\/me(\?|$)/.test(url)) pr.then(function (r) { if (r.ok) r.clone().json().then(function (j) {
+        var n = j && j.user && (j.user.name || j.user.login) || '';
+        if (n) localStorage.setItem('rumbo-name', n.split(' ')[0]);
+      }).catch(function () {}); });
+      if (/\/api\/logout/.test(url)) localStorage.removeItem('rumbo-name');
+    } catch (e) {}
+    return pr;
   };
 
 
   // ---------- Pantalla de carga: se va cuando la pantalla ya tiene contenido ----------
   (function () {
-    var t0 = Date.now();
+    var t0 = Date.now(), SHOW = 120, MIN = 900;
     function ready() {
       var pg = document.querySelector('#root .page');
-      return (pg && pg.querySelector('.topbar, h1') && !pg.querySelector('.sk')) || document.querySelector('#root .auth-card, #root .login-box, #root .welcome-slide');
+      if (pg && pg.querySelector('.topbar, h1, .ai-screen') && !pg.querySelector('.sk')) return true;
+      return !!document.querySelector('#root .auth-card, #root .login-box, #root .welcome-slide, #root .auth, #root form input[type=password]');
     }
     function hide() {
       var b = document.getElementById('boot'); if (!b) return;
-      b.classList.add('out'); setTimeout(function () { b.remove(); }, 450);
+      var shown = Date.now() - t0 - SHOW;
+      // Si alcanzó a verse, la dejamos terminar su animación de entrada para que no corte feo.
+      var wait = shown <= 0 ? 0 : Math.max(0, MIN - shown);
+      setTimeout(function () {
+        b.classList.add('done');
+        setTimeout(function () { b.classList.add('out'); setTimeout(function () { b.remove(); }, 650); }, shown <= 0 ? 0 : 260);
+      }, wait);
     }
-    var iv = setInterval(function () { if (ready() || Date.now() - t0 > 9000) { clearInterval(iv); hide(); } }, 60);
+    var iv = setInterval(function () { if (ready() || Date.now() - t0 > 12000) { clearInterval(iv); hide(); } }, 50);
   })();
 
   // ---------- Telegram Mini App ----------
@@ -228,5 +243,18 @@
     }
     new MutationObserver(function (ms) { ms.forEach(function (m) { m.addedNodes.forEach(scan); }); })
       .observe(document.documentElement, { childList: true, subtree: true });
+  })();
+
+  // ---------- Vibración suave al tocar (Android) ----------
+  (function () {
+    if (!navigator.vibrate) return;
+    var SEL = '.tabbar button, .seg button, .rw-switch, .toggle, .fab, .check, [class*="check"] button, .btn.primary, .buddy-btn';
+    document.addEventListener('pointerdown', function (e) {
+      try {
+        if (e.pointerType !== 'touch') return;
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (e.target.closest && e.target.closest(SEL)) navigator.vibrate(7);
+      } catch (err) {}
+    }, { passive: true, capture: true });
   })();
 })();
