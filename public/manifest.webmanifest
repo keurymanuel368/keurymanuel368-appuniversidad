@@ -1,0 +1,22 @@
+{
+  "name": "Rumbo · Tu universidad bajo control",
+  "short_name": "Rumbo",
+  "description": "Tareas, notas, pensum y pagos de la UAPA en un solo lugar.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F7FE",
+  "theme_color": "#F3F7FE",
+  "lang": "es-DO",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Tareas", "short_name": "Tareas", "url": "/#tareas", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Notas", "short_name": "Notas", "url": "/#asignaturas", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Asistente", "short_name": "Asistente", "url": "/#asistente", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

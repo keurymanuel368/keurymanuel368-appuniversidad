@@ -1,45 +1,38 @@
-# Configuración de Rumbo en Cloudflare Workers.
-# IMPORTANTE: antes de conectar el repositorio, cada valor marcado con ✏️ debe ser IGUAL
-# al que ya tiene tu Worker en Cloudflare (Workers & Pages → tu Worker → Settings).
-# Si un binding falta aquí, Cloudflare lo quita al publicar.
+# Rumbo · configuración de Cloudflare Workers
+# Cloudflare publica con este archivo cada vez que guardas un cambio en GitHub.
 
-name = "rumbo"                       # ✏️ nombre exacto del Worker (arriba en el panel de Cloudflare)
+name = "rumbo"
 main = "src/index.js"
-compatibility_date = "2025-01-01"    # ✏️ Settings → Runtime → Compatibility date
-compatibility_flags = ["nodejs_compat"]  # ✏️ Settings → Runtime → Compatibility flags (bórrala si no aparece)
+compatibility_date = "2025-09-01"
+# Mantiene las variables que ya tienes en el panel de Cloudflare (no las borra al publicar).
+keep_vars = true
 
-# Páginas de la app (la parte que ve el usuario). Van en la carpeta /public.
+# La app (páginas, estilos, íconos, APK del widget)
 [assets]
 directory = "./public"
-binding = "ASSETS"
 not_found_handling = "single-page-application"
-# El Worker atiende primero la API y la guía de Telegram.
-run_worker_first = ["/api/*", "/telegram"]
+# Estas direcciones las atiende el servidor (API, guía de Telegram, llaves y descarga de la app).
+run_worker_first = ["/api/*", "/telegram", "/llaves", "/exportar"]
 
-# Base de datos D1 → Settings → Bindings → D1 database
+# Base de datos D1 "rumbo-db"
 [[d1_databases]]
 binding = "DB"
-database_name = "rumbo"                                   # ✏️
-database_id = "PEGA-AQUI-EL-ID-DE-LA-BASE-DE-DATOS"       # ✏️ Storage & Databases → D1 → tu base → Database ID
+database_name = "rumbo-db"
+database_id = "4ebcd232-495b-4893-8bd6-0fe9a3f516dc"
 
-# Respaldos (R2) → Settings → Bindings → R2 bucket
-[[r2_buckets]]
+# Copias de seguridad (KV)
+[[kv_namespaces]]
 binding = "BACKUPS"
-bucket_name = "rumbo-backups"                             # ✏️
+id = "ae58212e218447b9bee6016159d31556"
 
-# Workers AI (voz y respaldo de IA)
+# Workers AI (voz y respaldo de la IA)
 [ai]
 binding = "AI"
 
-# Tareas programadas → Settings → Triggers → Cron Triggers
-[triggers]
-crons = ["*/15 * * * *"]                                  # ✏️ copia exactamente los que aparezcan
-
-# Variables públicas → Settings → Variables and Secrets (las de tipo "Text")
 [vars]
+APP_URL = "https://rumbo.gestori.workers.dev"
+MOODLE_URL = "https://eva.uapa.edu.do"
 TZ_OFFSET_HOURS = "-4"
-MOODLE_URL = "https://eva.uapa.edu.do"                    # ✏️
-# APP_URL = "https://tu-dominio"                          # ✏️ solo si existe en el panel
 
-# Los SECRETOS (SESSION_SECRET, MOODLE_TOKEN, GROQ_API_KEY, WA_TOKEN, etc.) NO van aquí:
-# se quedan guardados en Cloudflare y no se borran al publicar desde GitHub.
+# Las tareas programadas (Cron) no se tocan: se quedan como están en Cloudflare.
+# Los secretos tampoco van aquí: siguen en Cloudflare o los pones desde la app en /llaves.
