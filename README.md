@@ -6,7 +6,7 @@ Funciona en **Cloudflare Workers** con una base de datos **D1**.
 
 ## Qué hay en este repositorio
 
-| Carpeta o archivo | Qué es |
+| Carpeta o archivo | Qué es |  
 |---|---|
 | `src/index.js` | El servidor (la API, el bot de Telegram, las tareas programadas). Es el código que estaba publicado en Cloudflare. |
 | `public/` | La app que ve el usuario (páginas, estilos, íconos, `rumbo-widget.apk`). |
