@@ -19,6 +19,21 @@
     return _fetch.call(this, input, init);
   };
 
+
+  // ---------- Pantalla de carga: se va cuando la pantalla ya tiene contenido ----------
+  (function () {
+    var t0 = Date.now();
+    function ready() {
+      var pg = document.querySelector('#root .page');
+      return (pg && pg.querySelector('.topbar, h1') && !pg.querySelector('.sk')) || document.querySelector('#root .auth-card, #root .login-box, #root .welcome-slide');
+    }
+    function hide() {
+      var b = document.getElementById('boot'); if (!b) return;
+      b.classList.add('out'); setTimeout(function () { b.remove(); }, 450);
+    }
+    var iv = setInterval(function () { if (ready() || Date.now() - t0 > 9000) { clearInterval(iv); hide(); } }, 60);
+  })();
+
   // ---------- Telegram Mini App ----------
   var hash = location.hash || '', tg = null, go = null;
   var i = hash.indexOf('tgWebAppData=');
@@ -120,6 +135,63 @@
     });
   }
   window.addEventListener('load', function () { (window.requestIdleCallback || function (f) { setTimeout(f, 1500); })(preload); });
+
+
+  // ---------- Interruptor de WhatsApp en Ajustes (un toque para apagar o prender) ----------
+  (function () {
+    var WA = 'M152.58,145.23l23,11.48A24,24,0,0,1,152,176a72.08,72.08,0,0,1-72-72A24,24,0,0,1,99.29,80.46l11.48,23L101,118a8,8,0,0,0-.73,7.51,56.47,56.47,0,0,0,30.15,30.15A8,8,0,0,0,138,155ZM232,128A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-40,24a8,8,0,0,0-4.42-7.16l-32-16a8,8,0,0,0-8,.5l-14.69,9.8a40.55,40.55,0,0,1-16-16l9.8-14.69a8,8,0,0,0,.5-8l-16-32A8,8,0,0,0,104,64a40,40,0,0,0-40,40,88.1,88.1,0,0,0,88,88A40,40,0,0,0,192,152Z';
+    function card(on, configured) {
+      var d = document.createElement('div');
+      d.className = 'card rumbo-wa';
+      d.innerHTML = '<div class="rw-row"><span class="rw-ic"><svg viewBox="0 0 256 256"><path d="' + WA + '"/></svg></span>' +
+        '<span class="rw-copy"><b>WhatsApp</b><small>' + (configured ? '' : 'Sin conectar todavía · ') + '<span class="rw-state"></span></small></span>' +
+        '<button class="rw-switch" role="switch" type="button" aria-label="Avisos por WhatsApp"><i></i></button></div>';
+      set(d, on);
+      d.querySelector('.rw-switch').addEventListener('click', function () {
+        var next = !d.classList.contains('on');
+        set(d, next);
+        try { navigator.vibrate && navigator.vibrate(8); } catch (e) {}
+        fetch('/api/wa/toggle', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: next }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { set(d, !!j.on); toast(j.on ? '🟢 WhatsApp activado' : '⚪ WhatsApp en pausa'); })
+          .catch(function () { set(d, !next); toast('⚠️ No se pudo cambiar. Revisa tu conexión.'); });
+      });
+      return d;
+    }
+    function set(d, on) {
+      d.classList.toggle('on', on);
+      d.querySelector('.rw-switch').setAttribute('aria-checked', on ? 'true' : 'false');
+      d.querySelector('.rw-state').textContent = on ? 'Te aviso también por WhatsApp' : 'En pausa: solo Telegram y notificaciones';
+    }
+    var busy = false;
+    function mount() {
+      if (busy || !/^#ajustes/.test(location.hash)) return;
+      var page = document.querySelector('.page');
+      if (!page) return;
+      var head = page.querySelector('.topbar');
+      if (!head) return;
+      var have = page.querySelector('.rumbo-wa');
+      if (have) {
+        // Si quedó antes del título, se mueve justo debajo
+        if (head.compareDocumentPosition(have) & Node.DOCUMENT_POSITION_PRECEDING) {
+          var a0 = head; while (a0.parentElement !== page) a0 = a0.parentElement;
+          page.insertBefore(have, a0.nextSibling);
+        }
+        return;
+      }
+      busy = true;
+      _fetch('/api/wa/status', { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        busy = false;
+        if (!j || page.querySelector('.rumbo-wa') || !document.contains(page)) return;
+        var c = card(j.on, j.configured);
+        var anchor = head;
+        while (anchor && anchor.parentElement && anchor.parentElement !== page) anchor = anchor.parentElement;
+        if (anchor && anchor.parentElement === page) page.insertBefore(c, anchor.nextSibling); else page.prepend(c);
+      }).catch(function () { busy = false; });
+    }
+    new MutationObserver(function () { mount(); }).observe(document.documentElement, { childList: true, subtree: true });
+    window.addEventListener('hashchange', function () { setTimeout(mount, 60); });
+  })();
 
   // ---------- Números que cuentan al aparecer (como en las apps de Apple) ----------
   (function () {

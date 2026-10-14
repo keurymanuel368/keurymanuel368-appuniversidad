@@ -59,3 +59,15 @@ Abre `https://TU-DOMINIO/telegram` con tu sesión de Rumbo iniciada.
 - Cada usuario entra a esa misma página y vincula su propio Telegram.
 
 La página explica todo, paso por paso.
+
+## Widget de Android
+
+El código está en la carpeta `widget/`, escrito en Java, sin librerías extra.
+
+Cuando cambias algo ahí, GitHub Actions compila el APK solo (`.github/workflows/widget.yml`). Lo guarda en `public/rumbo-widget.apk`, y Cloudflare lo publica.
+
+- **Tamaño mediano (4×2):** titular del día y cuenta regresiva en vivo de la próxima entrega. También 3 entregas con color de urgencia, botón para actualizar y datos rápidos (pendientes, índice y racha).
+- **Tamaño pequeño (2×2):** número grande de pendientes, la próxima entrega y su cuenta regresiva.
+- **Tema:** claro y oscuro automático, igual que el teléfono.
+- **Actualización:** cada 30 minutos, o al tocar ↻.
+- **Firma:** el APK se firma con `widget/rumbo-widget.jks`, para que cada versión se instale encima de la anterior. No borres ese archivo.

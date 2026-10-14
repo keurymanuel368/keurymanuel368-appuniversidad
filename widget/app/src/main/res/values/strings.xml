@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rumbo Widget</string>
+    <string name="widget_name">Rumbo</string>
+    <string name="widget_desc">Tus entregas, tu índice y la cuenta regresiva de la próxima tarea.</string>
+</resources>

@@ -2813,6 +2813,11 @@ async function tgRich0(env, input) {
   if (mn = t.match(/^(?:cuanto\s+)?necesito(?:\s+(?:sacar|para|un|una|llegar a|tener))*\s+(\d{1,3})(?:\s+(?:en|de|para))?\s*(.*)$/)) return tgNecesito(env, mn[1], mn[2]);
   if (/^(calculadora|necesito)$/.test(t)) return tgNecesito(env, 70, "");
   if (/^(semana|cierre|cierre de semana|resumen semanal)$/.test(t)) return tgSemana(env);
+  if (mn = t.match(/^(?:whatsapp|wa|ws)(?:\s+(on|off|activar|desactivar|prender|apagar|encender))?$/)) {
+    if (mn[1]) await setSetting(env, "wa_enabled", /^(on|activar|prender|encender)$/.test(mn[1]) ? "1" : "0");
+    const on = await getSetting(env, "wa_enabled", "1") !== "0";
+    return { html: on ? "\u{1F7E2} <b>WhatsApp activado</b>\n\nTe llegan los avisos tambi\xE9n por WhatsApp." : "\u26AA <b>WhatsApp apagado</b>\n\nSolo te aviso por Telegram y notificaciones de la app.", kb: [[{ text: on ? "\u23F8\uFE0F Apagar WhatsApp" : "\u25B6\uFE0F Activar WhatsApp", callback_data: on ? "c:whatsapp off" : "c:whatsapp on" }], ...TG_MINI] };
+  }
   if (/^(llamar|llamada|llamame|voz|hablar)$/.test(t)) return tgLlamar(env);
   if (/^(hoy|resumen|dia)$/.test(t)) return tgHoy(env);
   if (/^(tareas?|pendientes?)$/.test(t)) return tgTareas(env);
@@ -3186,6 +3191,7 @@ async function queueWhatsApp(env, text) {
 __name(queueWhatsApp, "queueWhatsApp");
 async function flushWhatsApp(env) {
   if (!callmebotConfigured(env)) return 0;
+  if (await getSetting(env, "wa_enabled", "1") === "0") return 0;
   const list = JSON.parse(await getSetting(env, "wa_outbox", "[]") || "[]").filter((x) => nowSec() - x.at < 86400);
   if (!list.length) return 0;
   const left = [];
@@ -3240,7 +3246,8 @@ async function sendToMe(env, text, opts = {}) {
   const typeOk = !opts.type || !waTypes.length || waTypes.includes(opts.type) || opts.type === "plan" && waTypes.includes("resumen");
   const h = localDate(env).getUTCHours();
   const quiet = await getSetting(env, "wa_quiet", "1") !== "0" && (h >= 22 || h < 7) && opts.tag !== "security";
-  if (callmebotConfigured(env) && typeOk && !quiet) {
+  const waOn = await getSetting(env, "wa_enabled", "1") !== "0";
+  if (waOn && callmebotConfigured(env) && typeOk && !quiet) {
     const origin = (env.APP_URL || await getSetting(env, "app_origin")).replace(/\/$/, "");
     const link = opts.url && origin ? `
 
@@ -4406,7 +4413,7 @@ async function calendarIcs(env) {
 __name(calendarIcs, "calendarIcs");
 
 // src/worker/widget.ts
-var WIDGET_VERSION = 4;
+var WIDGET_VERSION = 5;
 var dayKey = /* @__PURE__ */ __name((d) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`, "dayKey");
 var pick = /* @__PURE__ */ __name((arr, seed) => arr[seed % arr.length], "pick");
 var FRASES = [
@@ -4484,6 +4491,11 @@ async function widgetData(env) {
     reminders: rem.map((r) => ({ text: r.text, when: cuandoTexto(env, r.remind_at) })),
     phrases: gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)),
     lastGrade: last ? { title: last.item_name, grade: last.grade, max: last.grade_max } : null,
+    next: (() => {
+      const t = pending.filter((x) => x.due_at >= now).sort((a, b) => a.due_at - b.due_at)[0];
+      return t ? { title: t.title, course: t.course_short || t.course_name || "", when: cuandoTexto(env, t.due_at), due_at: t.due_at } : null;
+    })(),
+    average: overallAverage(await courseSummaries(env)),
     doneWeek,
     updated: horaTexto(today)
   };
@@ -7119,6 +7131,14 @@ app.post("/api/admin/config", async (c) => {
   else await setSetting(c.env, key, v);
   resetAppConfig();
   return c.json({ ok: true, relogin: name === "SESSION_SECRET" });
+});
+// Interruptor general de WhatsApp: un toque para apagarlo o prenderlo.
+app.get("/api/wa/status", async (c) => c.json({ on: await getSetting(c.env, "wa_enabled", "1") !== "0", configured: callmebotConfigured(c.env) || waConfigured(c.env) }));
+app.post("/api/wa/toggle", async (c) => {
+  const b = await c.req.json().catch(() => ({}));
+  const on = typeof b.on === "boolean" ? b.on : await getSetting(c.env, "wa_enabled", "1") === "0";
+  await setSetting(c.env, "wa_enabled", on ? "1" : "0");
+  return c.json({ ok: true, on });
 });
 app.post("/api/telegram/unlink", async (c) => {
   await setSetting(c.env, "tg_chat_id", "");
