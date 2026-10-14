@@ -1,0 +1,45 @@
+# Configuración de Rumbo en Cloudflare Workers.
+# IMPORTANTE: antes de conectar el repositorio, cada valor marcado con ✏️ debe ser IGUAL
+# al que ya tiene tu Worker en Cloudflare (Workers & Pages → tu Worker → Settings).
+# Si un binding falta aquí, Cloudflare lo quita al publicar.
+
+name = "rumbo"                       # ✏️ nombre exacto del Worker (arriba en el panel de Cloudflare)
+main = "src/index.js"
+compatibility_date = "2025-01-01"    # ✏️ Settings → Runtime → Compatibility date
+compatibility_flags = ["nodejs_compat"]  # ✏️ Settings → Runtime → Compatibility flags (bórrala si no aparece)
+
+# Páginas de la app (la parte que ve el usuario). Van en la carpeta /public.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# El Worker atiende primero la API y la guía de Telegram.
+run_worker_first = ["/api/*", "/telegram"]
+
+# Base de datos D1 → Settings → Bindings → D1 database
+[[d1_databases]]
+binding = "DB"
+database_name = "rumbo"                                   # ✏️
+database_id = "PEGA-AQUI-EL-ID-DE-LA-BASE-DE-DATOS"       # ✏️ Storage & Databases → D1 → tu base → Database ID
+
+# Respaldos (R2) → Settings → Bindings → R2 bucket
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "rumbo-backups"                             # ✏️
+
+# Workers AI (voz y respaldo de IA)
+[ai]
+binding = "AI"
+
+# Tareas programadas → Settings → Triggers → Cron Triggers
+[triggers]
+crons = ["*/15 * * * *"]                                  # ✏️ copia exactamente los que aparezcan
+
+# Variables públicas → Settings → Variables and Secrets (las de tipo "Text")
+[vars]
+TZ_OFFSET_HOURS = "-4"
+MOODLE_URL = "https://eva.uapa.edu.do"                    # ✏️
+# APP_URL = "https://tu-dominio"                          # ✏️ solo si existe en el panel
+
+# Los SECRETOS (SESSION_SECRET, MOODLE_TOKEN, GROQ_API_KEY, WA_TOKEN, etc.) NO van aquí:
+# se quedan guardados en Cloudflare y no se borran al publicar desde GitHub.
