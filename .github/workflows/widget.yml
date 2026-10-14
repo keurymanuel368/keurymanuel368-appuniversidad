@@ -1,5 +1,6 @@
 # Compila el widget de Android cada vez que cambias algo en la carpeta widget/
 # y deja el APK nuevo en public/rumbo-widget.apk (Cloudflare lo publica solo).
+# Usa el Java y el Android SDK que ya trae la máquina de GitHub: menos pasos, menos fallos.
 name: Widget de Android
 
 on:
@@ -13,30 +14,36 @@ permissions:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar el código
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+      - name: Preparar Java 17
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          "$JAVA_HOME_17_X64/bin/java" -version
 
-      - uses: android-actions/setup-android@v3
+      - name: Preparar Gradle 8.10.2
+        run: |
+          curl -fsSL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.10.2/bin" >> "$GITHUB_PATH"
 
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
+      - name: Preparar Android SDK
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > widget/local.properties
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null || true
 
       - name: Compilar APK
         working-directory: widget
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Copiar a public/
-        run: cp widget/app/build/outputs/apk/release/app-release.apk public/rumbo-widget.apk
-
-      - name: Guardar el APK en el repositorio
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'Widget: APK compilado automáticamente'
-          file_pattern: public/rumbo-widget.apk
+      - name: Guardar el APK en public/
+        run: |
+          cp widget/app/build/outputs/apk/release/app-release.apk public/rumbo-widget.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898315+github-actions[bot]@users.noreply.github.com"
+          git add public/rumbo-widget.apk
+          git commit -m "Widget: APK compilado automáticamente" || echo "Sin cambios en el APK"
+          git push
