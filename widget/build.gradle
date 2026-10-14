@@ -1,3 +1,44 @@
 plugins {
-    id 'com.android.application' version '8.7.3' apply false
+    id 'com.android.application'
+}
+
+android {
+    namespace 'app.rumbo.widget'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'app.rumbo.widget'
+        minSdk 26
+        targetSdk 35
+        versionCode 6
+        versionName '6.0'
+    }
+
+    signingConfigs {
+        rumbo {
+            // Llave fija del proyecto: así cada versión nueva se instala encima de la anterior.
+            storeFile file('../rumbo-widget.jks')
+            storePassword 'rumbo-widget'
+            keyAlias 'rumbo'
+            keyPassword 'rumbo-widget'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.rumbo
+        }
+    }
+
+    // Que una advertencia de estilo no detenga la compilación.
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 }
