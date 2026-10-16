@@ -28,6 +28,7 @@ import { runScheduled } from './cron';
 import { weeklyPlan } from './plan';
 import { cuandoTexto, localDate, localToUnix, nowSec } from './time';
 import { setIgnored } from './ignore';
+import { tokenFromValue, webLoginToken } from './evalogin';
 import { registerExtras } from './extras';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -1136,6 +1137,16 @@ app.post('/api/eva/connect', async (c) => {
   try {
     const res = await fetch(`${base}/login/token.php?service=moodle_mobile_app`, { method: 'POST', body: new URLSearchParams({ username, password: b.password }) });
     const j = (await res.json().catch(() => ({}))) as { token?: string; error?: string; errorcode?: string };
+    // Si token.php no deja entrar, se intenta como en el navegador (entrar al EVA y pedir el enlace de la app).
+    let why = j.errorcode || 'sin respuesta';
+    if (!j.token) {
+      const w = await webLoginToken(base, username, b.password);
+      if (w.token) j.token = w.token;
+      else if (w.reason === 'invalid') why = 'invalidlogin';
+      else why = (j.errorcode && j.errorcode !== 'invalidlogin' ? j.errorcode + ' · ' : '') + w.reason + (w.detail ? ' ' + w.detail : '');
+      j.errorcode = why === 'invalidlogin' ? 'invalidlogin' : 'otro';
+      j.error = why;
+    }
     if (!j.token) return c.json({ error: j.errorcode === 'invalidlogin' ? 'Matrícula o contraseña incorrecta. Escribe los mismos datos con los que entras al EVA (revisa que no haya espacios) o usa «¿Olvidaste tu contraseña?».' : `El EVA no me dejó entrar (${j.error || 'sin respuesta'}). Prueba la opción avanzada de abajo.`, method: 'link' }, 400);
     token = j.token;
   } catch { return c.json({ error: 'No pude comunicarme con el EVA. Inténtalo en un momento.' }, 502); }
@@ -1146,12 +1157,8 @@ app.post('/api/eva/connect', async (c) => {
 app.post('/api/eva/token', async (c) => {
   const { value } = await c.req.json<{ value?: string }>().catch(() => ({ value: '' }));
   const v = (value || '').trim();
-  let token = /^[a-f0-9]{32}$/i.test(v) ? v : '';
-  const m = v.match(/token=([A-Za-z0-9+/=_-]+)/);
-  if (!token && m) {
-    try { token = atob(m[1].replace(/-/g, '+').replace(/_/g, '/')).split(':::')[1] || ''; } catch { token = ''; }
-  }
-  if (!/^[a-f0-9]{32}$/i.test(token)) return c.json({ error: 'Eso no parece el enlace del EVA. Debe empezar con moodlemobile://token=' }, 400);
+  const token = tokenFromValue(v);
+  if (!token) return c.json({ error: 'Eso no parece el enlace del EVA. Debe empezar con moodlemobile://token=' }, 400);
   return saveEvaToken(c.env, token).then((r) => c.json(r, r.ok ? 200 : 400));
 });
 

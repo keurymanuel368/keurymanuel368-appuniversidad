@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 42,
+    date: '2026-10-16',
+    title: '🔌 Conectar el EVA funciona aunque tu cuenta sea distinta',
+    items: [
+      'Si el EVA rechazaba tu contraseña por el método rápido, ahora Rumbo entra al EVA como lo harías tú en el navegador y consigue la conexión solo. Sigue sin guardar tu contraseña.',
+      'Si no se puede conectar, el mensaje dice la causa real en vez de culpar siempre a la contraseña.',
+    ],
+  },
+  {
     version: 41,
     date: '2026-10-16',
     title: '🎉 Entrar por primera vez, en un solo paso',
