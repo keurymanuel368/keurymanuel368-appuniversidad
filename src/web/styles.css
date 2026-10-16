@@ -2197,3 +2197,4 @@ h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
 #slot-appear .rw-appear-title { display: none; }
 #slot-appear, #slot-wa { display: block; }
 #slot-appear:not(:empty) { margin-top: 12px; }
+.btn.danger-soft { background: var(--red-soft); color: var(--red); border-color: transparent; }

@@ -619,6 +619,13 @@ function EvaCard({ eva, s, onSave, onChanged }: { eva: SettingsRes['status']['ev
     catch (e) { toast((e as Error).message, 'err'); }
     setSyncing(false); onChanged();
   }
+  async function disconnect() {
+    if (!confirm('¿Desconectar tu EVA? Rumbo dejará de traer tus tareas y notas. Lo que ya está guardado no se borra y puedes volver a conectarlo cuando quieras.')) return;
+    haptic(10);
+    try { await api('/eva/disconnect', { method: 'POST' }); toast('EVA desconectado'); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    onChanged();
+  }
   return (
     <div className={`card eva-card ${ok ? '' : 'needs'}`}>
       <div className="toggle">
@@ -638,6 +645,7 @@ function EvaCard({ eva, s, onSave, onChanged }: { eva: SettingsRes['status']['ev
       ) : (
         <button className="btn primary lg block" onClick={() => { haptic(8); setOpen(true); }}><Icon name="link" size={18} />Conectar mi EVA</button>
       )}
+      {eva.configured && <button className="btn danger-soft block" onClick={disconnect}><Icon name="logout" size={18} />Desconectar mi EVA</button>}
       <div className="field"><label htmlFor="es">Sincronizar el EVA cada (horas)</label><input id="es" className="input num" inputMode="numeric" defaultValue={s.eva_sync_hours} onBlur={(e) => onSave('eva_sync_hours', e.target.value.replace(/\D/g, '') || '2')} /></div>
       {open && <EvaModal onClose={() => setOpen(false)} onDone={() => { setOpen(false); onChanged(); void sync(); }} />}
     </div>

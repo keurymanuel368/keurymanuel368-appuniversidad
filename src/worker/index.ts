@@ -1167,7 +1167,9 @@ async function saveEvaToken(env: Env, token: string): Promise<{ ok: boolean; use
 }
 
 app.post('/api/eva/disconnect', async (c) => {
-  await setSetting(c.env, 'moodle_token', '');
+  await setSetting(c.env, 'moodle_token', 'off');
+  await setSetting(c.env, 'eva_user', '');
+  await setSetting(c.env, 'eva_last_error', '');
   return c.json({ ok: true });
 });
 

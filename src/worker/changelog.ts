@@ -10,6 +10,14 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 40,
+    date: '2026-10-16',
+    title: '🔌 Ya puedes desconectar tu EVA',
+    items: [
+      'En Ajustes → Conexiones, «Desconectar mi EVA»: Rumbo deja de traer tus tareas y notas, y lo que ya está guardado no se borra. Puedes volver a conectarlo cuando quieras.',
+    ],
+  },
+  {
     version: 39,
     date: '2026-10-16',
     title: '🔌 Conectar el EVA es mucho más fácil',
