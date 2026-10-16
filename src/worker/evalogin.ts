@@ -61,13 +61,16 @@ export async function webLoginToken(base: string, username: string, password: st
       const form = [...html0.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)].map((m) => m[0]).find((f) => /commonauth/i.test(f));
       if (!form) return { reason: 'nolaunch', detail: `sin formulario de identidad (HTTP ${first.res.status}, ${new URL(first.url).host}, ${html0.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)})` };
       const action = new URL((form.match(/<form\b[^>]*\baction="([^"]*)"/i)?.[1] || '/commonauth').replace(/&amp;/g, '&'), first.url).href;
+      // Igual que el JavaScript de esa página: el usuario lleva el dominio del servidor (matrícula@carbon.super).
+      const tenant = new URL(first.url).searchParams.get('tenantDomain');
+      const fullUser = tenant && tenant !== 'null' && !username.includes('@') ? `${username}@${tenant}` : username;
       const data = new URLSearchParams();
       for (const t of form.match(/<input\b[^>]*>/gi) || []) {
         const n = t.match(/\bname="([^"]*)"/i)?.[1];
         if (!n) continue;
         const type = (t.match(/\btype="([^"]*)"/i)?.[1] || 'text').toLowerCase();
         if (type === 'checkbox' || type === 'submit') continue;
-        data.set(n, type === 'password' ? password : /^(username|usernameUserInput)$/i.test(n) ? username : (t.match(/\bvalue="([^"]*)"/i)?.[1] || '').replace(/&amp;/g, '&'));
+        data.set(n, type === 'password' ? password : n === 'usernameUserInput' ? username : n === 'username' ? fullUser : (t.match(/\bvalue="([^"]*)"/i)?.[1] || '').replace(/&amp;/g, '&'));
       }
       if (!data.has('sessionDataKey')) { const k = new URL(first.url).searchParams.get('sessionDataKey'); if (k) data.set('sessionDataKey', k); }
       const post = await call(action, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: data.toString() });
