@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 43,
+    date: '2026-10-16',
+    title: '🔌 Conectar el EVA con el login oficial',
+    items: ['Nuevo botón «Entrar con el login oficial de la UAPA»: entras en la página del EVA y vuelves a Rumbo ya conectado, sin escribir tu clave aquí.'],
+  },
+  {
     version: 42,
     date: '2026-10-16',
     title: '🔌 Conectar el EVA funciona aunque tu cuenta sea distinta',

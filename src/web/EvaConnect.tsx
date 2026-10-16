@@ -43,10 +43,17 @@ export function EvaModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [passport] = useState(() => Math.random().toString(36).slice(2, 10));
   const launch = `https://eva.uapa.edu.do/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=moodlemobile`;
 
+  // Login oficial: el EVA devuelve el token a Rumbo (/eva-token) en vez de a la app de Moodle.
+  const official = `https://eva.uapa.edu.do/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=${encodeURIComponent(`${location.origin}/eva-token#`)}`;
+
   return (
     <Modal title="Conectar tu EVA" onClose={onClose}>
+      <div className="form-stack">
+        <a className="btn primary lg block" href={official}><Icon name="link" size={18} />Entrar con el login oficial de la UAPA</a>
+        <p className="small muted center">Entras en la página oficial del EVA y al terminar vuelves a Rumbo ya conectado. Rumbo nunca ve tu contraseña.</p>
+      </div>
       <form onSubmit={submit} className="form-stack">
-        <p className="small muted">Escribe la misma matrícula y contraseña con las que entras al EVA. Toma 10 segundos.</p>
+        <p className="small muted">O escribe la misma matrícula y contraseña con las que entras al EVA. Toma 10 segundos.</p>
         <div className="field"><label htmlFor="eva-u">Matrícula</label>
           <input id="eva-u" className="input" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" inputMode="numeric" placeholder="100123456" required /></div>
         <div className="field"><label htmlFor="eva-p">Contraseña del EVA</label>

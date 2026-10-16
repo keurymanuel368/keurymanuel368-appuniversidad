@@ -45,6 +45,15 @@ app.get('/telegram', (c) => c.html(TELEGRAM_PAGE, 200, noStore));
 app.get('/api/telegram/guia', (c) => c.html(TELEGRAM_PAGE, 200, noStore));
 app.get('/exportar', (c) => c.html(EXPORT_PAGE, 200, noStore));
 app.get('/api/exportar', (c) => c.html(EXPORT_PAGE, 200, noStore));
+// Vuelta del login oficial: el EVA redirige aquí con el token en el fragmento (#://token=…); la página lo guarda y vuelve a la app.
+const EVA_TOKEN_PAGE = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conectando el EVA</title>
+<body style="font-family:system-ui;text-align:center;padding:48px 20px;color:#1e3a5f"><h2 id="t">Conectando tu EVA…</h2><p id="m"></p><p><a href="/#ajustes">Volver a Rumbo</a></p>
+<script>(async()=>{const t=document.getElementById('t'),m=document.getElementById('m');try{const v=location.hash||location.href;
+const r=await fetch('/api/eva/token',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({value:v})});
+const j=await r.json().catch(()=>({}));history.replaceState(null,'',location.pathname);
+if(r.ok){t.textContent='¡Conectado!';m.textContent='Volviendo a Rumbo…';setTimeout(()=>location.replace('/#inicio'),1200)}
+else{t.textContent='No se pudo conectar';m.textContent=r.status===401?'Entra primero a Rumbo y vuelve a intentarlo.':(j.error||'Error')}}catch(e){t.textContent='No se pudo conectar';m.textContent=String(e)}})()</script></body></html>`;
+app.get('/eva-token', (c) => c.html(EVA_TOKEN_PAGE, 200, noStore));
 app.get('/llaves', (c) => c.html(KEYS_PAGE, 200, noStore));
 app.get('/api/llaves', (c) => c.html(KEYS_PAGE, 200, noStore));
 
