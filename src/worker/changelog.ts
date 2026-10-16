@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 41,
+    date: '2026-10-16',
+    title: '🎉 Entrar por primera vez, en un solo paso',
+    items: [
+      'Al crear tu cuenta con una invitación, escribes también la contraseña de tu EVA y Rumbo se conecta solo y empieza a traer tus tareas y notas. Ya no hay que buscar dónde conectar.',
+      'Si el EVA no acepta la contraseña, tu cuenta queda creada igual y te lleva a conectarlo con calma.',
+    ],
+  },
+  {
     version: 40,
     date: '2026-10-16',
     title: '🔌 Ya puedes desconectar tu EVA',

@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState, type FormEvent } from 'rea
 import { flushSync } from 'react-dom';
 import { api, ApiError, type Course } from './api';
 import { Icon } from './icons';
-import { Modal, SyncBar, TaskModal, Toaster, haptic } from './components';
+import { Modal, SyncBar, TaskModal, Toaster, haptic, toast } from './components';
 import { SearchModal } from './Search';
 import { Welcome } from './Welcome';
 import { isAdmin, setMe, type Me } from './me';
@@ -190,7 +190,7 @@ export function App() {
   const signedIn = () => api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch(() => setAuth('in'));
   if (auth === 'out') {
     const code = inviteCode();
-    return <>{code ? <Signup code={code} onIn={() => { location.hash = 'conectar'; void signedIn(); }} /> : <Login onIn={() => { void signedIn(); }} />}<Toaster /></>;
+    return <>{code ? <Signup code={code} onIn={(evaOk) => { location.hash = evaOk ? 'inicio' : 'conectar'; void signedIn(); }} /> : <Login onIn={() => { void signedIn(); }} />}<Toaster /></>;
   }
 
   const tab = (id: string) => {
@@ -345,23 +345,37 @@ function Login({ onIn }: { onIn: () => void }) {
 }
 
 /** Registro con invitación (#unirme/CÓDIGO): nombre, matrícula y contraseña; luego va directo a Conexiones. */
-function Signup({ code, onIn }: { code: string; onIn: () => void }) {
+function Signup({ code, onIn }: { code: string; onIn: (evaOk: boolean) => void }) {
   const [info, setInfo] = useState<{ from?: string; error?: string } | null>(null);
   const [name, setName] = useState('');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
+  const [evaPass, setEvaPass] = useState('');
+  const [step, setStep] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { api<{ from: string }>(`/invite/${code}`).then((r) => setInfo({ from: r.from })).catch((e) => setInfo({ error: (e as Error).message })); }, [code]);
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr('');
     try {
+      setStep('Creando tu cuenta…');
       await api('/signup', { method: 'POST', body: { code, name, login, password } });
       try { localStorage.setItem('rumbo-login', login.trim()); } catch { /* sin almacenamiento */ }
-      haptic(12); onIn();
+      // Ya con sesión: se conecta el EVA con la misma matrícula (la contraseña va directo a la UAPA y no se guarda).
+      let evaOk = false;
+      if (evaPass) {
+        setStep('Conectando con tu EVA…');
+        try {
+          await api('/eva/connect', { method: 'POST', body: { username: login, password: evaPass } });
+          evaOk = true;
+          void api('/sync', { method: 'POST' }).then(() => window.dispatchEvent(new Event('rumbo:badges'))).catch(() => {});
+          toast('¡Cuenta lista y EVA conectado! Trayendo tus tareas…');
+        } catch (e3) { toast(`Tu cuenta quedó creada, pero el EVA no conectó: ${(e3 as Error).message}`, 'err'); }
+      }
+      haptic(12); onIn(evaOk);
     } catch (e2) { setErr((e2 as Error).message); haptic(40); }
-    setBusy(false);
+    setStep(''); setBusy(false);
   }
   return (
     <div className="lg2">
@@ -392,9 +406,13 @@ function Signup({ code, onIn }: { code: string; onIn: () => void }) {
               <input id="su-p" type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="Contraseña nueva (8 o más)" minLength={8} required aria-describedby="su-hint" />
               <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? 'Ocultar contraseña' : 'Ver contraseña'}>{show ? 'Ocultar' : 'Ver'}</button></div>
             <span id="su-hint" className="auth-foot">Usa una contraseña nueva para Rumbo, no la del EVA.</span>
+            <label htmlFor="su-e" className="sr-only">Contraseña de tu EVA</label>
+            <div className="lg2-field"><span className="lg2-key"><Icon name="book" size={18} /></span>
+              <input id="su-e" type={show ? 'text' : 'password'} value={evaPass} onChange={(e) => setEvaPass(e.target.value)} autoComplete="off" placeholder="Contraseña de tu EVA (para traer tus tareas)" aria-describedby="su-eva" /></div>
+            <span id="su-eva" className="auth-foot">Es la que usas para entrar al EVA con esta matrícula. Va directo a la UAPA, Rumbo no la guarda. Si la dejas vacía, lo conectas después.</span>
             {err && <div className="auth-error" role="alert"><Icon name="alert" size={16} />{err}</div>}
             <button className="lg2-btn" type="submit" disabled={busy || !info}>
-              {busy && <span className="auth-spinner" aria-hidden="true" />}{busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}
+              {busy && <span className="auth-spinner" aria-hidden="true" />}{busy ? (step || 'Creando tu cuenta…') : evaPass ? 'Crear cuenta y conectar mi EVA' : 'Crear mi cuenta'}
               {!busy && <span className="lg2-arrow"><Icon name="chevron" size={18} style={{ strokeWidth: 2.6 }} /></span>}
             </button>
           </>
