@@ -34,15 +34,17 @@ describe('webLoginToken', () => {
         expect((init.headers as Record<string, string>).cookie).toContain('MoodleSession=abc');
         return res(303, '', { location: '/my/', 'set-cookie': 'MoodleSession=nueva; path=/' });
       }
+      if (url.endsWith('/my/')) return res(200, '<h1>Panel</h1>');
       expect((init.headers as Record<string, string>).cookie).toContain('MoodleSession=nueva');
       return res(303, '', { location: link });
     }));
     expect(await webLoginToken('https://eva.test', '100', 'clave')).toEqual({ token: TOKEN, reason: 'ok' });
-    expect(calls).toEqual(['GET /login/index.php', 'POST /login/index.php', 'GET /admin/tool/mobile/launch.php']);
+    expect(calls).toEqual(['GET /login/index.php', 'POST /login/index.php', 'GET /my/', 'GET /admin/tool/mobile/launch.php']);
   });
 
   it('contraseña mala: el EVA vuelve a mostrar el formulario → invalid', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => (init.method ? res(200, FORM + 'error') : res(200, FORM))));
+    // El EVA real: la clave mala redirige a /login/index.php?loginredirect=1 y ahí muestra el error.
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => (init.method ? res(303, '', { location: 'https://eva.test/login/index.php?loginredirect=1' }) : res(200, FORM + 'Acceso inválido'))));
     expect((await webLoginToken('https://eva.test', '100', 'mala')).reason).toBe('invalid');
   });
 
@@ -50,6 +52,7 @@ describe('webLoginToken', () => {
     let n = 0;
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
       if (url.endsWith('/login/index.php')) return init.method ? res(303, '', { location: '/my/' }) : res(200, FORM);
+      if (url.endsWith('/my/')) return res(200, '<h1>Panel</h1>');
       n++;
       return n === 1 ? res(200, '<a href="https://eva.test/admin/tool/mobile/launch.php?confirmed=1&amp;x=1">Continuar</a>') : res(303, '', { location: link });
     }));

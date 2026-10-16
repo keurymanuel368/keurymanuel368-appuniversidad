@@ -47,12 +47,18 @@ export async function webLoginToken(base: string, username: string, password: st
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ anchor: '', logintoken, username, password }).toString(),
     });
-    if (login.status < 300 || login.status >= 400) {
-      const body = await login.text();
-      if (/(login-form|name="password")/i.test(body)) return { reason: 'invalid' };
-      return { reason: login.status === 403 || login.status === 429 ? 'blocked' : 'error', detail: `HTTP ${login.status}` };
+    // Moodle contesta con una redirección en los dos casos: a /login/index.php?loginredirect=1 si la clave es mala
+    // (y ahí muestra «Acceso inválido») o al panel si es buena. Se siguen las redirecciones y se decide por la página final.
+    let last: Response = login;
+    for (let i = 0; i < 5 && last.status >= 300 && last.status < 400; i++) {
+      const loc = last.headers.get('location') || '';
+      if (!loc || /^[a-z][a-z0-9+.-]*:/i.test(loc) && !/^https?:/i.test(loc)) break;
+      await last.text().catch(() => '');
+      last = await call(new URL(loc, root + '/').href);
     }
-    await login.text().catch(() => '');
+    const after = last.status >= 300 && last.status < 400 ? '' : await last.text();
+    if (/id="login"|name="password"/i.test(after)) return { reason: 'invalid' };
+    if (last.status === 403 || last.status === 429) return { reason: 'blocked', detail: `HTTP ${last.status}` };
     // 3) Pedir el enlace de la app. A veces el EVA muestra antes una página de confirmación con un botón «confirmed=1».
     const passport = 'rumbo' + Math.random().toString(36).slice(2, 10);
     let url = `${root}/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=moodlemobile`;
