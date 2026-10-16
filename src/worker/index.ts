@@ -1131,6 +1131,7 @@ app.post('/api/eva/connect', async (c) => {
   if (!b.username?.trim() || !b.password) return c.json({ error: 'Escribe tu matrícula y tu contraseña del EVA.' }, 400);
   const base = c.env.MOODLE_URL.replace(/\/$/, '');
   let token = '';
+  let evaMsg = '';
   // Matrícula tolerante: espacios o guiones se quitan; un usuario con letras se escribe en minúsculas (Moodle lo exige).
   const raw = b.username.trim();
   const username = /^[\d\s-]+$/.test(raw) ? raw.replace(/\D/g, '') : raw.toLowerCase();
@@ -1142,12 +1143,12 @@ app.post('/api/eva/connect', async (c) => {
     if (!j.token) {
       const w = await webLoginToken(base, username, b.password);
       if (w.token) j.token = w.token;
-      else if (w.reason === 'invalid') why = 'invalidlogin';
+      else if (w.reason === 'invalid') { why = 'invalidlogin'; evaMsg = w.detail || ''; }
       else why = (j.errorcode && j.errorcode !== 'invalidlogin' ? j.errorcode + ' · ' : '') + w.reason + (w.detail ? ' ' + w.detail : '');
       j.errorcode = why === 'invalidlogin' ? 'invalidlogin' : 'otro';
       j.error = why;
     }
-    if (!j.token) return c.json({ error: j.errorcode === 'invalidlogin' ? 'Matrícula o contraseña incorrecta. Escribe los mismos datos con los que entras al EVA (revisa que no haya espacios) o usa «¿Olvidaste tu contraseña?».' : `El EVA no me dejó entrar (${j.error || 'sin respuesta'}). Prueba la opción avanzada de abajo.`, method: 'link' }, 400);
+    if (!j.token) return c.json({ error: j.errorcode === 'invalidlogin' ? 'Matrícula o contraseña incorrecta. Escribe los mismos datos con los que entras al EVA (revisa que no haya espacios) o usa «¿Olvidaste tu contraseña?».' + (evaMsg ? ` El EVA dice: «${evaMsg}»` : '') : `El EVA no me dejó entrar (${j.error || 'sin respuesta'}). Prueba la opción avanzada de abajo.`, method: 'link' }, 400);
     token = j.token;
   } catch { return c.json({ error: 'No pude comunicarme con el EVA. Inténtalo en un momento.' }, 502); }
   return saveEvaToken(c.env, token).then((r) => c.json(r, r.ok ? 200 : 400));

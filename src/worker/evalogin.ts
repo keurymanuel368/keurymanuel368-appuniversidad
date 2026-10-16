@@ -57,7 +57,10 @@ export async function webLoginToken(base: string, username: string, password: st
       last = await call(new URL(loc, root + '/').href);
     }
     const after = last.status >= 300 && last.status < 400 ? '' : await last.text();
-    if (/id="login"|name="password"/i.test(after)) return { reason: 'invalid' };
+    if (/id="login"|name="password"/i.test(after)) {
+      const msg = after.match(/id="loginerrormessage"[^>]*>([\s\S]*?)<\/div>/i)?.[1] || after.match(/class="[^"]*alert-danger[^"]*"[^>]*>([\s\S]*?)<\/div>/i)?.[1] || '';
+      return { reason: 'invalid', detail: msg.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) };
+    }
     if (last.status === 403 || last.status === 429) return { reason: 'blocked', detail: `HTTP ${last.status}` };
     // 3) Pedir el enlace de la app. A veces el EVA muestra antes una página de confirmación con un botón «confirmed=1».
     const passport = 'rumbo' + Math.random().toString(36).slice(2, 10);
