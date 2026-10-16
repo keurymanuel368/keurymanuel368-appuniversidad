@@ -2,11 +2,11 @@
 // una mascota con cara según cómo vas, una frase, tu racha y lo próximo que vence.
 import type { Env } from './env';
 import { getSettings } from './db';
-import { listTasks } from './data';
-import { cuandoTexto, horaTexto, localDate, nowSec } from './time';
+import { courseSummaries, listTasks, overallAverage } from './data';
+import { cuandoTexto, fechaLarga, horaTexto, localDate, nowSec, ymd } from './time';
 
 /** versionCode del APK publicado en public/rumbo-widget.apk (súbelo junto con android-widget/app/build.gradle). */
-export const WIDGET_VERSION = 4;
+export const WIDGET_VERSION = 6;
 
 export type WidgetData = {
   mood: 'feliz' | 'tranqui' | 'atento' | 'alerta';
@@ -16,7 +16,14 @@ export type WidgetData = {
   pending: number;
   today: number;
   overdue: number;
-  tasks: { title: string; when: string; course: string; urgent: boolean }[];
+  tasks: { title: string; when: string; course: string; urgent: boolean; late: boolean }[];
+  /** Hoy y los 6 días siguientes, con cuántas entregas tiene cada uno (widget grande). */
+  week: { d: string; n: number; count: number; today: boolean }[];
+  name: string;
+  dayTitle: string;
+  next: { title: string; course: string; when: string; due_at: number | null } | null;
+  /** Índice del trimestre (anillo del widget). */
+  average: number | null;
   reminders: { text: string; when: string }[];
   phrases: string[];
   doneWeek: number;
@@ -83,17 +90,33 @@ export async function widgetData(env: Env): Promise<WidgetData> {
     sub = racha > 1 ? `Llevas ${racha} días seguidos cumpliendo.` : 'Aprovecha para adelantar o descansar.';
   }
 
-  const list = [...overdue, ...pending.filter((t) => t.due_at! >= now)].slice(0, 3);
+  const list = [...overdue, ...pending.filter((t) => t.due_at! >= now)].slice(0, 5);
+  // Tu semana (para el widget grande): cuántas entregas hay cada día de hoy a 6 días.
+  const week: { d: string; n: number; count: number; today: boolean }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = localDate(env, now + i * 86400);
+    const key = ymd(d);
+    const items = pending.filter((t) => ymd(localDate(env, t.due_at!)) === key);
+    week.push({ d: 'DLMXJVS'[d.getUTCDay()], n: d.getUTCDate(), count: items.length, today: i === 0 });
+  }
   // Última nota (de los últimos 5 días): se alterna con las frases del widget.
   const last = await env.DB.prepare(`SELECT g.item_name, g.grade, g.grade_max FROM grades g WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.updated_at > ? ORDER BY g.updated_at DESC LIMIT 1`)
     .bind(env.UID, now - 5 * 86400).first<{ item_name: string; grade: number; grade_max: number }>();
   const gradeLine = last ? `📊 Última nota: ${Math.round(last.grade * 100) / 100}/${last.grade_max} · ${last.item_name.replace(/\s+(calificaci[oó]n|foro completo)$/i, '').slice(0, 40)}` : null;
   return {
     mood, headline, sub, streak: racha, pending: pending.length, today: dueToday.length, overdue: overdue.length,
-    tasks: list.map((t) => ({ title: t.title, when: t.due_at! < now ? 'Atrasada' : cuandoTexto(env, t.due_at!), course: t.course_short || t.course_name || '', urgent: t.due_at! < now + 86400 })),
+    tasks: list.map((t) => ({ title: t.title, when: t.due_at! < now ? 'Atrasada' : cuandoTexto(env, t.due_at!), course: t.course_short || t.course_name || '', urgent: t.due_at! < now + 86400, late: t.due_at! < now })),
+    week,
+    name,
+    dayTitle: (() => { const f = fechaLarga(localDate(env)); return f.charAt(0).toUpperCase() + f.slice(1); })(),
     reminders: rem.map((r) => ({ text: r.text, when: cuandoTexto(env, r.remind_at) })),
     phrases: gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)),
     lastGrade: last ? { title: last.item_name, grade: last.grade, max: last.grade_max } : null,
+    next: (() => {
+      const t = pending.filter((x) => x.due_at! >= now).sort((a, b) => a.due_at! - b.due_at!)[0];
+      return t ? { title: t.title, course: t.course_short || t.course_name || '', when: cuandoTexto(env, t.due_at!), due_at: t.due_at } : null;
+    })(),
+    average: overallAverage(await courseSummaries(env)),
     doneWeek,
     updated: horaTexto(today),
   };

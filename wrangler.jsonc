@@ -24,6 +24,9 @@
   "kv_namespaces": [{ "binding": "BACKUPS", "id": "ae58212e218447b9bee6016159d31556" }],
   // Workers AI (plan gratis): transcribe las notas de voz que le mandas al asistente por WhatsApp.
   "ai": { "binding": "AI" },
+  // Pantallas en vivo: un Durable Object por usuario mantiene los WebSockets (src/worker/live.ts). Plan gratis (SQLite).
+  "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "RumboLive" }] },
+  "migrations": [{ "tag": "v1-live", "new_sqlite_classes": ["RumboLive"] }],
   // Un solo cron cada 30 minutos: sincroniza el EVA, envía el resumen diario y los recordatorios.
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {

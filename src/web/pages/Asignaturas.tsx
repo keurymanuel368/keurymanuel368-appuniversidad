@@ -23,7 +23,7 @@ export function Asignaturas() {
 
   return (
     <>
-      <PageHead eyebrow="Asignaturas del trimestre" title="Notas">
+      <PageHead eyebrow="Este trimestre" title="Notas">
         <button className="btn line" onClick={() => { haptic(6); setRecord(true); }} aria-label="Récord de notas"><Icon name="download" size={18} /><span className="lbl">Récord</span></button>
         <button className="btn line" onClick={() => setAdding(true)} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Agregar a mano</span></button>
       </PageHead>

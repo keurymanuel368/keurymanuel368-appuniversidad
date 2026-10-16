@@ -1,14 +1,19 @@
 import { Hono } from 'hono';
 import type { Env } from './env';
 import { checkPassword, clearSessionCookie, createSessionCookie, hashPassword, randomHex, safeEqual, sessionUser, verifyMetaSignature } from './auth';
-import { courseSummaries, dashboard, listTasks, payWindow, summaryAlert, summaryShort, summaryText } from './data';
+import { courseSummaries, dashboard, indexTrend, listTasks, payWindow, summaryAlert, summaryShort, summaryText, weekStory } from './data';
 import { blocks } from './wa';
-import { DEFAULT_SETTINGS, activeUsers, forUser, getSettings, markSent, setSetting, userBySetting } from './db';
+import { DEFAULT_SETTINGS, activeUsers, forUser, getSetting, getSettings, markSent, setSetting, userBySetting } from './db';
 import { classifyNews, cleanNewsText, syncEva } from './moodle';
 import { CALLMEBOT_ACTIVATE, CALLMEBOT_NUMBER, sendCallMeBot, GRAPH, waServerReady, callmebotConfigured, logInbound, sendToMe, sendWhatsApp, waChatLink, waConfigured, waWindowOpen } from './notify';
 import { sendPushAll, vapidPublicKey } from './push';
 import { transcribeAudio, transcribeWhatsAppAudio } from './voice';
-import { downloadTelegramFile, sendTelegram, setupTelegram, telegramReady, tgCall } from './telegram';
+import {
+  CONFIG_KEYS, CONFIG_NAMES, TG_MINI, TG_TOKEN_RE, answerTelegramCallback, downloadTelegramFile, ensureTgWebhook, loadTelegramToken, pdfAnswer,
+  resetAppConfig, resetTelegramToken, sendTelegram, setupTelegram, telegramReady, tgAyuda, tgCall, tgEsc, tgFormat, tgRich, visionAnswer,
+} from './telegram';
+import { RumboLive, notifyLive, tgVerifyInitData } from './live';
+import { EXPORT_PAGE, KEYS_PAGE, TELEGRAM_PAGE } from './pages';
 import { calendarIcs } from './calendar';
 import { WIDGET_VERSION, widgetData } from './widget';
 import { dumpData, gunzip, listBackups, makeBackup } from './backup';
@@ -21,7 +26,7 @@ import { aiStream, getMemory, setMemory } from './ai';
 import { providers, testEngines } from './llm';
 import { runScheduled } from './cron';
 import { weeklyPlan } from './plan';
-import { nowSec } from './time';
+import { cuandoTexto, localDate, localToUnix, nowSec } from './time';
 import { registerExtras } from './extras';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -30,6 +35,16 @@ const app = new Hono<{ Bindings: Env }>();
 app.get('/api/health', (c) => c.json({ ok: true }));
 // Versión publicada: la app web y la app del widget la consultan para actualizarse solas.
 app.get('/api/version', (c) => c.json({ app: CHANGELOG[0].version, widget: WIDGET_VERSION, apk: `${new URL(c.req.url).origin}/rumbo-widget.apk?v=${WIDGET_VERSION}` }, 200, { 'Cache-Control': 'no-store' }));
+
+// Páginas sueltas (pages.ts): guía del bot de Telegram, llaves y configuración, y descarga de la app.
+// Cada una pide sesión a la API cuando la necesita; la página en sí es pública.
+const noStore = { 'Cache-Control': 'no-store' };
+app.get('/telegram', (c) => c.html(TELEGRAM_PAGE, 200, noStore));
+app.get('/api/telegram/guia', (c) => c.html(TELEGRAM_PAGE, 200, noStore));
+app.get('/exportar', (c) => c.html(EXPORT_PAGE, 200, noStore));
+app.get('/api/exportar', (c) => c.html(EXPORT_PAGE, 200, noStore));
+app.get('/llaves', (c) => c.html(KEYS_PAGE, 200, noStore));
+app.get('/api/llaves', (c) => c.html(KEYS_PAGE, 200, noStore));
 
 app.post('/api/login', async (c) => {
   const { password, login } = await c.req.json<{ password?: string; login?: string }>().catch(() => ({ password: '', login: '' }));
@@ -225,19 +240,45 @@ app.post('/api/mail/ingest', async (c) => {
   return c.json({ ok: true, received: msgs.length, saved });
 });
 
-// ---------- Telegram (público, verificado con la clave secreta que Telegram reenvía) ----------
-app.post('/api/telegram/webhook', async (c) => {
-  const secret = await getSettings(c.env).then((s) => s.tg_secret || '');
-  if (!secret || !safeEqual(c.req.header('x-telegram-bot-api-secret-token') || '', secret)) return c.text('Forbidden', 403);
-  type TgMsg = { message_id: number; chat: { id: number }; text?: string; voice?: { file_id: string }; audio?: { file_id: string } };
-  const update = await c.req.json<{ update_id: number; message?: TgMsg }>().catch(() => null);
-  const m = update?.message;
-  if (!m || !(await markSent({ ...c.env, UID: 0 }, `tg:${update!.update_id}`))) return c.json({ ok: true });
-  c.executionCtx.waitUntil(answerTelegram(c.env, m));
+// ---------- Telegram: entrar desde la Mini App (público; Telegram firma los datos con el token del bot) ----------
+app.post('/api/telegram/webapp-login', async (c) => {
+  const { initData } = await c.req.json<{ initData?: string }>().catch(() => ({ initData: '' }));
+  const user = await tgVerifyInitData(c.env, initData || '');
+  if (!user?.id) return c.json({ error: 'No pude verificar que vienes de Telegram.' }, 401);
+  const uid = await userBySetting({ ...c.env, UID: 0 }, 'tg_chat_id', String(user.id));
+  if (!uid) return c.json({ error: 'Tu Telegram no está vinculado a una cuenta de Rumbo. Entra con tu contraseña y vincula el bot en /telegram.' }, 404);
+  const u = await c.env.DB.prepare('SELECT active FROM users WHERE id = ?').bind(uid).first<{ active: number }>();
+  if (!u?.active) return c.json({ error: 'Cuenta desactivada.' }, 403);
+  c.header('Set-Cookie', await createSessionCookie(c.env, uid));
   return c.json({ ok: true });
 });
 
-async function answerTelegram(sys: Env, m: { chat: { id: number }; text?: string; voice?: { file_id: string }; audio?: { file_id: string } }): Promise<void> {
+// ---------- Telegram (público, verificado con la clave secreta que Telegram reenvía) ----------
+type TgFile = { file_id: string; file_size?: number; mime_type?: string; file_name?: string };
+type TgMsg = { message_id: number; chat: { id: number }; text?: string; caption?: string; voice?: TgFile; audio?: TgFile; photo?: TgFile[]; document?: TgFile };
+app.post('/api/telegram/webhook', async (c) => {
+  const secret = await getSettings(c.env).then((s) => s.tg_secret || '');
+  if (!secret || !safeEqual(c.req.header('x-telegram-bot-api-secret-token') || '', secret)) return c.text('Forbidden', 403);
+  const update = await c.req.json<{ update_id: number; message?: TgMsg; callback_query?: { id: string; data?: string; message?: { message_id: number; chat?: { id: number } } } }>().catch(() => null);
+  // Botones (Hoy, Tareas, ✅ Ya la entregué, +1 h…): después se avisa a las pantallas abiertas.
+  if (update?.callback_query) {
+    const cq = update.callback_query;
+    if (await markSent({ ...c.env, UID: 0 }, `tg:${update.update_id}`)) {
+      c.executionCtx.waitUntil(answerTelegramCallback(c.env, cq)
+        .then(() => userBySetting({ ...c.env, UID: 0 }, 'tg_chat_id', String(cq.message?.chat?.id || '')))
+        .then((uid) => notifyLive(c.env, uid, 'telegram')).catch(() => {}));
+    }
+    return c.json({ ok: true });
+  }
+  const m = update?.message;
+  if (!m || !(await markSent({ ...c.env, UID: 0 }, `tg:${update!.update_id}`))) return c.json({ ok: true });
+  c.executionCtx.waitUntil(answerTelegram(c.env, m)
+    .then(() => userBySetting({ ...c.env, UID: 0 }, 'tg_chat_id', String(m.chat.id)))
+    .then((uid) => notifyLive(c.env, uid, 'telegram')).catch(() => {}));
+  return c.json({ ok: true });
+});
+
+async function answerTelegram(sys: Env, m: TgMsg): Promise<unknown> {
   const chat = String(m.chat.id);
   const text = (m.text || '').trim();
   // ¿De quién es este chat? Por el código de vinculación (/start <código>) o por el chat ya vinculado.
@@ -254,24 +295,51 @@ async function answerTelegram(sys: Env, m: { chat: { id: number }; text?: string
     } else if (s.tg_chat_id !== chat) {
       await sendTelegram(env, 'Este es un bot privado de Rumbo. Para vincularlo, abre el enlace desde Ajustes → Telegram en la app.', chat);
     } else {
-      await sendTelegram(env, await handleCommand(env, 'ayuda'), chat);
+      const r = tgAyuda();
+      await sendTelegram(env, r.html, chat, { html: true, kb: r.kb });
     }
     return;
   }
   if (!s.tg_chat_id || s.tg_chat_id !== chat) { await sendTelegram(env, 'Este es un bot privado de Rumbo.', chat); return; }
   try {
     await tgCall(env, 'sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => {});
+    // Fotos (pizarra, apuntes, ejercicios): las explica o resuelve una IA con visión.
+    const photo = m.photo?.length ? m.photo[m.photo.length - 1] : null;
+    const doc = m.document || null;
+    if (photo || (doc && /^image\//.test(doc.mime_type || ''))) {
+      await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, 'in', 'telegram', `📸 Foto${m.caption ? ': ' + m.caption : ''}`).run();
+      const f = (photo || doc)!;
+      if ((f.file_size || 0) > 15e6) return sendTelegram(env, 'La imagen pesa mucho. Mándamela como foto normal (no como archivo).', chat);
+      const ans = await visionAnswer(env, await downloadTelegramFile(env, f.file_id), doc?.mime_type || 'image/jpeg', m.caption || '');
+      await sendTelegram(env, `📸 <b>${m.caption ? tgEsc(m.caption.slice(0, 80)) : 'Lo que veo en tu foto'}</b>\n\n${tgFormat(ans)}`, chat, { html: true, kb: TG_MINI });
+      return;
+    }
+    // PDF: resumen, ideas clave y preguntas de repaso (o la respuesta a la pregunta del pie).
+    if (doc && (/pdf/i.test(doc.mime_type || '') || /\.pdf$/i.test(doc.file_name || ''))) {
+      await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, 'in', 'telegram', `📄 ${doc.file_name || 'PDF'}${m.caption ? ': ' + m.caption : ''}`).run();
+      if ((doc.file_size || 0) > 2e7) return sendTelegram(env, 'Ese PDF pasa de 20 MB, el límite de Telegram para bots. Prueba con uno más liviano.', chat);
+      await sendTelegram(env, `📄 Leyendo <b>${tgEsc(doc.file_name || 'tu PDF')}</b>… dame unos segundos.`, chat, { html: true });
+      const r = await pdfAnswer(env, await downloadTelegramFile(env, doc.file_id), doc.file_name, m.caption || '');
+      await sendTelegram(env, `📄 <b>${tgEsc(doc.file_name || 'Tu PDF')}</b>\n\n${tgFormat(r.text)}\n\n<i>Toca las respuestas ocultas para verlas.</i>`, chat, { html: true, kb: TG_MINI });
+      return;
+    }
+    if (doc) return sendTelegram(env, 'Por ahora leo *fotos* y *PDF*. Si es un Word, guárdalo como PDF y mándamelo.', chat);
     const fileId = m.voice?.file_id || m.audio?.file_id;
     if (fileId) {
       const heard = await transcribeAudio(env, await downloadTelegramFile(env, fileId));
       await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, 'in', 'telegram', `🎤 ${heard || '(audio sin palabras)'}`).run();
       if (!heard) { await sendTelegram(env, 'No logré entender el audio 😅. ¿Me lo repites o me lo escribes?', chat); return; }
-      await sendTelegram(env, `🎤 _"${heard}"_\n\n${await handleCommand(env, heard, 'telegram')}`, chat);
+      const rv = await tgRich(env, heard);
+      if (rv) await sendTelegram(env, `🎤 <i>«${tgEsc(heard)}»</i>\n\n${rv.html}`, chat, { html: true, kb: rv.kb });
+      else await sendTelegram(env, `🎤 <i>«${tgEsc(heard)}»</i>\n\n${tgFormat(await handleCommand(env, heard, 'telegram'))}`, chat, { html: true, kb: TG_MINI });
       return;
     }
     if (!text) { await sendTelegram(env, 'Por ahora entiendo texto y notas de voz.', chat); return; }
     await env.DB.prepare('INSERT INTO messages (user_id, direction, channel, body) VALUES (?, ?, ?, ?)').bind(env.UID, 'in', 'telegram', text).run();
-    await sendTelegram(env, await handleCommand(env, text.replace(/^\//, ''), 'telegram'), chat);
+    // Hoy, tareas, notas, pagos, «necesito 80 cálculo», «semana»…: respuesta con formato y botones.
+    const rich = await tgRich(env, text);
+    if (rich) await sendTelegram(env, rich.html, chat, { html: true, kb: rich.kb });
+    else await sendTelegram(env, await handleCommand(env, text.replace(/^\//, ''), 'telegram'), chat, { kb: TG_MINI });
   } catch (e) {
     await sendTelegram(env, `No pude responder: ${(e as Error).message}`, chat);
   }
@@ -297,6 +365,32 @@ app.post('/api/release/announce', async (c) => {
   return c.json({ ok: true, version: CHANGELOG[0].version });
 });
 
+// ---------- Manifest con el ícono que elegiste en Ajustes → Apariencia (público) ----------
+app.get('/api/manifest', (c) => {
+  const v = String(c.req.query('icon') || '');
+  const ok = ['noche', 'atardecer', 'menta', 'morado'].includes(v);
+  const i192 = ok ? `/icons/${v}-192.png` : '/icon-192.png', i512 = ok ? `/icons/${v}-512.png` : '/icon-512.png', im = ok ? `/icons/${v}-maskable-512.png` : '/icon-maskable-512.png';
+  return c.json({
+    id: '/',
+    name: 'Rumbo · Tu universidad bajo control',
+    short_name: 'Rumbo',
+    description: 'Tareas, notas, pensum y pagos de la UAPA en un solo lugar.',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: v === 'noche' ? '#000000' : '#F5F5F7',
+    theme_color: v === 'noche' ? '#000000' : '#F5F5F7',
+    lang: 'es-DO',
+    icons: [{ src: i192, sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: i512, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: im, sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
+    shortcuts: [
+      { name: 'Tareas', short_name: 'Tareas', url: '/#tareas', icons: [{ src: i192, sizes: '192x192' }] },
+      { name: 'Notas', short_name: 'Notas', url: '/#asignaturas', icons: [{ src: i192, sizes: '192x192' }] },
+      { name: 'Asistente', short_name: 'Asistente', url: '/#asistente', icons: [{ src: i192, sizes: '192x192' }] },
+    ],
+  }, 200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=300' });
+});
+
 // ---------- A partir de aquí, todo requiere sesión ----------
 app.use('/api/*', async (c, next) => {
   const uid = await sessionUser(c.env, c.req.header('cookie') || null);
@@ -304,6 +398,29 @@ app.use('/api/*', async (c, next) => {
   // Desde aquí, c.env es «el Env de este usuario»: todas las consultas usan c.env.UID.
   c.env = await forUser(c.env, uid);
   await next();
+});
+
+// ---------- En vivo: cada pantalla abre un WebSocket con su Durable Object (live.ts) ----------
+app.get('/api/live', (c) => {
+  if (!c.env.LIVE) return c.json({ error: 'Falta el enlace LIVE (Durable Object).' }, 501);
+  if (c.req.header('upgrade') !== 'websocket') return c.json({ ok: true });
+  return c.env.LIVE.get(c.env.LIVE.idFromName('u' + c.env.UID)).fetch(c.req.raw);
+});
+
+// Después de cualquier cambio (POST, PATCH, DELETE) se avisa a tus otras pantallas para que recarguen.
+// x-rumbo-device dice qué pantalla hizo el cambio (esa no necesita recargar).
+const LIVE_SKIP = /^\/api\/(live|tts|transcribe|push|login|logout|me$|telegram\/setup|assistant\/(voice|transcribe))/;
+app.use('/api/*', async (c, next) => {
+  await next();
+  const m = c.req.method;
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS' || !c.env.UID || c.res.status >= 400 || LIVE_SKIP.test(c.req.path)) return;
+  const uid = c.env.UID, env = c.env;
+  const dev = /^[a-z0-9]{4,16}$/.test(c.req.header('x-rumbo-device') || '') ? 'dev:' + c.req.header('x-rumbo-device') : 'app';
+  if (/stream/.test(c.req.path)) {
+    // El asistente con streaming hace cambios al final: se avisa a los 7 s y a los 20 s.
+    c.executionCtx.waitUntil(new Promise((r) => setTimeout(r, 7000)).then(() => notifyLive(env, uid, dev)));
+    c.executionCtx.waitUntil(new Promise((r) => setTimeout(r, 20000)).then(() => notifyLive(env, uid, dev)));
+  } else c.executionCtx.waitUntil(notifyLive(env, uid, dev));
 });
 
 app.get('/api/me', async (c) => {
@@ -545,6 +662,27 @@ app.patch('/api/tasks/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// Cómo va tu índice (para «subió de 84.1 a 84.4») y el resumen de la semana tipo historia.
+app.get('/api/index-trend', async (c) => c.json(await indexTrend(c.env)));
+app.get('/api/week-story', async (c) => c.json(await weekStory(c.env)));
+
+// Posponer a mañana (deslizar a la izquierda o el menú de la tarea). Si la fecha la pone el EVA, solo se recuerda mañana 8:00.
+app.post('/api/tasks/:id/postpone', async (c) => {
+  const id = Number(c.req.param('id'));
+  const t = await c.env.DB.prepare('SELECT id, title, due_at, source FROM tasks WHERE id = ? AND user_id = ?').bind(id, c.env.UID).first<{ id: number; title: string; due_at: number | null; source: string }>();
+  if (!t) return c.json({ error: 'Tarea no encontrada.' }, 404);
+  const now = nowSec();
+  if (t.source !== 'eva' && t.due_at) {
+    const due = Math.max(t.due_at, now) + 86400;
+    await c.env.DB.prepare('UPDATE tasks SET due_at = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(due, now, id, c.env.UID).run();
+    return c.json({ ok: true, mode: 'due', message: `Movida para ${cuandoTexto(c.env, due)}` });
+  }
+  const d = localDate(c.env, now + 86400);
+  const at = localToUnix(c.env, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 8, 0);
+  await c.env.DB.prepare('INSERT INTO reminders (user_id, text, remind_at) VALUES (?, ?, ?)').bind(c.env.UID, `⏰ Retoma: ${t.title}${t.due_at ? ' · vence ' + cuandoTexto(c.env, t.due_at) : ''}`, at).run();
+  return c.json({ ok: true, mode: 'reminder', message: 'La fecha la pone el EVA: te la recuerdo mañana a las 8:00 a. m.' });
+});
+
 app.delete('/api/tasks/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').bind(Number(c.req.param('id')), c.env.UID).run();
   return c.json({ ok: true });
@@ -569,9 +707,81 @@ app.post('/api/mail/reset', async (c) => {
 
 // Telegram: registrar el bot y obtener el enlace para vincular tu chat
 app.post('/api/telegram/setup', async (c) => {
-  if (!telegramReady(c.env)) return c.json({ error: 'Falta el secreto TELEGRAM_BOT_TOKEN. Créalo con: npx wrangler secret put TELEGRAM_BOT_TOKEN' }, 400);
+  if (!telegramReady(c.env)) return c.json({ error: c.env.ROLE === 'admin' ? 'Falta el token del bot. Pégalo en ' + new URL('/telegram', c.req.url).href : 'El administrador todavía no ha conectado el bot de Telegram.' }, 400);
   try { return c.json(await setupTelegram(c.env, new URL(c.req.url).origin)); }
   catch (e) { return c.json({ error: (e as Error).message }, 502); }
+});
+
+app.get('/api/telegram/status', async (c) => {
+  await ensureTgWebhook(c.env, new URL(c.req.url).origin).catch(() => {});
+  const s = await getSettings(c.env);
+  return c.json({ configured: telegramReady(c.env), connected: !!s.tg_chat_id, username: s.tg_username || '', admin: c.env.ROLE === 'admin', source: c.env.TG_TOKEN_SOURCE || '' });
+});
+
+// El administrador pega el token de @BotFather en /telegram: se valida con Telegram y se guarda en D1.
+app.post('/api/admin/telegram/token', async (c) => {
+  const { token } = await c.req.json<{ token?: string }>().catch(() => ({ token: '' }));
+  const t = String(token || '').trim();
+  if (!TG_TOKEN_RE.test(t)) return c.json({ error: 'Ese no parece un token de BotFather. Tiene esta forma: 123456789:AAH...(unos 35 caracteres)' }, 400);
+  try {
+    const me = await tgCall<{ is_bot?: boolean }>({ ...c.env, TELEGRAM_BOT_TOKEN: t }, 'getMe');
+    if (!me.is_bot) throw new Error('Ese token no es de un bot.');
+  } catch (e) {
+    return c.json({ error: 'Telegram no aceptó el token: ' + (e as Error).message + '. Cópialo otra vez desde @BotFather.' }, 400);
+  }
+  await setSetting(c.env, 'tg_bot_token', t);
+  resetTelegramToken();
+  c.env.TELEGRAM_BOT_TOKEN = t;
+  c.env.TG_TOKEN_SOURCE = 'app';
+  try { return c.json({ ok: true, ...(await setupTelegram(c.env, new URL(c.req.url).origin)) }); }
+  catch (e) { return c.json({ error: 'Guardé el token, pero no pude configurar el bot: ' + (e as Error).message }, 502); }
+});
+
+app.post('/api/admin/telegram/token/delete', async (c) => {
+  if (telegramReady(c.env)) await tgCall(c.env, 'deleteWebhook', { drop_pending_updates: true }).catch(() => {});
+  await setSetting(c.env, 'tg_bot_token', '');
+  resetTelegramToken();
+  return c.json({ ok: true });
+});
+
+// ---------- Llaves y configuración (/llaves, solo el administrador) ----------
+// Se guardan en D1 (settings cfg:NOMBRE) y pisan al secreto de Cloudflare; «Volver al de Cloudflare» las borra.
+const maskVal = (v: string) => (!v ? '' : v.length <= 8 ? '•'.repeat(v.length) : '•'.repeat(Math.min(12, v.length - 4)) + v.slice(-4));
+function configList(env: Env, reveal: boolean) {
+  return CONFIG_KEYS.map((x) => {
+    const v = String((env as unknown as Record<string, unknown>)[x.k] || '');
+    return { ...x, source: env.CFG_SRC?.[x.k] || '', cloudflare: !!env.CFG_CF?.[x.k], set: !!v, value: !x.secret || reveal ? v : maskVal(v) };
+  });
+}
+app.get('/api/admin/config', (c) => c.json({ keys: configList(c.env, false) }));
+app.post('/api/admin/config/reveal', async (c) => {
+  const { password } = await c.req.json<{ password?: string }>().catch(() => ({ password: '' }));
+  const u = await c.env.DB.prepare('SELECT id, pass_hash, pass_salt FROM users WHERE id = ?').bind(c.env.UID).first<{ id: number; pass_hash: string | null; pass_salt: string | null }>();
+  if (!u || !(await checkPassword(c.env, u, password || ''))) return c.json({ error: 'La contraseña no coincide.' }, 400);
+  return c.json({ keys: configList(c.env, true) });
+});
+app.post('/api/admin/config', async (c) => {
+  const { name, value, reset } = await c.req.json<{ name?: string; value?: string; reset?: boolean }>().catch(() => ({} as { name?: string; value?: string; reset?: boolean }));
+  if (!name || !CONFIG_NAMES.has(name)) return c.json({ error: 'Esa llave no existe.' }, 400);
+  const key = name === 'TELEGRAM_BOT_TOKEN' ? 'tg_bot_token' : 'cfg:' + name;
+  const v = reset ? '' : String(value ?? '').trim();
+  if (!reset && !v) return c.json({ error: 'Escribe un valor o usa «Volver al de Cloudflare».' }, 400);
+  if (v.length > 4000) return c.json({ error: 'El valor es demasiado largo.' }, 400);
+  if (name === 'TZ_OFFSET_HOURS' && v && !/^[-+]?\d{1,2}(\.\d+)?$/.test(v)) return c.json({ error: 'Escribe solo el número de horas, por ejemplo -4.' }, 400);
+  if (/_URL$/.test(name) && v && !/^https?:\/\//.test(v)) return c.json({ error: 'La dirección debe empezar con https://' }, 400);
+  if (reset) await c.env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(key).run();
+  else await setSetting(c.env, key, v);
+  resetAppConfig();
+  return c.json({ ok: true, relogin: name === 'SESSION_SECRET' });
+});
+
+// ---------- WhatsApp encendido/apagado (Ajustes o «whatsapp off» en el bot) ----------
+app.get('/api/wa/status', async (c) => c.json({ on: (await getSetting(c.env, 'wa_enabled', '1')) !== '0', configured: callmebotConfigured(c.env) || waConfigured(c.env) }));
+app.post('/api/wa/toggle', async (c) => {
+  const b = await c.req.json<{ on?: boolean }>().catch(() => ({} as { on?: boolean }));
+  const on = typeof b.on === 'boolean' ? b.on : (await getSetting(c.env, 'wa_enabled', '1')) === '0';
+  await setSetting(c.env, 'wa_enabled', on ? '1' : '0');
+  return c.json({ ok: true, on });
 });
 
 app.post('/api/telegram/unlink', async (c) => {
@@ -1132,10 +1342,14 @@ app.post('/api/cron/run', async (c) => c.env.ROLE === 'admin' ? c.json({ log: aw
 
 app.all('/api/*', (c) => c.json({ error: 'Ruta no encontrada' }, 404));
 
+// Durable Object de las pantallas en vivo (wrangler.jsonc → durable_objects).
+export { RumboLive };
+
 export default {
   // Sin sesión todavía, el Env es «del sistema» (UID 0); el middleware lo cambia por el del usuario.
-  fetch: (req: Request, env: Env, ctx: ExecutionContext) => app.fetch(req, { ...env, UID: 0 }, ctx),
+  // loadTelegramToken completa el Env con las llaves guardadas en /llaves.
+  fetch: async (req: Request, env: Env, ctx: ExecutionContext) => app.fetch(req, await loadTelegramToken({ ...env, UID: 0 }), ctx),
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runScheduled({ ...env, UID: 0 }).then((log) => console.log(log.join(' | '))));
+    ctx.waitUntil(loadTelegramToken({ ...env, UID: 0 }).then((e) => runScheduled(e)).then((log) => console.log(log.join(' | '))));
   },
 } satisfies ExportedHandler<Env>;

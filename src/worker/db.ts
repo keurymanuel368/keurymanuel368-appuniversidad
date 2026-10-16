@@ -3,8 +3,9 @@ import { nowSec } from './time';
 
 // Ajustes: los personales se guardan como 'u<id>:clave' (cada compañero tiene los suyos) y los del
 // sistema (llaves de notificaciones, motores de IA, bot) se comparten sin prefijo.
-const GLOBAL = new Set(['vapid_keys', 'app_origin', 'tts_chars', 'tts_day', 'tg_secret', 'wa_display_number', 'wa_last_error', 'ai_fail_at', 'ai_fail_detail']);
-const isGlobal = (key: string) => GLOBAL.has(key) || key.startsWith('llm_');
+const GLOBAL = new Set(['vapid_keys', 'app_origin', 'tts_chars', 'tts_day', 'tg_secret', 'tg_bot_token', 'tg_username', 'tg_hook_v', 'wa_display_number', 'wa_last_error', 'ai_fail_at', 'ai_fail_detail']);
+// cfg:NOMBRE = llaves de la app guardadas desde /llaves (son de todo el sistema, no de un usuario).
+const isGlobal = (key: string) => GLOBAL.has(key) || key.startsWith('llm_') || key.startsWith('cfg:');
 const prefix = (env: Env) => `u${env.UID || 0}:`;
 const fullKey = (env: Env, key: string) => (isGlobal(key) ? key : prefix(env) + key);
 

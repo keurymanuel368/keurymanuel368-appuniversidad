@@ -6,7 +6,7 @@
 import type { Env } from './env';
 import { getSetting, setSetting } from './db';
 import { sendPushAll } from './push';
-import { sendTelegram, telegramReady } from './telegram';
+import { sendTelegram, telegramReady, TG_MINI, type TgKb } from './telegram';
 import { localDate, nowSec } from './time';
 
 export type Channel = 'whatsapp' | 'callmebot' | 'push' | 'telegram';
@@ -97,6 +97,7 @@ async function queueWhatsApp(env: Env, text: string): Promise<void> {
 /** Reenvía los avisos pendientes (los de hace más de 24 h ya no sirven y se descartan). */
 export async function flushWhatsApp(env: Env): Promise<number> {
   if (!callmebotConfigured(env)) return 0;
+  if ((await getSetting(env, 'wa_enabled', '1')) === '0') return 0;
   const list = (JSON.parse((await getSetting(env, 'wa_outbox', '[]')) || '[]') as Pending[]).filter((x) => nowSec() - x.at < 86400);
   if (!list.length) return 0;
   const left: Pending[] = [];
@@ -138,7 +139,8 @@ function plain(text: string): string {
 
 /** Tipos de aviso que puedes encender o apagar en Ajustes. */
 export type NotifyType = 'tareas' | 'notas' | 'pagos' | 'avisos' | 'resumen' | 'novedades' | 'plan';
-export type SendOptions = { title?: string; tag?: string; url?: string; pushBody?: string; type?: NotifyType };
+/** tg: versión con formato y botones para Telegram (si no viene, se convierte el texto normal). */
+export type SendOptions = { title?: string; tag?: string; url?: string; pushBody?: string; type?: NotifyType; tg?: { html: string; kb?: TgKb } };
 
 /** Envía un aviso por todos los canales gratis disponibles. */
 export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): Promise<SendResult> {
@@ -149,7 +151,9 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
 
   // Telegram (si lo conectaste): no tiene ventana de 24 h, así que siempre llega.
   if (telegramReady(env) && (await getSetting(env, 'tg_chat_id'))) {
-    const t = await sendTelegram(env, text);
+    const origin0 = (env.APP_URL || '').replace(/\/$/, '');
+    const kb: TgKb = opts.url && /^https:/.test(origin0) ? [[{ text: '🔗 Abrir en Rumbo', url: `${origin0}/${opts.url.replace(/^\//, '')}` }], ...TG_MINI] : TG_MINI;
+    const t = opts.tg ? await sendTelegram(env, opts.tg.html, undefined, { html: true, kb: opts.tg.kb || kb }) : await sendTelegram(env, text, undefined, { kb });
     if (t.ok) channels.push('telegram'); else errors.push('Telegram: ' + t.error);
   }
 
@@ -162,7 +166,9 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
   const typeOk = !opts.type || !waTypes.length || waTypes.includes(opts.type) || (opts.type === 'plan' && waTypes.includes('resumen'));
   const h = localDate(env).getUTCHours();
   const quiet = (await getSetting(env, 'wa_quiet', '1')) !== '0' && (h >= 22 || h < 7) && opts.tag !== 'security';
-  if (callmebotConfigured(env) && typeOk && !quiet) {
+  // WhatsApp se puede apagar con un toque (Ajustes o «whatsapp off» en el bot).
+  const waOn = (await getSetting(env, 'wa_enabled', '1')) !== '0';
+  if (waOn && callmebotConfigured(env) && typeOk && !quiet) {
     // Al final, un enlace que abre justo eso en Rumbo (WhatsApp lo vuelve tocable).
     const origin = (env.APP_URL || (await getSetting(env, 'app_origin'))).replace(/\/$/, '');
     const link = opts.url && origin ? `\n\n👉 Ábrelo en Rumbo:\n${origin}/${opts.url.replace(/^\//, '')}` : '';

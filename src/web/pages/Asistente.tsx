@@ -78,7 +78,7 @@ export function Asistente() {
   const [autoVoice, setAutoVoice] = useState(() => store.get('rumbo-autovoz', '1') === '1');
   const [voice, setVoice] = useState(() => store.get('rumbo-voz2', 'device'));
   const [sheet, setSheet] = useState<'' | 'voz' | 'memoria'>('');
-  const [call, setCall] = useState(false);
+  const [call, setCall] = useState(() => /llamada/.test(location.hash));
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const audioCtx = useRef<AudioContext | null>(null);

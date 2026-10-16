@@ -1,7 +1,9 @@
 // Tareas programadas: se ejecutan cada 30 minutos (un solo Cron Trigger, gratis).
 import type { Env } from './env';
-import { activeUsers, forUser, getSettings, markSent, unmarkSent, wasSent } from './db';
-import { payWindow, periodLabel, summaryAlert, summaryShort } from './data';
+import { activeUsers, forUser, getSettings, markSent, setSetting, unmarkSent, wasSent } from './db';
+import { indexTrend, payWindow, periodLabel, staleCourses, summaryAlert, summaryShort } from './data';
+import { ensureTgWebhook, tgEsc, tgHoy, tgSemana, tgWithApp } from './telegram';
+import { notifyLive } from './live';
 import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
 import { flushWhatsApp, sendToMe } from './notify';
@@ -20,6 +22,8 @@ import { cuandoTexto, localDate, nowSec, ymd } from './time';
  */
 export async function runScheduled(env: Env): Promise<string[]> {
   const log: string[] = [];
+  // Si cambió la versión del webhook de Telegram (botones, menú), se vuelve a registrar sola.
+  await ensureTgWebhook(env).catch((e) => log.push('tg webhook: ' + (e as Error).message));
   const users = await activeUsers(env);
   const envs = await Promise.all(users.map((u) => forUser(env, u.id, u.role)));
   // A quién le toca el EVA: con token y más atrasado respecto a su intervalo.
@@ -36,6 +40,8 @@ export async function runScheduled(env: Env): Promise<string[]> {
   for (const ue of envs) {
     try {
       const l = await runForUser(ue, ue.UID === syncUid, ue.ROLE === 'admin' ? backupError : undefined);
+      // Las pantallas abiertas se actualizan solas después de sincronizar o de un recordatorio.
+      if (ue.UID === syncUid || l.some((x) => /^(Recordatorio|Tarea)/.test(x))) await notifyLive(ue, ue.UID, 'eva');
       if (l.length) log.push(`[${ue.UID}] ${l.join(' · ')}`);
     } catch (e) { log.push(`[${ue.UID}] error: ${(e as Error).message}`); }
   }
@@ -76,9 +82,43 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   const hour = Number(s.summary_hour || 7);
   if (s.summary_enabled !== '0' && local.getUTCHours() >= hour && !(await wasSent(env, `summary:${today}`))) {
     await markSent(env, `summary:${today}`);
-    const r = await sendToMe(env, await summaryAlert(env), { title: '☀️ Tu resumen de hoy', tag: 'summary', url: '/#inicio', pushBody: await summaryShort(env), type: 'resumen' });
+    const r = await sendToMe(env, await summaryAlert(env), { title: '☀️ Tu resumen de hoy', tag: 'summary', url: '/#inicio', pushBody: await summaryShort(env), type: 'resumen', tg: tgWithApp(env, await tgHoy(env)) });
     if (!r.ok) await unmarkSent(env, `summary:${today}`);
     log.push(`Resumen: ${r.ok ? 'enviado por ' + r.channels.join(' + ') : r.error}`);
+  }
+
+  // 2b) Cierre de la semana: domingo desde las 7 p. m.
+  if (s.week_close !== '0' && local.getUTCDay() === 0 && local.getUTCHours() >= 19 && !(await wasSent(env, `semana:${today}`))) {
+    await markSent(env, `semana:${today}`);
+    const sem = await tgSemana(env);
+    const r = await sendToMe(env, sem.plain, { title: '📆 Cierre de la semana', tag: 'week', url: '/#inicio/semana', pushBody: sem.short, type: 'resumen', tg: sem });
+    if (!r.ok) await unmarkSent(env, `semana:${today}`);
+    log.push(`Cierre semanal: ${r.ok ? 'ok' : r.error}`);
+  }
+
+  // 2c) Asignaturas sin nada nuevo en el EVA por 10 días (solo si el EVA se sincronizó hace poco).
+  if (s.stale_alerts !== '0' && local.getUTCHours() >= hour && Number(s.eva_last_sync || 0) > nowSec() - 2 * 86400 && !(await wasSent(env, `stale:${today}`))) {
+    await markSent(env, `stale:${today}`);
+    for (const c of (await staleCourses(env).catch(() => [])).slice(0, 2)) {
+      const key = `stale_c${c.id}`;
+      if (Number(s[key] || 0) > nowSec() - 10 * 86400) continue;
+      await setSetting(env, key, String(nowSec()));
+      const name = c.short_name || c.name;
+      const text = `${name} lleva ${c.days} días sin nada nuevo en el EVA. Échale un ojo por si el facilitador publicó algo que Rumbo no ve (un anuncio en el aula, un archivo o una videoconferencia).`;
+      await env.DB.prepare(`INSERT OR IGNORE INTO announcements (user_id, source, ext_id, course_id, title, body, author, kind, url, created_at) VALUES (?, 'rumbo', ?, ?, ?, ?, 'Rumbo', 'aviso', ?, ?)`)
+        .bind(env.UID, `stale:${c.id}:${today}`, c.id, `📭 ${name}: ${c.days} días sin movimiento`, text, '/#asignaturas', nowSec()).run();
+      const r = await sendToMe(env, blocks('📭 *Asignatura sin movimiento*', text), {
+        title: `📭 ${name} sin movimiento`, pushBody: text, tag: `stale-${c.id}`, url: '/#asignaturas', type: 'avisos',
+        tg: { html: `📭 <b>${tgEsc(name)}</b> lleva <b>${c.days} días</b> sin nada nuevo en el EVA.\n\n<i>Échale un ojo por si el facilitador publicó algo que Rumbo no ve (un anuncio en el aula, un archivo o una videoconferencia).</i>` },
+      });
+      log.push(`Sin movimiento ${name}: ${r.ok ? 'avisado' : r.error}`);
+    }
+  }
+
+  // 2d) Guarda el índice del día (para mostrar cuánto subió o bajó).
+  if (local.getUTCHours() >= hour && !(await wasSent(env, `trend:${today}`))) {
+    await markSent(env, `trend:${today}`);
+    await indexTrend(env).catch(() => null);
   }
 
   // 3) Recordatorios de entregas (72 h, 24 h y 3 h antes, configurable)
@@ -101,7 +141,10 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
         `${urgent ? '🚨' : '📌'} *${urgent ? '¡Vence pronto!' : 'Recordatorio de entrega'}*`,
         [`*${t.title}*`, curso && `📚 ${curso}`, `⏰ Vence *${cuandoTexto(env, t.due_at)}*`, `⏳ ${timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase())}`].filter(Boolean).join('\n'),
         '_Cuando la entregues, márcala como hecha en Rumbo._',
-      ), { title: `📌 ${t.title}`, pushBody: `${curso ? curso + ' · ' : ''}vence ${cuandoTexto(env, t.due_at)}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: 'tareas' });
+      ), { title: `📌 ${t.title}`, pushBody: `${curso ? curso + ' · ' : ''}vence ${cuandoTexto(env, t.due_at)}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: 'tareas', tg: {
+        html: [`${urgent ? '🚨' : '📌'} <b>${urgent ? '¡Vence pronto!' : 'Recordatorio de entrega'}</b>`, '', `<b>${tgEsc(t.title)}</b>`, curso && `📚 <i>${tgEsc(curso)}</i>`, `⏰ Vence <b>${tgEsc(cuandoTexto(env, t.due_at))}</b>`, `⏳ ${tgEsc(timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase()))}`].filter(Boolean).join('\n'),
+        kb: [[{ text: '✅ Ya la entregué', callback_data: `dr:${t.id}` }], [{ text: '⏰ +1 h', callback_data: `s:${t.id}:1h` }, { text: '⏰ +3 h', callback_data: `s:${t.id}:3h` }, { text: '🌙 Esta noche', callback_data: `s:${t.id}:night` }]],
+      } });
       if (!r.ok) for (const x of thresholds.filter((x) => x >= h)) await unmarkSent(env, `task:${t.id}:${x}`);
       log.push(`Tarea ${t.id} (${h} h): ${r.ok ? 'ok' : r.error}`);
     }

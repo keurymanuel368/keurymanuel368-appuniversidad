@@ -1,8 +1,9 @@
 // Consultas compartidas por la API, el asistente y el cron.
 import type { Env } from './env';
-import { getSettings } from './db';
+import { getSetting, getSettings, setSetting } from './db';
 import { courseLabel, money } from './wa';
-import { cuandoTexto, daysBetween, fechaLarga, localDate, localToUnix, MESES, nowSec } from './time';
+import { cuandoTexto, daysBetween, fechaCorta, fechaLarga, localDate, localToUnix, MESES, nowSec } from './time';
+import { streak } from './widget';
 
 export type Task = {
   id: number; title: string; due_at: number | null; url: string | null; source: string; status: string; notes: string | null; submitted_at: number | null;
@@ -15,6 +16,8 @@ export type Task = {
 export type CourseSummary = {
   id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva: string | null;
   graded: number; total: number; average: number | null; pending_tasks: number;
+  /** Créditos de la asignatura según el pensum (3 si no se encuentra): pesan en el índice. */
+  credits?: number;
   /** 1 si el promedio usa los pesos del EVA (cada actividad vale lo que dice el libro de calificaciones). */
   weighted?: number;
   eva_total?: number | null; eva_total_max?: number | null;
@@ -76,10 +79,14 @@ export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
     FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
   const rows = await bestGrades(env);
+  // Créditos de cada asignatura (por código o por nombre en el pensum) para que el índice pese como en la UAPA.
+  const { results: pen } = await env.DB.prepare('SELECT code, name, credits FROM pensum WHERE user_id = ?').bind(env.UID).all<{ code: string | null; name: string; credits: number }>().catch(() => ({ results: [] as { code: string | null; name: string; credits: number }[] }));
+  const nz = (t: unknown) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const creditsOf = (c: CourseSummary) => pen.find((f) => (c.code && f.code === c.code) || (nz(f.name).length > 6 && (nz(f.name).includes(nz(c.name)) || nz(c.name).includes(nz(f.name)))))?.credits || 3;
   return results.map((r) => {
     const mine = rows.filter((g) => g.course_id === r.id);
     const { avg, weighted } = courseAverage(mine);
-    return { ...r, graded: mine.filter((g) => g.grade !== null).length, total: mine.length, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
+    return { ...r, credits: creditsOf(r), graded: mine.filter((g) => g.grade !== null).length, total: mine.length, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
   });
 }
 
@@ -93,10 +100,72 @@ export async function allGrades(env: Env): Promise<GradeMatch[]> {
   return results;
 }
 
+/** Índice del trimestre: promedio de las asignaturas ponderado por créditos. */
 export function overallAverage(courses: CourseSummary[]): number | null {
-  const vals = courses.map((c) => c.average).filter((v): v is number => v !== null);
-  if (!vals.length) return null;
-  return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
+  const g = courses.filter((c) => c.average !== null && c.average !== undefined);
+  if (!g.length) return null;
+  const w = g.reduce((a, c) => a + (c.credits || 3), 0);
+  return Math.round((g.reduce((a, c) => a + c.average! * (c.credits || 3), 0) / w) * 10) / 10;
+}
+
+export type IndexTrend = { now: number | null; prev: number | null; prevAt: number | null; changedAt: number | null; hist: { t: number; v: number }[] };
+
+/** Guarda el índice cada vez que cambia (avg_hist) y dice cuál era el anterior. */
+export async function indexTrend(env: Env): Promise<IndexTrend> {
+  const now = overallAverage(await courseSummaries(env));
+  let hist: { t: number; v: number }[] = [];
+  try { hist = JSON.parse(await getSetting(env, 'avg_hist', '[]')) || []; } catch { hist = []; }
+  if (now !== null && (!hist.length || Math.abs(hist[hist.length - 1].v - now) >= 0.05)) {
+    hist.push({ t: nowSec(), v: now });
+    hist = hist.slice(-40);
+    await setSetting(env, 'avg_hist', JSON.stringify(hist));
+  }
+  const prev = hist.length >= 2 ? hist[hist.length - 2] : null;
+  return { now, prev: prev ? prev.v : null, prevAt: prev ? prev.t : null, changedAt: hist.length ? hist[hist.length - 1].t : null, hist: hist.slice(-12) };
+}
+
+export function trendText(tr: IndexTrend | null): string | null {
+  if (!tr || tr.now === null || tr.prev === null || Math.abs(tr.now - tr.prev) < 0.05) return null;
+  const d = Math.round((tr.now - tr.prev) * 10) / 10;
+  return `Tu índice ${d > 0 ? 'subió' : 'bajó'} de ${tr.prev} a ${tr.now} (${d > 0 ? '+' : ''}${d})`;
+}
+
+/** Resumen de la semana tipo historia (Inicio y cierre del domingo). */
+export async function weekStory(env: Env) {
+  const now = nowSec(), from = now - 7 * 86400;
+  const s = await getSettings(env);
+  const { results: done } = await env.DB.prepare(`SELECT t.title, c.short_name AS course FROM tasks t LEFT JOIN courses c ON c.id = t.course_id WHERE t.user_id = ? AND t.status = 'done' AND COALESCE(t.submitted_at, t.updated_at) >= ? ORDER BY COALESCE(t.submitted_at, t.updated_at) DESC`).bind(env.UID, from).all<{ title: string; course: string | null }>();
+  const { results: grades } = await env.DB.prepare(`SELECT g.item_name AS item, g.grade, g.grade_max AS max, c.short_name AS course, c.color FROM grades g JOIN courses c ON c.id = g.course_id WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.updated_at >= ? ORDER BY g.grade / g.grade_max DESC`).bind(env.UID, from).all<{ item: string; grade: number; max: number; course: string | null; color: string }>();
+  const { results: next } = await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'pending' AND due_at BETWEEN ? AND ?`).bind(env.UID, now, now + 7 * 86400).all<{ n: number }>();
+  const tr = await indexTrend(env);
+  const g = grades.map((r) => ({ item: String(r.item || '').replace(/\s+(calificaci[oó]n|foro completo)$/i, ''), grade: Math.round(r.grade * 100) / 100, max: r.max, course: r.course, color: r.color }));
+  const avgWeek = g.length ? Math.round((g.reduce((a, x) => a + (x.grade / x.max) * 100, 0) / g.length) * 10) / 10 : null;
+  return {
+    name: (s.student_name || '').split(' ')[0],
+    range: `${fechaCorta(localDate(env, from + 86400))} – ${fechaCorta(localDate(env, now))}`,
+    done: done.length,
+    doneList: done.slice(0, 4).map((d) => ({ title: d.title, course: d.course || 'Personal' })),
+    grades: g.slice(0, 4),
+    gradesCount: g.length,
+    avgWeek,
+    index: tr.now,
+    indexPrev: tr.prev,
+    trend: trendText(tr),
+    streak: await streak(env),
+    nextWeek: next[0]?.n || 0,
+  };
+}
+
+/** Asignaturas activas sin nada nuevo del EVA (tareas, notas o avisos) en `days` días. */
+export async function staleCourses(env: Env, days = 10) {
+  const now = nowSec();
+  const { results } = await env.DB.prepare(`
+    SELECT c.id, c.name, c.short_name,
+      MAX(COALESCE((SELECT MAX(created_at) FROM tasks t WHERE t.course_id = c.id AND t.source = 'eva'), 0),
+          COALESCE((SELECT MAX(updated_at) FROM grades g WHERE g.course_id = c.id), 0),
+          COALESCE((SELECT MAX(created_at) FROM announcements a WHERE a.course_id = c.id), 0)) AS last
+    FROM courses c WHERE c.user_id = ? AND c.active = 1`).bind(env.UID).all<{ id: number; name: string; short_name: string | null; last: number }>();
+  return results.filter((r) => r.last > 0 && now - r.last > days * 86400).map((r) => ({ ...r, days: Math.floor((now - r.last) / 86400) }));
 }
 
 /** Ventana de pago mensual (por defecto del día 25 al día 5 del mes siguiente). */

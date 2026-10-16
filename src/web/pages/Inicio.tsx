@@ -73,7 +73,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   return (
     <>
       <PullIndicator pull={pull} refreshing={refreshing} />
-      <PageHead eyebrow={`${greeting()} · ${d.today}`} title={d.name ? d.name.split(' ')[0] : 'Tu día'}>
+      <PageHead eyebrow={`${greeting()} · ${String(d.today || '').replace(/ de (\S{3})\S*/, ' $1').replace(/^(\S{3})\S*/, '$1')}`} title={d.name ? d.name.split(' ')[0] : 'Tu día'}>
         <button className="avatar hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
       </PageHead>
 
@@ -117,7 +117,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
               <button className="btn ghost" onClick={sendSummary} disabled={busy}><Icon name="send" size={17} />{busy ? 'Enviando…' : 'Resumen'}</button>
             </div>
           </div>
-          {d.termProgress !== null && <div className="hero-ring"><Ring value={d.termProgress} label="del trimestre" /></div>}
+          {d.termProgress !== null && <div className="hero-ring"><Ring value={d.termProgress} label="del trimestre pasó" /></div>}
         </div>
 
         <div className="stats">
@@ -131,7 +131,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
           <button className="stat" onClick={() => go('asignaturas')}>
             <span className="stat-ic green"><Icon name="trend" size={18} /></span>
             <span className="value num">{d.average === null ? '—' : <CountUp value={d.average} decimals={1} />}</span>
-            <span className="label">Promedio</span>
+            <span className="label">Índice del trimestre</span>
             <span className={`foot ${d.average !== null && d.average >= 70 ? 'good' : ''}`}>{d.average === null ? 'Sin notas aún' : d.average >= 70 ? 'Sobre el mínimo' : 'Bajo 70'}</span>
           </button>
           <button className="stat" onClick={() => go('asignaturas')}>
@@ -333,7 +333,7 @@ function FreshGrade({ g, onDone }: { g: NonNullable<Dashboard['freshGrade']>; on
       <div className="fg-main">
         <span className="fg-score num"><b>{fmtGrade(g.grade)}</b><small>/{fmtGrade(g.max)}</small></span>
         <span className="fg-copy"><b>{g.title}</b><span><i className="dot" style={{ background: g.color || 'var(--blue)' }} />{g.course || 'Asignatura'}</span>
-          {g.average !== null && <span className="fg-avg">Promedio ahora <b className="num">{fmtGrade(g.average)}</b>{g.delta ? <em className={`num ${g.delta > 0 ? 'up' : 'down'}`}>{g.delta > 0 ? '▲ +' : '▼ '}{fmtGrade(g.delta)}</em> : null}</span>}
+          {g.average !== null && <span className="fg-avg">Materia ahora <b className="num">{fmtGrade(g.average)}</b>{g.delta ? <em className={`num ${g.delta > 0 ? 'up' : 'down'}`}>{g.delta > 0 ? '▲ +' : '▼ '}{fmtGrade(g.delta)}</em> : null}</span>}
         </span>
       </div>
       {g.feedback && <p className="fg-fb">💬 {g.feedback.length > 220 ? g.feedback.slice(0, 220) + '…' : g.feedback}</p>}

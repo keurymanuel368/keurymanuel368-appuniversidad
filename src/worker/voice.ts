@@ -5,7 +5,7 @@ import { groqTranscribe } from './llm';
 
 const MAX_BYTES = 8 * 1024 * 1024; // ~8 minutos de nota de voz; de sobra para una pregunta
 
-function toBase64(bytes: Uint8Array): string {
+export function toBase64(bytes: Uint8Array): string {
   let s = '';
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);

@@ -299,37 +299,63 @@ export function TaskRow({ t, onToggle, onOpen }: { t: Task; onToggle: (t: Task) 
     setTimeout(() => onToggle(t), 380);
   }
 
-  // Deslizar a la derecha para completar (o reabrir) la tarea.
+  // Deslizar a la derecha para completar (o reabrir) la tarea; a la izquierda, posponerla a mañana.
+  // Mantener presionada abre el menú rápido (lo pinta rumbo-plus.js al recibir «rumbo:taskmenu»).
   const row = useRef<HTMLDivElement>(null);
-  const swipe = useRef<{ x: number; y: number; dx: number; locked: boolean | null } | null>(null);
+  const swipe = useRef<{ x: number; y: number; dx: number; locked: boolean | null; lp?: ReturnType<typeof setTimeout>; lpFired?: boolean } | null>(null);
   const [dx, setDx] = useState(0);
-  const onStart = (e: React.TouchEvent) => { swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, locked: null }; };
+  const w = window as unknown as { __rwLpAt?: number; __rwLp?: number };
+  const onStart = (e: React.TouchEvent) => {
+    const s: NonNullable<typeof swipe.current> = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, locked: null };
+    s.lp = setTimeout(() => {
+      if (s.locked) return;
+      s.lpFired = true; w.__rwLpAt = Date.now(); haptic(10);
+      window.dispatchEvent(new CustomEvent('rumbo:taskmenu', { detail: t }));
+    }, 480);
+    swipe.current = s;
+  };
   const onMove = (e: React.TouchEvent) => {
     const s = swipe.current;
     if (!s) return;
     const mx = e.touches[0].clientX - s.x, my = e.touches[0].clientY - s.y;
-    if (s.locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) s.locked = Math.abs(mx) > Math.abs(my) * 1.3 && mx > 0;
+    if (Math.abs(mx) > 8 || Math.abs(my) > 8) clearTimeout(s.lp);
+    if (s.locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) s.locked = Math.abs(mx) > Math.abs(my) * 1.3 && (mx > 0 || !done);
     if (!s.locked) return;
-    s.dx = Math.min(140, Math.max(0, mx));
-    if (s.dx > 90 && dx <= 90) haptic(6);
+    s.dx = Math.min(140, Math.max(done ? 0 : -140, mx));
+    if ((s.dx > 90 && dx <= 90) || (s.dx < -90 && dx >= -90)) haptic(6);
     setDx(s.dx);
   };
-  const onEnd = () => { if (swipe.current && swipe.current.dx > 90) toggle(); swipe.current = null; setDx(0); };
+  const onEnd = () => {
+    const s = swipe.current;
+    if (s) {
+      clearTimeout(s.lp);
+      if (s.lpFired) w.__rwLp = Date.now();
+      if (s.dx > 90) toggle();
+      else if (s.dx < -90) window.dispatchEvent(new CustomEvent('rumbo:postpone', { detail: t }));
+    }
+    swipe.current = null; setDx(0);
+  };
+  const onCancel = () => { if (swipe.current) clearTimeout(swipe.current.lp); swipe.current = null; setDx(0); };
+  // En computadora: clic derecho abre el mismo menú (salvo que acabe de abrirse por toque largo).
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (Date.now() - (w.__rwLpAt || 0) > 1500) window.dispatchEvent(new CustomEvent('rumbo:taskmenu', { detail: t }));
+  };
 
   const graded = t.grade !== null && t.grade !== undefined && t.grade_max;
   const pct = graded ? (t.grade! / t.grade_max!) * 100 : null;
 
   return (
     <div className="task-wrap" ref={row} style={{ ['--cc' as string]: t.course_color || '#B8C6E0' }}>
-      <div className={`swipe-bg ${dx > 90 ? 'armed' : ''}`} style={{ opacity: dx ? 1 : 0 }} aria-hidden="true">
-        <Icon name={done ? 'sync' : 'check'} size={20} style={{ strokeWidth: 2.6 }} />{done ? 'Reabrir' : 'Hecha'}
+      <div className={`swipe-bg ${dx > 90 || dx < -90 ? 'armed' : ''} ${dx < 0 ? 'left' : ''}`} style={{ opacity: dx ? 1 : 0 }} aria-hidden="true">
+        <Icon name={dx < 0 ? 'clock' : done ? 'sync' : 'check'} size={20} style={{ strokeWidth: 2.6 }} />{dx < 0 ? 'Mañana' : done ? 'Reabrir' : 'Hecha'}
       </div>
       <div className={`task ${done ? 'done' : ''}`} style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? 'none' : undefined }}
-        onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}>
+        onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} onTouchCancel={onCancel} onContextMenu={onContextMenu}>
         <button className={`check ${done ? 'on' : ''}`} onClick={toggle} aria-label={done ? 'Marcar como pendiente' : 'Marcar como hecha'}>
           <Icon name="check" size={15} style={{ strokeWidth: 3.2 }} />
         </button>
-        <button className="body" onClick={() => onOpen?.(t)} style={{ cursor: onOpen ? 'pointer' : 'default' }}>
+        <button className="body" onClick={() => { if (Date.now() - (w.__rwLp || 0) >= 800) onOpen?.(t); }} style={{ cursor: onOpen ? 'pointer' : 'default' }}>
           <span className="title">{t.title}</span>
           <span className="sub">
             <span className="dot" style={{ background: t.course_color || '#B8C6E0' }} />
@@ -801,5 +827,11 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
+  // live.js avisa «rumbo:live» cuando cambió algo en otro dispositivo o en el servidor: se recarga solo.
+  useEffect(() => {
+    const onLive = () => setTick((t) => t + 1);
+    window.addEventListener('rumbo:live', onLive);
+    return () => window.removeEventListener('rumbo:live', onLive);
+  }, []);
   return { data, error, reload: () => setTick((t) => t + 1), setData };
 }

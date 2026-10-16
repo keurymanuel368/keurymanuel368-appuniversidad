@@ -109,7 +109,7 @@ const STOP = new Set(('a al como con cual cuales cuanto cuanta de del dime dame 
   'nota notas calificacion calificaciones puntuacion puntos puntaje sacaste mire ver').split(' '));
 
 /** Palabras útiles de una pregunta: sin tildes ni signos, sin palabras vacías. */
-function keywords(q: string): string[] {
+export function keywords(q: string): string[] {
   return normalize(q.replace(/[¿?¡!.,;:"'«»()]/g, ' ')).split(' ').filter((t) => t && !STOP.has(t) && (t.length > 1 || /\d/.test(t)));
 }
 

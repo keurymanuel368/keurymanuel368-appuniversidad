@@ -234,7 +234,7 @@ export function TelegramCard({ st, onChanged }: { st: { configured: boolean; con
             <li>En Telegram, busca <b>@BotFather</b> y escríbele <b>/newbot</b>.</li>
             <li>Ponle un nombre (por ejemplo <b>Rumbo</b>) y un usuario que termine en <b>bot</b> (por ejemplo <b>rumbo_manuel_bot</b>).</li>
             <li>BotFather te da un <b>token</b>. No lo pegues en ningún chat.</li>
-            <li>En la computadora, dentro de la carpeta <b>rumbo</b>, ejecuta <b>npx wrangler secret put TELEGRAM_BOT_TOKEN</b> y pega el token cuando lo pida.</li>
+            <li>Pégalo en <a href="/telegram"><b>la página de Telegram</b></a>: ahí te guía paso a paso.</li>
             <li>Vuelve aquí y pulsa <b>Conectar</b>.</li>
           </ol>
         </Modal>
@@ -412,7 +412,7 @@ function AiEnginesCard({ engines }: { engines: string[] }) {
               <span className="small muted">{m.d}</span>
               <ol className="steps">
                 <li>Crea tu clave en <a href={m.url} target="_blank" rel="noopener"><b>{m.url.replace('https://', '')}</b></a>.</li>
-                <li>En la computadora, dentro de la carpeta <b>rumbo</b>: <code>npx wrangler secret put {m.k}</code> y pega la clave cuando la pida.</li>
+                <li>Pégala en <a href="/llaves"><b>Llaves y configuración</b></a> (busca <code>{m.k}</code>).</li>
               </ol>
             </div>
           ))}
@@ -735,6 +735,8 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
             <div className="card actions-list">
               <button className="action-row" disabled={!!busy} onClick={() => action('test', '/notify/test')}><span className="set-ic blue"><Icon name="send" size={18} /></span><b>{busy === 'test' ? 'Enviando…' : 'Enviar mensaje de prueba'}</b><Icon name="chevron" size={18} /></button>
               <button className={`action-row ${busy === 'sync' ? 'spinning' : ''}`} disabled={!!busy} onClick={() => action('sync', '/sync')}><span className="set-ic violet"><Icon name="sync" size={18} /></span><b>{busy === 'sync' ? 'Sincronizando…' : 'Sincronizar EVA ahora'}</b><Icon name="chevron" size={18} /></button>
+              {admin && <a className="action-row" href="/llaves" style={{ textDecoration: 'none', color: 'inherit' }}><span className="set-ic blue"><Icon name="plug" size={18} /></span><b>Llaves y configuración</b><Icon name="chevron" size={18} /></a>}
+              {admin && <a className="action-row" href="/telegram" style={{ textDecoration: 'none', color: 'inherit' }}><span className="set-ic blue"><Icon name="send" size={18} /></span><b>Bot de Telegram (guía)</b><Icon name="chevron" size={18} /></a>}
               {admin && <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>}
               <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
               <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>

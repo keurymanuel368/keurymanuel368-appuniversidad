@@ -30,4 +30,11 @@ export interface Env {
   GEMINI_MODEL?: string;
   CEREBRAS_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  GEMINI_VISION_MODEL?: string;
+  // Pantallas en vivo (Durable Object RumboLive, ver live.ts)
+  LIVE?: DurableObjectNamespace;
+  // Los pone loadAppConfig (telegram.ts): de dónde salió cada llave (cloudflare = secreto, app = /llaves)
+  CFG_CF?: Record<string, boolean>;
+  CFG_SRC?: Record<string, string>;
+  TG_TOKEN_SOURCE?: string;
 }

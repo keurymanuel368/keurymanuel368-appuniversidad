@@ -3,6 +3,8 @@
 import type { Env } from './env';
 import type { SyncChange, SyncResult } from './moodle';
 import { sendToMe } from './notify';
+import { courseSummaries, indexTrend, trendText } from './data';
+import { tgEsc, tgGradeCard } from './telegram';
 import { cuandoTexto, nowSec } from './time';
 import { blocks, courseLabel } from './wa';
 
@@ -26,6 +28,8 @@ ${cheer}${fb}`;
 
 export async function notifyGrades(env: Env, grades: SyncResult['newGrades']): Promise<number> {
   let sent = 0;
+  // Cómo cambió tu índice con estas notas (p. ej. «Tu índice subió de 84.1 a 84.4»).
+  const trend = trendText(await indexTrend(env).catch(() => null));
   for (const g of grades.slice(0, 8)) {
     const m = gradeMessage(g);
     const { icon, cheer, changed, title, head, body } = m;
@@ -42,10 +46,15 @@ ${g.feedback}` : 'Sin comentario del facilitador.'}`, task ? `/#tareas/${task.id
       `${icon} *${changed ? 'Te cambiaron una nota' : '¡Te calificaron!'}*`,
       [`*${g.item}*`, `📚 ${courseLabel(g.course)}`, `📊 Nota: *${fmt(g.grade)}/${fmt(g.max)}*${changed ? ` _(antes ${fmt(g.prev!)})_` : ''}`].join('\n'),
       quote,
+      trend ? `📈 ${trend}` : '',
       cheer,
     ), {
       title, tag: `grade-${g.courseId}-${g.itemId}`, url: task ? `/#tareas/${task.id}` : '/#asignaturas',
-      pushBody: `${head}${g.feedback ? ' · 💬 ' + g.feedback.slice(0, 120) : ' · ' + cheer}`, type: 'notas',
+      pushBody: `${head}${trend ? ' · ' + trend : ''}${g.feedback ? ' · 💬 ' + g.feedback.slice(0, 120) : ' · ' + cheer}`, type: 'notas',
+      tg: {
+        html: tgGradeCard(env, g, changed, cheer, (await courseSummaries(env).catch(() => [])).find((c) => c.name === g.course)?.average) + (trend ? `\n\n📈 <b>${tgEsc(trend)}</b>` : ''),
+        kb: [[{ text: '📊 Mis notas', callback_data: 'c:notas' }, { text: '🧮 ¿Cuánto necesito?', callback_data: 'c:necesito' }]],
+      },
     });
     if (r.ok) sent++;
   }

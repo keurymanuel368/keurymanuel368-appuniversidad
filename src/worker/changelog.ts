@@ -10,6 +10,48 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 37,
+    date: '2026-10-14',
+    title: 'Rumbo se usa con gestos',
+    items: [
+      'Mantén presionada una tarea y sale un menú: Ya la entregué, Posponer a mañana, Modo enfoque, Abrir en el EVA y Preguntarle a Rumbo. En computadora, clic derecho.',
+      'Desliza una tarea a la izquierda para posponerla. Si la fecha la pone el EVA, Rumbo te la recuerda mañana a las 8:00.',
+      'En Inicio, la tarjeta «Tu día» junta lo que vence hoy y lo atrasado, con un botón Empezar que abre el modo enfoque.',
+      'Cuando te califican, ves cómo cambió tu índice (por ejemplo, de 84.1 a 84.4). También llega en el aviso.',
+      'El buscador ahora hace cosas: escribe «nueva tarea», «sincronizar», «modo oscuro» o «resumen».',
+      'Ajustes → Apariencia: elige el color de la app, el ícono de tu pantalla de inicio y si la mascota sale solo en Inicio.',
+      'Resumen de tu semana tipo historia: el domingo en la noche (o tocando el calendario arriba en Inicio).',
+      'Si una asignatura pasa 10 días sin nada nuevo en el EVA, Rumbo te avisa para que le eches un ojo.',
+      'El Plan muestra qué tan cargado está cada día, y la pantalla de entrada tiene la brújula animada.'
+    ]
+  },
+  {
+    version: 36,
+    date: '2026-10-14',
+    title: 'Detalles que se notan',
+    items: [
+      'La ficha de cada tarea se lee bien: el título ahora es blanco sobre el fondo oscuro.',
+      'Los botones de texto (Copiar para la IA, Editar tarea, Marcar todas) ya no tienen recuadro: se ven limpios, como en el iPhone.',
+      'La mascota es más pequeña en el celular y se aparta mientras bajas, para no tapar lo que lees.',
+      'Toca la pestaña en la que ya estás y subes al principio.',
+      'La barra de abajo se ve más nítida y los títulos de arriba caben completos.',
+      '¡Confeti! Al marcar una tarea como hecha sale una pequeña lluvia de colores donde tocaste (y el teléfono vibra suave).',
+      'En Mi pensum, la leyenda ahora tiene sus colores: en curso, aprobada, disponible, con prerrequisito y optativa.'
+    ]
+  },
+  {
+    version: 35,
+    date: '2026-10-13',
+    title: 'Rumbo, versión final del diseño',
+    items: [
+      'Nueva pantalla de carga: la brújula de Rumbo gira y se acomoda, te saluda por tu nombre y te dice qué está preparando.',
+      'Widget nuevo para Android en tres tamaños (pequeño, mediano y grande). Cambia de color según cómo va tu día, muestra tu índice en un anillo, tu semana y la cuenta regresiva en vivo.',
+      'WhatsApp se apaga y se enciende con un toque en Ajustes, o escribiéndole al bot «whatsapp off».',
+      'El selector de Tareas (Pendientes, Mes, Plan, Entregadas) ya no se descentra al cambiar.',
+      'Detalles: la mascota habla menos tiempo y no tapa lo que lees, los accesos rápidos llenan el ancho y en Android sientes una vibración suave al tocar.'
+    ]
+  },
+  {
     version: 34,
     date: '2026-10-13',
     title: '🎨 Rumbo más limpio',
