@@ -70,9 +70,9 @@ export async function webLoginToken(base: string, username: string, password: st
         if (!n) continue;
         const type = (t.match(/\btype="([^"]*)"/i)?.[1] || 'text').toLowerCase();
         if (type === 'checkbox' || type === 'submit') continue;
-        data.set(n, type === 'password' ? password : n === 'usernameUserInput' ? username : n === 'username' ? fullUser : (t.match(/\bvalue="([^"]*)"/i)?.[1] || '').replace(/&amp;/g, '&'));
+        data.set(n, type === 'password' ? password : n === 'usernameUserInput' ? username : n === 'username' ? fullUser : (t.match(/\bvalue=(?:"([^"]*)"|'([^']*)')/i)?.slice(1).find((x) => x !== undefined) || '').replace(/&amp;/g, '&'));
       }
-      if (!data.has('sessionDataKey')) { const k = new URL(first.url).searchParams.get('sessionDataKey'); if (k) data.set('sessionDataKey', k); }
+      if (!data.get('sessionDataKey')) { const k = new URL(first.url).searchParams.get('sessionDataKey'); if (k) data.set('sessionDataKey', k); }
       const post = await call(action, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: data.toString() });
       const done = await follow(post, action);
       if (done.res.status === 403 || done.res.status === 429) return { reason: 'blocked', detail: `HTTP ${done.res.status}` };
