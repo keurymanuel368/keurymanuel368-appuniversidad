@@ -58,16 +58,16 @@ export async function webLoginToken(base: string, username: string, password: st
     const first = await follow(await call(start), start);
     if (new URL(first.url).host !== new URL(root).host) {
       const html0 = await first.res.text();
-      const form = [...html0.matchAll(/<form[^>]*>[\s\S]*?<\/form>/gi)].map((m) => m[0]).find((f) => /commonauth/i.test(f));
-      if (!form) return { reason: 'nolaunch', detail: 'sin formulario de identidad' };
-      const action = new URL((form.match(/<form[^>]*action="([^"]*)"/i)?.[1] || '/commonauth').replace(/&amp;/g, '&'), first.url).href;
+      const form = [...html0.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)].map((m) => m[0]).find((f) => /commonauth/i.test(f));
+      if (!form) return { reason: 'nolaunch', detail: `sin formulario de identidad (HTTP ${first.res.status}, ${new URL(first.url).host}, ${html0.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)})` };
+      const action = new URL((form.match(/<form\b[^>]*\baction="([^"]*)"/i)?.[1] || '/commonauth').replace(/&amp;/g, '&'), first.url).href;
       const data = new URLSearchParams();
-      for (const t of form.match(/<input[^>]*>/gi) || []) {
-        const n = t.match(/name="([^"]*)"/i)?.[1];
+      for (const t of form.match(/<input\b[^>]*>/gi) || []) {
+        const n = t.match(/\bname="([^"]*)"/i)?.[1];
         if (!n) continue;
-        const type = (t.match(/type="([^"]*)"/i)?.[1] || 'text').toLowerCase();
+        const type = (t.match(/\btype="([^"]*)"/i)?.[1] || 'text').toLowerCase();
         if (type === 'checkbox' || type === 'submit') continue;
-        data.set(n, type === 'password' ? password : /user|name|login/i.test(n) && type !== 'hidden' ? username : (t.match(/value="([^"]*)"/i)?.[1] || '').replace(/&amp;/g, '&'));
+        data.set(n, type === 'password' ? password : /^(username|usernameUserInput)$/i.test(n) ? username : (t.match(/\bvalue="([^"]*)"/i)?.[1] || '').replace(/&amp;/g, '&'));
       }
       if (!data.has('sessionDataKey')) { const k = new URL(first.url).searchParams.get('sessionDataKey'); if (k) data.set('sessionDataKey', k); }
       const post = await call(action, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: data.toString() });
