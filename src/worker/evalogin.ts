@@ -62,8 +62,10 @@ export async function webLoginToken(base: string, username: string, password: st
     // 3) Pedir el enlace de la app. A veces el EVA muestra antes una página de confirmación con un botón «confirmed=1».
     const passport = 'rumbo' + Math.random().toString(36).slice(2, 10);
     let url = `${root}/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=moodlemobile`;
+    let init: RequestInit = {};
     for (let i = 0; i < 4; i++) {
-      const r = await call(url);
+      const r = await call(url, init);
+      init = {};
       const loc = r.headers.get('location') || '';
       if (/^moodlemobile:\/\/token=/i.test(loc)) {
         const token = tokenFromValue(loc);
@@ -73,7 +75,22 @@ export async function webLoginToken(base: string, username: string, password: st
       const body = await r.text();
       const next = body.match(/href="([^"]*launch\.php[^"]*confirmed=1[^"]*)"/i)?.[1]?.replace(/&amp;/g, '&');
       if (next) { url = new URL(next, root + '/').href; continue; }
-      return { reason: 'nolaunch', detail: `HTTP ${r.status}` };
+      // Moodle suele mostrar el botón de confirmar como un formulario (con sesskey), no como enlace.
+      const form = [...body.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)].map((m) => m[0]).find((f) => /launch\.php/i.test(f));
+      if (form) {
+        const attr = (re: RegExp) => form.match(re)?.[1]?.replace(/&amp;/g, '&') || '';
+        const action = new URL(attr(/<form\b[^>]*\baction="([^"]*)"/i) || url, root + '/').href;
+        const method = (attr(/<form\b[^>]*\bmethod="([^"]*)"/i) || 'get').toLowerCase();
+        const data = new URLSearchParams();
+        for (const t of form.match(/<input\b[^>]*>/gi) || []) {
+          const n = t.match(/\bname="([^"]*)"/i)?.[1];
+          if (n) data.set(n, (t.match(/\bvalue="([^"]*)"/i)?.[1] || '').replace(/&amp;/g, '&'));
+        }
+        if (method === 'post') { url = action; init = { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: data.toString() }; }
+        else url = action + (action.includes('?') ? '&' : '?') + data.toString();
+        continue;
+      }
+      return { reason: 'nolaunch', detail: `HTTP ${r.status} ${body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140)}` };
     }
     return { reason: 'nolaunch', detail: 'demasiados pasos' };
   } catch (e) {
