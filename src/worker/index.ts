@@ -1130,10 +1130,13 @@ app.post('/api/eva/connect', async (c) => {
   if (!b.username?.trim() || !b.password) return c.json({ error: 'Escribe tu matrícula y tu contraseña del EVA.' }, 400);
   const base = c.env.MOODLE_URL.replace(/\/$/, '');
   let token = '';
+  // Matrícula tolerante: espacios o guiones se quitan; un usuario con letras se escribe en minúsculas (Moodle lo exige).
+  const raw = b.username.trim();
+  const username = /^[\d\s-]+$/.test(raw) ? raw.replace(/\D/g, '') : raw.toLowerCase();
   try {
-    const res = await fetch(`${base}/login/token.php?service=moodle_mobile_app`, { method: 'POST', body: new URLSearchParams({ username: b.username.trim(), password: b.password }) });
+    const res = await fetch(`${base}/login/token.php?service=moodle_mobile_app`, { method: 'POST', body: new URLSearchParams({ username, password: b.password }) });
     const j = (await res.json().catch(() => ({}))) as { token?: string; error?: string; errorcode?: string };
-    if (!j.token) return c.json({ error: j.errorcode === 'invalidlogin' ? 'El EVA no aceptó esa matrícula y contraseña. Revisa que sean las mismas con las que entras al EVA, o usa la opción «Con el enlace del EVA».' : `El EVA respondió: ${j.error || 'sin token'}. Prueba la opción «Con el enlace del EVA».`, method: 'link' }, 400);
+    if (!j.token) return c.json({ error: j.errorcode === 'invalidlogin' ? 'Matrícula o contraseña incorrecta. Escribe los mismos datos con los que entras al EVA (revisa que no haya espacios) o usa «¿Olvidaste tu contraseña?».' : `El EVA no me dejó entrar (${j.error || 'sin respuesta'}). Prueba la opción avanzada de abajo.`, method: 'link' }, 400);
     token = j.token;
   } catch { return c.json({ error: 'No pude comunicarme con el EVA. Inténtalo en un momento.' }, 502); }
   return saveEvaToken(c.env, token).then((r) => c.json(r, r.ok ? 200 : 400));

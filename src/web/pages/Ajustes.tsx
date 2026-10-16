@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api, channelsLabel, dateLabel, type SendResult } from '../api';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
 import { TEXT_SIZES, applyTextSize, applyTheme, storedTextSize } from '../theme';
-import { Modal, PageHead, RichText, Skeleton, haptic, toast, useLoad } from '../components';
+import { Modal, PageHead, RichText, Segmented, Skeleton, haptic, toast, useLoad } from '../components';
+import { EvaModal } from '../EvaConnect';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { me } from '../me';
@@ -598,8 +599,57 @@ function DeleteAccount() {
   );
 }
 
+type Tab = 'cuenta' | 'conexiones' | 'avisos' | 'avanzado';
+const TABS: Tab[] = ['cuenta', 'conexiones', 'avisos', 'avanzado'];
+const TAB_KEY = 'rumbo-ajustes-tab';
+const savedTab = (): Tab | null => {
+  const h = location.hash.match(/^#ajustes\/(\w+)/)?.[1] as Tab | undefined;
+  if (h && TABS.includes(h)) return h;
+  try { const v = localStorage.getItem(TAB_KEY) as Tab | null; return v && TABS.includes(v) ? v : null; } catch { return null; }
+};
+
+/** El EVA es lo más importante de Rumbo: tarjeta grande con el botón de conectar y la sincronización. */
+function EvaCard({ eva, s, onSave, onChanged }: { eva: SettingsRes['status']['eva']; s: Record<string, string>; onSave: (k: string, v: string) => void; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const ok = eva.configured && !eva.error;
+  async function sync() {
+    setSyncing(true); haptic(8);
+    try { await api('/sync', { method: 'POST' }); toast('Listo: tus tareas y notas ya están en Rumbo ✅'); window.dispatchEvent(new Event('rumbo:badges')); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setSyncing(false); onChanged();
+  }
+  return (
+    <div className={`card eva-card ${ok ? '' : 'needs'}`}>
+      <div className="toggle">
+        <span className="set-ic violet"><Icon name="book" size={18} /></span>
+        <div className="t">
+          <b>Mi EVA de la UAPA</b>
+          <span>{ok ? `Conectado${eva.user ? ' como ' + eva.user : ''}${eva.lastSync ? ' · última vez ' + dateLabel(eva.lastSync) : ''}` : eva.configured ? 'La conexión falló: vuelve a conectarla.' : 'Conéctalo con tu matrícula y contraseña del EVA. Es lo único imprescindible.'}</span>
+          {eva.error && <span className="t-err">{eva.error}</span>}
+        </div>
+        <span className={`pill ${ok ? 'green' : 'gray'}`}><i className={`led ${ok ? 'on' : ''}`} />{ok ? 'Conectado' : eva.configured ? 'Con error' : 'Sin conectar'}</span>
+      </div>
+      {ok ? (
+        <div className="conn-actions">
+          <button className={`btn soft ${syncing ? 'spinning' : ''}`} onClick={sync} disabled={syncing}><Icon name="sync" size={18} />{syncing ? 'Trayendo…' : 'Sincronizar ahora'}</button>
+          <button className="btn line" onClick={() => setOpen(true)}>Reconectar</button>
+        </div>
+      ) : (
+        <button className="btn primary lg block" onClick={() => { haptic(8); setOpen(true); }}><Icon name="link" size={18} />Conectar mi EVA</button>
+      )}
+      <div className="field"><label htmlFor="es">Sincronizar el EVA cada (horas)</label><input id="es" className="input num" inputMode="numeric" defaultValue={s.eva_sync_hours} onBlur={(e) => onSave('eva_sync_hours', e.target.value.replace(/\D/g, '') || '2')} /></div>
+      {open && <EvaModal onClose={() => setOpen(false)} onDone={() => { setOpen(false); onChanged(); void sync(); }} />}
+    </div>
+  );
+}
+
 export function Ajustes({ onLogout }: { onLogout: () => void }) {
   const q = useLoad(() => api<SettingsRes>('/settings'));
+  const [tab, setTabState] = useState<Tab>(() => savedTab() || 'cuenta');
+  const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem(TAB_KEY, t); } catch { /* sin almacenamiento */ } window.scrollTo({ top: 0 }); };
+  // Primera vez, sin EVA conectado: se abre directo en Conexiones.
+  useEffect(() => { if (q.data && !savedTab() && !q.data.status.eva.configured) setTabState('conexiones'); }, [!!q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState('');
   const [report, setReport] = useState<string[] | null>(null);
   if (q.error) return <div className="error">{q.error}</div>;
@@ -635,32 +685,75 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
   const summaryOn = s.summary_enabled !== '0';
   const admin = st.role === 'admin';
 
+  const needsEva = !(st.eva.configured && !st.eva.error);
+  const hourSelect = (id: string, key: string, def: string) => (
+    <select id={id} className="input" value={s[key] || def} onChange={(e) => save(key, e.target.value)}>
+      {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
+    </select>
+  );
+  const Block = ({ title, children, extra }: { title: string; children: React.ReactNode; extra?: React.ReactNode }) => (
+    <div className="section"><div className="section-head"><h3>{title}</h3>{extra}</div>{children}</div>
+  );
+
   return (
     <>
-      <PageHead eyebrow="Cuenta, conexiones y avisos" title="Ajustes">
+      <PageHead eyebrow="Todo en su lugar" title="Ajustes">
         <button className="btn line hide-mobile" onClick={onLogout}><Icon name="logout" size={18} />Cerrar sesión</button>
       </PageHead>
-      <section className="grid2 stagger">
-        <div className="col">
-          <div className="section">
-            <div className="section-head"><h3>Mi cuenta</h3></div>
-            <AccountCard />
-          </div>
-          <div className="section">
-            <div className="section-head"><h3>Comentarios</h3></div>
-            <FeedbackCard />
-          </div>
-          <div className="section">
-            <div className="section-head"><h3>Notificaciones</h3></div>
+      <Segmented label="Categorías de ajustes" value={tab} onChange={setTab}
+        options={[{ id: 'cuenta', label: 'Cuenta' }, { id: 'conexiones', label: 'Conexiones', count: needsEva ? 1 : undefined }, { id: 'avisos', label: 'Avisos' }, { id: 'avanzado', label: 'Avanzado' }]} />
+
+      <div className="col stagger settings-tab" key={tab}>
+        {tab === 'cuenta' && <>
+          <Block title="Mi cuenta"><AccountCard /></Block>
+          <Block title="Cómo te saludo y tu trimestre">
+            <div className="card"><div className="form-grid">
+              <div className="field"><label htmlFor="nm">Cómo te saludo</label><input id="nm" className="input" defaultValue={s.student_name} onBlur={(e) => save('student_name', e.target.value)} /></div>
+              <div className="field"><label htmlFor="ts">Inicio del trimestre</label><input id="ts" type="date" className="input" defaultValue={s.term_start} onBlur={(e) => save('term_start', e.target.value)} /></div>
+              <div className="field"><label htmlFor="te">Fin del trimestre</label><input id="te" type="date" className="input" defaultValue={s.term_end} onBlur={(e) => save('term_end', e.target.value)} /></div>
+            </div></div>
+          </Block>
+          <Block title="Apariencia"><ThemeCard /><div id="slot-appear" /></Block>
+          <Block title="Comentarios"><FeedbackCard /></Block>
+          <Block title="Sesión">
+            <div className="card actions-list">
+              <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
+              <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>
+              <DeleteAccount />
+            </div>
+          </Block>
+        </>}
+
+        {tab === 'conexiones' && <>
+          <Block title="Mi EVA"><EvaCard eva={st.eva} s={s} onSave={save} onChanged={q.reload} /></Block>
+          <div id="slot-wa" />
+          <Block title="Más conexiones" extra={<a className="link-btn" href="#conectar">Paso a paso</a>}>
+            <div className="card">
+              <div className="toggle">
+                <span className="set-ic green"><Icon name="chat" size={18} /></span>
+                <div className="t"><b>Avisos por WhatsApp</b><span>{st.callmebot.configured ? `Te llegan a +${st.callmebot.number}: resumen diario y todos los avisos.` : 'Apagados: actívalos en «Paso a paso» (toma 2 minutos).'}</span></div>
+                <Status ok={st.callmebot.configured} text={st.callmebot.configured ? 'Activo' : 'Apagado'} />
+              </div>
+              <TelegramCard st={st.telegram} onChanged={q.reload} />
+              <MailCard connected={st.mail.connected} lastAt={st.mail.lastAt} onChanged={q.reload} />
+              <CalendarCard connected={st.calendar.connected} onChanged={q.reload} studyOn={s.ics_study !== '0'} onStudy={(on) => save('ics_study', on ? '1' : '0')} />
+              <WidgetCard />
+              <div className="toggle">
+                <span className="set-ic orange"><Icon name="spark" size={18} /></span>
+                <div className="t"><b>Notas de voz</b><span>Háblale al asistente o haz una llamada de voz: entiende el español dominicano y te responde.</span></div>
+                <Status ok text="Listo" />
+              </div>
+              {admin && <AiEnginesCard engines={st.ai.engines} />}
+            </div>
+          </Block>
+        </>}
+
+        {tab === 'avisos' && <>
+          <Block title="Notificaciones">
             <PushCard devices={st.push.devices} alsoWa={s.push_also_wa !== '0'} onSave={save} onChanged={q.reload} />
             <NotifyTypes s={s} onSave={save} />
-          </div>
-          <div className="section">
-            <div className="section-head"><h3>Apariencia</h3></div>
-            <ThemeCard />
-          </div>
-          <div className="section">
-            <div className="section-head"><h3>Resumen y recordatorios</h3></div>
+          </Block>
+          <Block title="Resumen y recordatorios">
             <div className="card">
               <div className="toggle">
                 <span className="set-ic blue"><Icon name="bell" size={18} /></span>
@@ -673,74 +766,24 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                 <button className={`switch ${s.study_enabled !== '0' ? 'on' : ''}`} role="switch" aria-checked={s.study_enabled !== '0'} aria-label="Hora de estudio" onClick={() => { haptic(8); save('study_enabled', s.study_enabled === '0' ? '1' : '0'); }} />
               </div>
               <div className="form-grid">
-                <div className="field"><label htmlFor="sh">Hora del resumen</label>
-                  <select id="sh" className="input" value={s.summary_hour} onChange={(e) => save('summary_hour', e.target.value)}>
-                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
-                  </select></div>
+                <div className="field"><label htmlFor="sh">Hora del resumen</label>{hourSelect('sh', 'summary_hour', '7')}</div>
+                <div className="field"><label htmlFor="sth">Hora de estudio</label>{hourSelect('sth', 'study_hour', '19')}</div>
+                <div className="field"><label htmlFor="ph">Plan de la semana (domingo)</label>{hourSelect('ph', 'plan_hour', '18')}</div>
                 <div className="field"><label htmlFor="tr">Recordar entregas (horas antes)</label><input id="tr" className="input num" defaultValue={s.task_reminders} onBlur={(e) => save('task_reminders', e.target.value.replace(/[^\d,]/g, ''))} /></div>
-                <div className="field"><label htmlFor="es">Sincronizar el EVA cada (horas)</label><input id="es" className="input num" inputMode="numeric" defaultValue={s.eva_sync_hours} onBlur={(e) => save('eva_sync_hours', e.target.value.replace(/\D/g, '') || '2')} /></div>
-                <div className="field"><label htmlFor="sth">Hora de estudio (te aviso qué toca)</label>
-                  <select id="sth" className="input" value={s.study_hour || '19'} onChange={(e) => save('study_hour', e.target.value)}>
-                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
-                  </select></div>
-                <div className="field"><label htmlFor="ph">Plan de la semana (domingo)</label>
-                  <select id="ph" className="input" value={s.plan_hour || '18'} onChange={(e) => save('plan_hour', e.target.value)}>
-                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? '12' : h > 12 ? h - 12 : h}:00 {h < 12 ? 'a. m.' : 'p. m.'}</option>)}
-                  </select></div>
-                <div className="field"><label htmlFor="nm">Cómo te saludo</label><input id="nm" className="input" defaultValue={s.student_name} onBlur={(e) => save('student_name', e.target.value)} /></div>
               </div>
             </div>
-          </div>
+          </Block>
           <PlanCard />
-          <div className="section">
-            <div className="section-head"><h3>Trimestre</h3></div>
-            <div className="card">
-              <div className="form-grid">
-                <div className="field"><label htmlFor="ts">Inicio</label><input id="ts" type="date" className="input" defaultValue={s.term_start} onBlur={(e) => save('term_start', e.target.value)} /></div>
-                <div className="field"><label htmlFor="te">Fin</label><input id="te" type="date" className="input" defaultValue={s.term_end} onBlur={(e) => save('term_end', e.target.value)} /></div>
-              </div>
-            </div>
-          </div>
-        </div>
+        </>}
 
-        <div className="col">
-          <div className="section">
-            <div className="section-head"><h3>Conexiones</h3><a className="link-btn" href="#conectar">Paso a paso</a></div>
-            <div className="card">
-              <div className="toggle">
-                <span className="set-ic violet"><Icon name="book" size={18} /></span>
-                <div className="t"><b>EVA UAPA (Moodle)</b><span>{st.eva.configured ? (st.eva.lastSync ? `Última sincronización: ${dateLabel(st.eva.lastSync)}${st.eva.user ? ' · ' + st.eva.user : ''}` : 'Configurado, sin sincronizar aún') : 'Sin conectar: toca «Paso a paso» arriba.'}</span>{st.eva.error && <span className="t-err">{st.eva.error}</span>}</div>
-                <Status ok={st.eva.configured && !st.eva.error} text={st.eva.configured ? (st.eva.error ? 'Con error' : 'Conectado') : 'Sin configurar'} />
-              </div>
-              <div className="toggle">
-                <span className="set-ic green"><Icon name="chat" size={18} /></span>
-                <div className="t"><b>Avisos por WhatsApp</b><span>{st.callmebot.configured ? `Te llegan a +${st.callmebot.number}: resumen diario y todos los avisos.` : 'Apagados: actívalos en «Paso a paso» (toma 2 minutos).'}</span></div>
-                <Status ok={st.callmebot.configured} text={st.callmebot.configured ? 'Activo' : 'Apagado'} />
-              </div>
-              <div className="toggle">
-                <span className="set-ic orange"><Icon name="spark" size={18} /></span>
-                <div className="t"><b>Notas de voz</b><span>Háblale al asistente o haz una llamada de voz: entiende el español dominicano y te responde.</span></div>
-                <Status ok text="Listo" />
-              </div>
-              <WidgetCard />
-              <BackupCard />
-              <MailCard connected={st.mail.connected} lastAt={st.mail.lastAt} onChanged={q.reload} />
-              {admin && <AiEnginesCard engines={st.ai.engines} />}
-              <TelegramCard st={st.telegram} onChanged={q.reload} />
-              <CalendarCard connected={st.calendar.connected} onChanged={q.reload} studyOn={s.ics_study !== '0'} onStudy={(on) => save('ics_study', on ? '1' : '0')} />
-            </div>
-          </div>
-          <div className="section">
-            <div className="section-head"><h3>Acciones</h3></div>
+        {tab === 'avanzado' && <>
+          <Block title="Acciones">
             <div className="card actions-list">
               <button className="action-row" disabled={!!busy} onClick={() => action('test', '/notify/test')}><span className="set-ic blue"><Icon name="send" size={18} /></span><b>{busy === 'test' ? 'Enviando…' : 'Enviar mensaje de prueba'}</b><Icon name="chevron" size={18} /></button>
               <button className={`action-row ${busy === 'sync' ? 'spinning' : ''}`} disabled={!!busy} onClick={() => action('sync', '/sync')}><span className="set-ic violet"><Icon name="sync" size={18} /></span><b>{busy === 'sync' ? 'Sincronizando…' : 'Sincronizar EVA ahora'}</b><Icon name="chevron" size={18} /></button>
               {admin && <a className="action-row" href="/llaves" style={{ textDecoration: 'none', color: 'inherit' }}><span className="set-ic blue"><Icon name="plug" size={18} /></span><b>Llaves y configuración</b><Icon name="chevron" size={18} /></a>}
               {admin && <a className="action-row" href="/telegram" style={{ textDecoration: 'none', color: 'inherit' }}><span className="set-ic blue"><Icon name="send" size={18} /></span><b>Bot de Telegram (guía)</b><Icon name="chevron" size={18} /></a>}
               {admin && <button className="action-row" disabled={!!busy} onClick={() => action('cron', '/cron/run')}><span className="set-ic orange"><Icon name="clock" size={18} /></span><b>{busy === 'cron' ? 'Ejecutando…' : 'Ejecutar avisos ahora'}</b><Icon name="chevron" size={18} /></button>}
-              <button className="action-row danger hide-desktop" onClick={onLogout}><span className="set-ic red"><Icon name="logout" size={18} /></span><b>Cerrar sesión</b></button>
-              <button className="action-row danger" onClick={async () => { haptic(10); await api('/logout-all', { method: 'POST' }).catch(() => {}); navigator.serviceWorker?.controller?.postMessage('clear-api'); toast('Cerré la sesión en todos tus dispositivos'); setTimeout(() => location.reload(), 900); }}><span className="set-ic red"><Icon name="alert" size={18} /></span><b>Cerrar sesión en todos los dispositivos</b><Icon name="chevron" size={18} /></button>
-              <DeleteAccount />
             </div>
             {report && (
               <div className="card">
@@ -748,9 +791,10 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                 <ul className="report">{report.map((r, i) => <li key={i}>{r}</li>)}</ul>
               </div>
             )}
-          </div>
-        </div>
-      </section>
+          </Block>
+          <Block title="Copias de seguridad"><div className="card"><BackupCard /></div></Block>
+        </>}
+      </div>
     </>
   );
 }

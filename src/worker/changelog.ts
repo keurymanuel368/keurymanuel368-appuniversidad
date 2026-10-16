@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 39,
+    date: '2026-10-16',
+    title: '🔌 Conectar el EVA es mucho más fácil',
+    items: [
+      'Conectar el EVA ahora es una sola pantalla: tu matrícula y tu contraseña del EVA, y listo. Ya no hace falta F12 ni copiar enlaces.',
+      'Si te equivocas de contraseña, te lo dice claro y te deja corregir (antes te mandaba al paso difícil). Tu contraseña no se guarda.',
+      'El método del F12 sigue existiendo, pero escondido en «opción avanzada» por si el EVA no deja entrar con contraseña.',
+      'Ajustes ordenado en 4 pestañas: Cuenta, Conexiones, Avisos y Avanzado. El EVA aparece primero en Conexiones, y si aún no lo conectaste, Ajustes se abre ahí.',
+    ],
+  },
+  {
     version: 38,
     date: '2026-10-16',
     title: '🎓 Promedio final por asignatura',

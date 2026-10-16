@@ -187,27 +187,14 @@
     var busy = false;
     function mount() {
       if (busy || !/^#ajustes/.test(location.hash)) return;
-      var page = document.querySelector('.page');
-      if (!page) return;
-      var head = page.querySelector('.topbar');
-      if (!head) return;
-      var have = page.querySelector('.rumbo-wa');
-      if (have) {
-        // Si quedó antes del título, se mueve justo debajo
-        if (head.compareDocumentPosition(have) & Node.DOCUMENT_POSITION_PRECEDING) {
-          var a0 = head; while (a0.parentElement !== page) a0 = a0.parentElement;
-          page.insertBefore(have, a0.nextSibling);
-        }
-        return;
-      }
+      // Ajustes tiene pestañas: la tarjeta vive en el espacio #slot-wa de la pestaña Conexiones.
+      var slot = document.getElementById('slot-wa');
+      if (!slot || slot.querySelector('.rumbo-wa')) return;
       busy = true;
       _fetch('/api/wa/status', { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
         busy = false;
-        if (!j || page.querySelector('.rumbo-wa') || !document.contains(page)) return;
-        var c = card(j.on, j.configured);
-        var anchor = head;
-        while (anchor && anchor.parentElement && anchor.parentElement !== page) anchor = anchor.parentElement;
-        if (anchor && anchor.parentElement === page) page.insertBefore(c, anchor.nextSibling); else page.prepend(c);
+        if (!j || slot.querySelector('.rumbo-wa') || !document.contains(slot)) return;
+        slot.appendChild(card(j.on, j.configured));
       }).catch(function () { busy = false; });
     }
     new MutationObserver(function () { mount(); }).observe(document.documentElement, { childList: true, subtree: true });

@@ -326,9 +326,10 @@
   }
   function ensureAppearance() {
     if (route() !== 'ajustes') return;
-    var page = $('#root .page'); if (!page || $('.rw-appear', page)) return;
-    var anchor = $('.rumbo-wa', page) || $('.topbar', page);
-    if (!anchor) return;
+    var page = $('#root .page'); if (!page) return;
+    // Ajustes tiene pestañas: esta tarjeta vive en #slot-appear (pestaña Cuenta).
+    var anchor = document.getElementById('slot-appear');
+    if (!anchor || $('.rw-appear', anchor)) return;
     var acc = store.get('rumbo-accent', 'azul'), icn = store.get('rumbo-icon', ''), scope = store.get('rumbo-buddy-scope', 'all');
     var card = h('<section class="rw-appear"><div class="rw-appear-title">Apariencia</div><div class="rw-card">' +
       '<div class="rw-row"><div><b>Color de la app</b><small>Botones, barra de abajo y detalles</small></div></div>' +
@@ -352,7 +353,7 @@
     $$('.rw-mini-seg button', card).forEach(function (b) {
       b.addEventListener('click', function () { $$('.rw-mini-seg button', card).forEach(function (x) { x.classList.toggle('on', x === b); }); store.set('rumbo-buddy-scope', b.dataset.v); applyBuddy(); vib(6); });
     });
-    anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    anchor.appendChild(card);
   }
 
   // ---------- Resumen de la semana (historia) ----------
