@@ -22,7 +22,7 @@ async function stats(env: Env): Promise<Stats> {
     honorCourses: await one(`SELECT COUNT(*) AS n FROM (SELECT AVG(g.grade * 100.0 / g.grade_max) AS a FROM grades g JOIN courses c ON c.id = g.course_id WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.grade_max > 0 GROUP BY g.course_id HAVING COUNT(*) >= 2 AND a >= 90)`),
     early: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'done' AND due_at IS NOT NULL AND submitted_at IS NOT NULL AND submitted_at <= due_at - 86400`),
     weekDone: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND due_at BETWEEN ? AND ? AND status = 'done'`, now - 7 * 86400, now),
-    weekTotal: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND due_at BETWEEN ? AND ?`, now - 7 * 86400, now),
+    weekTotal: await one(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status != 'ignored' AND due_at BETWEEN ? AND ?`, now - 7 * 86400, now),
     chats: await one(`SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND direction = 'in' AND channel = 'app'`),
     focus: await one(`SELECT COALESCE(SUM(focus_minutes), 0) AS n FROM tasks WHERE user_id = ?`),
     high: await one(`SELECT COUNT(*) AS n FROM grades WHERE user_id = ? AND grade IS NOT NULL AND grade_max > 0 AND grade * 100.0 / grade_max >= 90`),

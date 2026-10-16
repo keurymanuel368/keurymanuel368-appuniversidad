@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, dateLabel, type Course, type PensumRow, type Task } from '../api';
-import { CountUp, Empty, Modal, PageHead, Ring, Segmented, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, useLoad } from '../components';
+import { CountUp, Empty, Modal, PageHead, Ring, Segmented, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, runSync, setActivityIgnored, syncToast, toast, toggleTask, useLoad } from '../components';
 import { Icon } from '../icons';
 import { AverageChart, FeedbackNotes, RecordModal } from '../NotasExtras';
+import { gradeWeights, neededFor } from '../../shared/promedio';
 
-type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; weight?: number | null; source?: string | null; task_id: number | null; due_at: number | null; status: string | null };
+/** ignored: 1 = no cuenta para el promedio (quitada) · auto: 1 = la quitó Rumbo porque no se corrige. */
+type Grade = { id: number; item_name: string; grade: number | null; grade_max: number; weight?: number | null; source?: string | null; task_id: number | null; due_at: number | null; status: string | null; ignored?: number; auto?: number };
 
 export function Asignaturas() {
   const courses = useLoad(() => api<Course[]>('/courses'));
@@ -34,6 +36,7 @@ export function Asignaturas() {
         </Empty></div>
       ) : (<>
         <TermSummary courses={list} onPick={(id) => { haptic(5); setSel(id); }} />
+        <FinalGrades courses={list} onPick={(id) => { haptic(5); setSel(id); if (window.innerWidth < 900) setTimeout(() => document.querySelector('.detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }} />
         <AverageChart />
         <section className="grid2 courses-layout">
           <div className="courses scroller picker">
@@ -57,13 +60,14 @@ export function Asignaturas() {
   );
 }
 
-type PastCourse = { id: number; code: string | null; name: string; color: string; average: number | null; graded: number; delivered: number };
+type PastCourse = { id: number; code: string | null; name: string; color: string; average: number | null; graded: number; total?: number; delivered: number };
 
 /** Índice del trimestre (ponderado por créditos del pensum) y asignaturas en riesgo. */
 function TermSummary({ courses, onPick }: { courses: Course[]; onPick: (id: number) => void }) {
   const pensum = useLoad(() => api<PensumRow[]>('/pensum'));
   const fold = (x: string) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   const creditsOf = (c: Course) => {
+    if (c.credits) return c.credits;
     const p = (pensum.data || []).find((r) => (c.code && r.code === c.code) || (fold(r.name).length > 6 && (fold(r.name).includes(fold(c.name)) || fold(c.name).includes(fold(r.name)))));
     return p?.credits || 3;
   };
@@ -126,7 +130,7 @@ function History() {
         {h.data.map((c) => (
           <div key={c.id} className="hist-row">
             <span className="dot" style={{ background: c.color }} />
-            <span className="hist-copy"><b>{c.name}</b><small>{c.code ? c.code + ' · ' : ''}{c.delivered} entregas · {c.graded} calificadas</small></span>
+            <span className="hist-copy"><b>{c.name}</b><small>{c.code ? c.code + ' · ' : ''}{c.delivered} entregas · {c.total ? `${c.graded} de ${c.total}` : c.graded} calificadas</small></span>
             {c.average !== null ? <span className={`grade-badge ${c.average >= 70 ? 'good' : 'bad'}`}><b className="num">{c.average}</b></span> : <span className="pill gray">Sin nota</span>}
           </div>
         ))}
@@ -145,18 +149,23 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
   const [fac, setFac] = useState(course.facilitator || '');
   const [open, setOpen] = useState<Task | null>(null);
   async function openTask(id: number) { haptic(5); try { setOpen(await api<Task>(`/tasks/${id}`)); } catch (e) { toast((e as Error).message, 'err'); } }
-  const g = grades.data || [];
-  const graded = g.filter((x) => x.grade !== null);
-  const pending = g.length - graded.length;
-  // Con los pesos del EVA (si todas las actividades los traen) el cálculo es exacto; si no, todas valen igual.
-  const weighted = g.length > 0 && g.every((x) => (x.weight ?? 0) > 0);
-  const w = (x: Grade) => (weighted ? x.weight! : 1);
-  const sum = graded.reduce((a, x) => a + (x.grade! / x.grade_max) * 100 * w(x), 0);
-  const wAll = g.reduce((a, x) => a + w(x), 0), wLeft = g.filter((x) => x.grade === null).reduce((a, x) => a + w(x), 0);
-  const need = pending > 0 && wLeft > 0 ? (goal * wAll - sum) / wLeft : null;
+  const [sheet, setSheet] = useState<Grade | null>(null);
+  const [showOff, setShowOff] = useState(false);
+  const all = grades.data || [];
+  // Lo quitado (no se corrige) va aparte y no entra en ningún cálculo.
+  const off = all.filter((x) => x.ignored);
+  const g = all.filter((x) => !x.ignored);
+  // Mismo cálculo que el servidor (src/shared/promedio.ts): pesos del EVA si los publica; una actividad con peso 0 no cuenta.
+  const { weighted, weightOf } = gradeWeights(g);
+  const counts = (x: Grade) => weightOf(x) > 0;
+  const graded = g.filter((x) => x.grade !== null && counts(x));
+  const pending = g.filter((x) => x.grade === null && counts(x)).length;
+  const countable = g.filter(counts).length;
+  const need = neededFor(g, goal);
   const shownGrades = order === 'sin' ? g.filter((x) => x.grade === null)
     : order === 'nota' ? [...g].sort((a, b) => (b.grade === null ? -1 : (b.grade / b.grade_max)) - (a.grade === null ? -1 : (a.grade / a.grade_max))) : g;
-  const pct = g.length ? Math.round((graded.length / g.length) * 100) : 0;
+  const pct = countable ? Math.round((graded.length / countable) * 100) : 0;
+  const reloadAll = () => { grades.reload(); onChanged(); };
 
   async function saveFac() {
     if (fac === (course.facilitator || '')) return;
@@ -178,7 +187,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
           <div className="detail-copy">
             <span className="code num">{course.code || course.short_name}</span>
             <h2>{course.name}</h2>
-            <span className="muted small">{graded.length} de {g.length} actividades calificadas</span>
+            <span className="muted small">{graded.length} de {countable} actividades calificadas{off.length ? ` · ${off.length} no cuenta${off.length === 1 ? '' : 'n'}` : ''}</span>
             {course.eva_total != null && course.eva_total_max ? (() => {
               const evaPct = (course.eva_total / course.eva_total_max) * 100;
               const off = course.average !== null && Math.abs(evaPct - course.average) > 2;
@@ -205,17 +214,30 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
               const v = x.grade === null ? null : (x.grade / x.grade_max) * 100;
               const tone = v === null ? 'gray' : v >= 70 ? 'green' : 'red';
               return (
-                <button key={x.id} className={`grade-row ${x.task_id ? 'tappable' : ''}`} onClick={() => x.task_id && openTask(x.task_id)} disabled={!x.task_id}>
+                <button key={x.id} className="grade-row tappable" onClick={() => { haptic(5); setSheet(x); }}>
                   <div className="grade-top">
-                    <span className="grade-name">{x.item_name}{x.due_at && <small>{dateLabel(x.due_at)}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota tomada del foro' : x.source === 'manual' ? ' · nota puesta por ti' : ''}{weighted ? ` · vale ${fmtGrade(Math.round(x.weight! * 1000) / 10)} %` : ''}</small>}</span>
-                    <span className={`grade-val num ${tone}`}>{x.grade === null ? 'Pendiente' : `${fmtGrade(x.grade)}/${fmtGrade(x.grade_max)}`}</span>
-                    {x.task_id && <Icon name="chevron" size={16} className="row-chevron" />}
+                    <span className="grade-name">{x.item_name}<small>{x.due_at ? dateLabel(x.due_at) : ''}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota tomada del foro' : x.source === 'manual' ? ' · nota puesta por ti' : ''}{weighted ? (counts(x) ? ` · vale ${fmtGrade(Math.round(weightOf(x) * 1000) / 10)} %` : ' · vale 0 % en el EVA') : ''}</small></span>
+                    <span className={`grade-val num ${tone}`}>{x.grade === null ? (counts(x) ? 'Pendiente' : 'No cuenta') : `${fmtGrade(x.grade)}/${fmtGrade(x.grade_max)}`}</span>
+                    <Icon name="chevron" size={16} className="row-chevron" />
                   </div>
                   <div className="progress thin"><div className={tone} style={{ width: `${v ?? 0}%` }} /></div>
                 </button>
               );
             })}
           </div>
+          {off.length > 0 && (
+            <div className="grades-off">
+              <button className="link-btn" onClick={() => { haptic(4); setShowOff((v) => !v); }} aria-expanded={showOff}>
+                <Icon name="chevron" size={15} style={{ transform: showOff ? 'rotate(90deg)' : undefined }} />No cuentan para el promedio · {off.length}
+              </button>
+              {showOff && off.map((x) => (
+                <div key={x.id} className="grade-off-row">
+                  <span className="grade-name">{x.item_name}<small>{x.auto ? 'No se corrige: Rumbo la quitó sola' : 'La quitaste tú'}</small></span>
+                  <button className="btn soft sm" onClick={() => setActivityIgnored({ gradeId: x.id }, false, reloadAll).catch((e) => toast((e as Error).message, 'err'))}>Volver a contar</button>
+                </div>
+              ))}
+            </div>
+          )}
         </>)}
       </div>
 
@@ -235,11 +257,123 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
         <input id="goal" type="range" min={60} max={100} step={1} value={goal} onChange={(e) => { setGoal(Number(e.target.value)); haptic(3); }} className="range" style={{ ['--p' as string]: `${((goal - 60) / 40) * 100}%` }} />
         <div className="sim-scale num"><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span></div>
         <div className="sim-result">
-          {verdict ?? <><span>Necesitas un promedio de</span><b className="num">{Math.max(0, Math.ceil(need!))}</b><span>{pending === 1 ? "en la actividad que falta." : `en las ${pending} actividades que faltan.`}</span></>}
+          {verdict ?? <><span>Necesitas un promedio de</span><b className="num">{Math.max(0, Math.ceil(need ?? 0))}</b><span>{pending === 1 ? "en la actividad que falta." : `en las ${pending} actividades que faltan.`}</span></>}
         </div>
         <p className="sim-note">{weighted ? 'Usa el peso que cada actividad tiene en el EVA.' : 'Cálculo aproximado: el EVA no publica los pesos, así que supone que todas las actividades valen lo mismo.'}</p>
       </div>
-      {open && <TaskSheet task={open} courses={courses} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); onChanged(); }} />}
+      {open && <TaskSheet task={open} courses={courses} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); reloadAll(); }} />}
+      {sheet && <GradeSheet grade={sheet} course={course} weightText={weighted ? (counts(sheet) ? `Vale ${fmtGrade(Math.round(weightOf(sheet) * 1000) / 10)} % de la nota` : 'En el EVA vale 0 %: no suma a tu promedio') : 'Todas las actividades valen lo mismo'}
+        onClose={() => setSheet(null)} onOpenTask={(id) => { setSheet(null); void openTask(id); }} onChanged={() => { setSheet(null); reloadAll(); }} />}
+    </div>
+  );
+}
+
+/**
+ * Una actividad de Notas: poner tu nota (si el EVA todavía no la publica), quitarla porque no se corrige
+ * (rúbrica de actitudes y valores, espacio fuera de fecha…) o abrir la tarea.
+ */
+function GradeSheet({ grade, course, weightText, onClose, onOpenTask, onChanged }: { grade: Grade; course: Course; weightText: string; onClose: () => void; onOpenTask: (id: number) => void; onChanged: () => void }) {
+  const fromEva = grade.grade !== null && grade.source !== 'manual';
+  const manual = grade.source === 'manual';
+  const [value, setValue] = useState(manual && grade.grade !== null ? String(grade.grade) : '');
+  const [max, setMax] = useState(String(grade.grade_max || 100));
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await api(`/grades/${grade.id}/grade`, { method: 'POST', body: { grade: Number(value.replace(',', '.')), max: Number(max.replace(',', '.')) } });
+      haptic(12); toast('Nota guardada: ya cuenta en tu promedio. Si el EVA la publica, se usa la del EVA.');
+      window.dispatchEvent(new Event('rumbo:grades'));
+      onChanged();
+    } catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  }
+  async function removeMine() {
+    setBusy(true);
+    try { await api(`/grades/${grade.id}/grade`, { method: 'DELETE' }); toast('Quitaste tu nota'); window.dispatchEvent(new Event('rumbo:grades')); onChanged(); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  }
+  const pct = grade.grade !== null ? Math.round((grade.grade / grade.grade_max) * 100) : null;
+  return (
+    <Modal title={grade.item_name} onClose={onClose}>
+      <div className="col">
+        <div className="gs-head">
+          <span className="ts-course"><span className="dot" style={{ background: course.color }} />{course.name}</span>
+          <b className="gs-val num">{grade.grade === null ? 'Sin nota' : `${fmtGrade(grade.grade)} / ${fmtGrade(grade.grade_max)}`}{pct !== null && <small> · {pct}%</small>}</b>
+          <span className="small muted">{fromEva ? 'Nota publicada en el EVA' : manual ? 'Nota puesta por ti' : 'El EVA todavía no tiene nota'} · {weightText}</span>
+        </div>
+        {!fromEva && (
+          <form className="manual-grade open" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+            <label htmlFor="gs-grade">{manual ? 'Cambiar mi nota' : 'Poner mi nota'}</label>
+            <div className="mg-row">
+              <input id="gs-grade" className="input num lg" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="95" />
+              <span>de</span>
+              <input id="gs-max" className="input num" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} aria-label="Nota máxima" />
+            </div>
+            <div className="mg-row">
+              {manual && <button type="button" className="btn line grow" onClick={removeMine} disabled={busy}>Quitar mi nota</button>}
+              <button type="submit" className="btn primary grow" disabled={busy || !value.trim()}>{busy ? 'Guardando…' : 'Guardar'}</button>
+            </div>
+          </form>
+        )}
+        <div className="ts-links">
+          {grade.task_id && <button className="link-btn" onClick={() => onOpenTask(grade.task_id!)}><Icon name="tasks" size={16} />Abrir la tarea</button>}
+          <button className="link-btn" onClick={() => setActivityIgnored({ gradeId: grade.id }, true, onChanged).catch((e) => toast((e as Error).message, 'err'))}><Icon name="trash" size={16} />No se corrige: quitar del promedio</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Promedio final por asignatura: lo que llevas en cada una (final cuando ya tiene todas las notas),
+ * el total oficial del EVA si lo publica y el índice del trimestre ponderado por créditos. Se puede copiar.
+ */
+function FinalGrades({ courses, onPick }: { courses: Course[]; onPick: (id: number) => void }) {
+  const rows = courses.filter((c) => c.total > 0 || c.average !== null);
+  if (!rows.length) return null;
+  const withAvg = rows.filter((c) => c.average !== null);
+  const cr = withAvg.reduce((a, c) => a + (c.credits || 3), 0);
+  const index = cr ? withAvg.reduce((a, c) => a + c.average! * (c.credits || 3), 0) / cr : null;
+  const allDone = rows.every((c) => c.complete);
+  const evaOf = (c: Course) => (c.eva_total != null && c.eva_total_max ? Math.round((c.eva_total / c.eva_total_max) * 1000) / 10 : null);
+  async function copy() {
+    const lines = rows.map((c) => `${c.name}: ${c.average ?? '—'}${c.complete ? '' : ` (parcial, faltan ${c.total - c.graded})`} · ${c.credits || 3} cr`);
+    const text = [`Promedio final por asignatura${allDone ? '' : ' (parcial)'}`, ...lines, index !== null ? `Índice del trimestre: ${index.toFixed(1)}` : ''].filter(Boolean).join('\n');
+    try { await navigator.clipboard.writeText(text); haptic(10); toast('Promedios copiados'); }
+    catch { toast('No pude copiar', 'err'); }
+  }
+  return (
+    <div className="section">
+      <div className="section-head">
+        <h3>Promedio final</h3>
+        <span className={`pill ${allDone ? 'green' : 'gray'}`}>{allDone ? 'Trimestre completo' : 'Parcial'}</span>
+        <button className="btn soft sm" onClick={copy}><Icon name="upload" size={15} />Copiar</button>
+      </div>
+      <div className="card list final-grades">
+        {rows.map((c) => {
+          const eva = evaOf(c);
+          return (
+            <button key={c.id} className="final-row" onClick={() => onPick(c.id)} style={{ ['--c' as string]: c.color }}>
+              <span className="dot" style={{ background: c.color }} />
+              <span className="final-copy">
+                <b>{c.name}</b>
+                <small>{c.credits || 3} créditos · {c.complete ? 'todas las notas' : `${c.graded} de ${c.total} calificadas`}{eva !== null && c.average !== null && Math.abs(eva - c.average) > 2 ? ` · EVA: ${fmtGrade(eva)}` : ''}</small>
+              </span>
+              {c.average !== null
+                ? <span className={`grade-badge ${c.average >= 70 ? 'good' : 'bad'}`}><b className="num">{fmtGrade(c.average)}</b>{!c.complete && <small>parcial</small>}</span>
+                : <span className="pill gray">Sin nota</span>}
+            </button>
+          );
+        })}
+        {index !== null && (
+          <div className="final-row total">
+            <span className="final-copy"><b>Índice del trimestre</b><small>Ponderado por créditos · las actividades que no se corrigen no cuentan</small></span>
+            <span className={`grade-badge ${index >= 70 ? 'good' : 'bad'}`}><b className="num">{index.toFixed(1)}</b></span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

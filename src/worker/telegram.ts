@@ -9,6 +9,7 @@ import { courseLabel, money } from './wa';
 import { handleCommand, keywords, normalize } from './assistant';
 import { toBase64 } from './voice';
 import { llmComplete } from './llm';
+import { courseAverage, neededFor } from '../shared/promedio';
 
 const api = (env: any) => `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 export const CONFIG_KEYS = [
@@ -446,20 +447,14 @@ export async function tgNecesito(env: any, target: any, query: any) {
   const courses = await courseSummaries(env);
   if (!courses.length) return { html: "📚 Aún no tengo tus asignaturas. Escríbeme <code>sincronizar</code>.", kb: TG_MINI };
   const goal = Math.max(1, Math.min(100, Number(target) || 70));
+  // Mismo cálculo que el simulador de Notas (src/shared/promedio.ts): pesos del EVA y sin lo quitado.
   const calc = async (c: any) => {
-    const rows: any[] = await bestGrades(env, c.id);
-    const graded = rows.filter((r) => r.grade !== null && r.grade_max > 0);
-    const left = rows.filter((r) => r.grade === null);
+    const rows = await bestGrades(env, c.id);
     if (!rows.length) return { c, msg: "sin actividades todavía" };
-    const pct = (r: any) => r.grade / r.grade_max * 100;
-    const weighted = rows.every((r) => (r.weight ?? 0) > 0);
-    let need;
-    if (!left.length) return { c, done: true, now: c.average };
-    if (weighted) {
-      const W = rows.reduce((a, r) => a + r.weight, 0), earned = graded.reduce((a, r) => a + pct(r) * r.weight, 0), rem = left.reduce((a, r) => a + r.weight, 0);
-      need = (goal * W - earned) / rem;
-    } else need = (goal * rows.length - graded.reduce((a, r) => a + pct(r), 0)) / left.length;
-    return { c, need: Math.round(need * 10) / 10, left: left.length };
+    const a = courseAverage(rows);
+    const need = neededFor(rows, goal);
+    if (need === null) return { c, done: true, now: c.average };
+    return { c, need: Math.round(need * 10) / 10, left: a.total - a.graded };
   };
   const words = keywords(query || "");
   let list = courses;

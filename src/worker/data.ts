@@ -4,6 +4,7 @@ import { getSetting, getSettings, setSetting } from './db';
 import { courseLabel, money } from './wa';
 import { cuandoTexto, daysBetween, fechaCorta, fechaLarga, localDate, localToUnix, MESES, nowSec } from './time';
 import { streak } from './widget';
+import { NO_CUENTA_SQL, courseAverage as averageOf } from '../shared/promedio';
 
 export type Task = {
   id: number; title: string; due_at: number | null; url: string | null; source: string; status: string; notes: string | null; submitted_at: number | null;
@@ -20,27 +21,31 @@ export type CourseSummary = {
   credits?: number;
   /** 1 si el promedio usa los pesos del EVA (cada actividad vale lo que dice el libro de calificaciones). */
   weighted?: number;
+  /** 1 cuando todas las actividades que cuentan ya tienen nota: el promedio es el final de la asignatura. */
+  complete?: number;
   eva_total?: number | null; eva_total_max?: number | null;
 };
 
 type GradeRow = { id: number; moodle_item_id: number | null; grade: number | null; grade_max: number; weight: number | null };
 
-/** Promedio de una asignatura: con los pesos del EVA si todas las notas los traen; si no, todas valen igual. */
-export function courseAverage(rows: GradeRow[]): { avg: number | null; weighted: boolean } {
-  const g = rows.filter((r) => r.grade !== null && r.grade_max > 0);
-  if (!g.length) return { avg: null, weighted: false };
-  const weighted = g.every((r) => (r.weight ?? 0) > 0);
-  if (weighted) {
-    const w = g.reduce((a, r) => a + r.weight!, 0);
-    return { avg: g.reduce((a, r) => a + (r.grade! / r.grade_max) * 100 * r.weight!, 0) / w, weighted };
-  }
-  return { avg: g.reduce((a, r) => a + (r.grade! / r.grade_max) * 100, 0) / g.length, weighted };
+/** Promedio de una asignatura (src/shared/promedio.ts): con los pesos del EVA si los publica; si no, todas valen igual. */
+export function courseAverage(rows: GradeRow[]): { avg: number | null; weighted: boolean; graded: number; total: number } {
+  return averageOf(rows);
 }
 
-/** Una nota por actividad (los foros traen dos renglones: vale el que tiene nota). */
+/** ¿Esta nota está quitada del promedio? (la quitaste tú, o es de las que no se corrigen y no la volviste a contar). */
+export const GRADE_IGNORED_SQL = (g: string) => `COALESCE(${g}.ignored, CASE WHEN ${NO_CUENTA_SQL(`${g}.item_name`)} THEN 1 ELSE 0 END)`;
+
+/**
+ * Una nota por actividad (los foros traen dos renglones: vale el que tiene nota).
+ * Deja fuera las actividades quitadas del promedio.
+ */
 export async function bestGrades(env: Env, courseId?: number): Promise<(GradeRow & { course_id: number })[]> {
-  const { results } = await env.DB.prepare(`WITH best AS (SELECT g.id, g.course_id, g.moodle_item_id, g.grade, g.grade_max, g.weight FROM grades g WHERE g.user_id = ?1 AND g.id = (SELECT g2.id FROM grades g2
-      WHERE g2.course_id = g.course_id AND COALESCE(g2.moodle_key, 'i' || g2.id) = COALESCE(g.moodle_key, 'i' || g.id) ORDER BY g2.grade IS NULL, g2.id LIMIT 1))
+  const { results } = await env.DB.prepare(`WITH best AS (SELECT g.id, g.course_id, g.moodle_item_id, g.grade, g.grade_max,
+      -- En los foros el peso puede venir en el otro renglón: se usa el mayor de la actividad.
+      COALESCE((SELECT MAX(g3.weight) FROM grades g3 WHERE g3.course_id = g.course_id AND g3.moodle_key = g.moodle_key), g.weight) AS weight
+    FROM grades g WHERE g.user_id = ?1 AND ${GRADE_IGNORED_SQL('g')} = 0 AND g.id = (SELECT g2.id FROM grades g2
+      WHERE g2.course_id = g.course_id AND ${GRADE_IGNORED_SQL('g2')} = 0 AND COALESCE(g2.moodle_key, 'i' || g2.id) = COALESCE(g.moodle_key, 'i' || g.id) ORDER BY g2.grade IS NULL, g2.id LIMIT 1))
     SELECT * FROM best${courseId ? ' WHERE course_id = ?2' : ''}`).bind(...(courseId ? [env.UID, courseId] : [env.UID])).all<GradeRow & { course_id: number }>();
   return results;
 }
@@ -55,6 +60,8 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
   const binds: unknown[] = [env.UID];
   if (opts.status) { where.push('t.status = ?'); binds.push(opts.status); }
   if (opts.id !== undefined) { where.push('t.id = ?'); binds.push(opts.id); }
+  // Las actividades quitadas (no se corrigen) no salen en ninguna lista; abriéndola por id sí, para poder devolverla.
+  if (!opts.status && opts.id === undefined) where.push("t.status != 'ignored'");
   if (opts.from !== undefined) { where.push('(t.due_at IS NULL OR t.due_at >= ?)'); binds.push(opts.from); }
   if (opts.to !== undefined) { where.push('(t.due_at IS NULL OR t.due_at <= ?)'); binds.push(opts.to); }
   const sql = `SELECT t.id, t.title, t.due_at, t.url, t.source, t.status, t.notes, t.submitted_at, t.course_id, t.focus_minutes,${opts.id !== undefined ? ' t.description,' : ''}
@@ -85,8 +92,8 @@ export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
   const creditsOf = (c: CourseSummary) => pen.find((f) => (c.code && f.code === c.code) || (nz(f.name).length > 6 && (nz(f.name).includes(nz(c.name)) || nz(c.name).includes(nz(f.name)))))?.credits || 3;
   return results.map((r) => {
     const mine = rows.filter((g) => g.course_id === r.id);
-    const { avg, weighted } = courseAverage(mine);
-    return { ...r, credits: creditsOf(r), graded: mine.filter((g) => g.grade !== null).length, total: mine.length, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
+    const { avg, weighted, graded, total } = courseAverage(mine);
+    return { ...r, credits: creditsOf(r), graded, total, complete: total > 0 && graded === total ? 1 : 0, average: avg === null ? null : Math.round(avg * 10) / 10, weighted: weighted ? 1 : 0 };
   });
 }
 
@@ -233,7 +240,7 @@ export async function dashboard(env: Env) {
   const ld = localDate(env);
   const dow = (ld.getUTCDay() + 6) % 7; // 0 = lunes
   const weekStart = localToUnix(env, ld.getUTCFullYear(), ld.getUTCMonth() + 1, ld.getUTCDate() - dow, 0, 0);
-  const wk = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done FROM tasks WHERE user_id = ? AND due_at >= ? AND due_at < ?`)
+  const wk = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done FROM tasks WHERE user_id = ? AND status != 'ignored' AND due_at >= ? AND due_at < ?`)
     .bind(env.UID, weekStart, weekStart + 7 * 86400).first<{ total: number; done: number | null }>();
   const { results: news } = await env.DB.prepare(`SELECT a.id, a.title, a.kind, a.created_at, a.read, c.name AS course_name FROM announcements a LEFT JOIN courses c ON c.id = a.course_id
     WHERE a.user_id = ? AND (a.source = 'avisos' OR a.kind IN ('pago', 'evento') OR a.source = 'correo') ORDER BY a.created_at DESC LIMIT 3`).bind(env.UID).all();
@@ -260,7 +267,7 @@ export async function dashboard(env: Env) {
   const goalIds = (s.goals || '').split(',').filter(Boolean);
   const goals: { id: string; label: string; done: number; total: number; ok: boolean; detail: string }[] = [];
   if (goalIds.length) {
-    const { results: wkTasks } = await env.DB.prepare(`SELECT status, due_at, submitted_at FROM tasks WHERE user_id = ? AND due_at >= ? AND due_at < ?`)
+    const { results: wkTasks } = await env.DB.prepare(`SELECT status, due_at, submitted_at FROM tasks WHERE user_id = ? AND status != 'ignored' AND due_at >= ? AND due_at < ?`)
       .bind(env.UID, weekStart, weekStart + 7 * 86400).all<{ status: string; due_at: number; submitted_at: number | null }>();
     for (const g of goalIds) {
       if (g === 'atiempo') {

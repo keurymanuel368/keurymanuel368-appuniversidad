@@ -10,6 +10,19 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 38,
+    date: '2026-10-16',
+    title: '🎓 Promedio final por asignatura',
+    items: [
+      'En Notas, «Promedio final por asignatura»: cada materia con su nota, sus créditos y si ya está completa, y el índice del trimestre. Lo puedes copiar con un toque.',
+      'Las actividades que no se corrigen (la rúbrica de actitudes y valores y el espacio para enviar tareas fuera de fecha) ya no salen como pendientes ni cuentan para el promedio.',
+      'Cualquier otra que no se corrija la puedes quitar: en Notas toca la actividad → «No se corrige: quitar del promedio», o en la tarea → «No se corrige: quitar». Si te equivocas, «Deshacer» o «Volver a contar».',
+      'Arreglado: la nota que pones a mano ahora sí se refleja. Antes, una nota en una actividad que el EVA cuenta como 0 % cambiaba todo el cálculo de la materia.',
+      'Ahora puedes poner tu nota en cualquier actividad de Notas, aunque no la hayas marcado como entregada o no tenga tarea en Rumbo.',
+      'Arreglado: los foros que traen dos renglones de nota ya no dejan la materia «incompleta» para siempre, así el pensum marca la materia como aprobada al terminar el trimestre.',
+    ],
+  },
+  {
     version: 37,
     date: '2026-10-14',
     title: 'Rumbo se usa con gestos',

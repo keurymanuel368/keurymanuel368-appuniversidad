@@ -5,6 +5,9 @@ import { getSetting, setSetting } from './db';
 import { nowSec } from './time';
 import { notifyChanges, notifyGrades } from './grades';
 import { scanForum, type ForumInfo } from './forums';
+import { bestGrades, courseAverage } from './data';
+import { applyAutoIgnore } from './ignore';
+import { noCuenta } from '../shared/promedio';
 
 const COLORS = ['#1F5FE0', '#12A5C9', '#7A5AF0', '#F08A1C', '#0F9F6E', '#D6457A', '#8A6D3B', '#3E4C6B'];
 
@@ -211,10 +214,15 @@ async function syncNews(env: Env, userid: number, courseMap: Map<number, { id: n
 async function syncPensumFromCourses(env: Env): Promise<void> {
   const { results: pensum } = await env.DB.prepare('SELECT id, code, name, status FROM pensum WHERE user_id = ?').bind(env.UID).all<{ id: number; code: string | null; name: string; status: string }>();
   if (!pensum.length) return;
-  const { results: courses } = await env.DB.prepare(`SELECT c.code, c.name, c.active,
-      (SELECT AVG(g.grade * 100.0 / g.grade_max) FROM grades g WHERE g.course_id = c.id AND g.grade IS NOT NULL AND g.grade_max > 0) AS avg,
-      (SELECT COUNT(*) FROM grades g WHERE g.course_id = c.id AND g.grade IS NULL) AS missing
-    FROM courses c WHERE c.user_id = ? AND c.moodle_id IS NOT NULL`).bind(env.UID).all<{ code: string | null; name: string; active: number; avg: number | null; missing: number }>();
+  // El mismo promedio que ves en Notas: una nota por actividad (el renglón vacío de los foros no cuenta como «falta»),
+  // con los pesos del EVA y sin las actividades quitadas.
+  const { results: rawCourses } = await env.DB.prepare('SELECT c.id, c.code, c.name, c.active FROM courses c WHERE c.user_id = ? AND c.moodle_id IS NOT NULL')
+    .bind(env.UID).all<{ id: number; code: string | null; name: string; active: number }>();
+  const rows = await bestGrades(env);
+  const courses = rawCourses.map((c) => {
+    const a = courseAverage(rows.filter((r) => r.course_id === c.id));
+    return { ...c, avg: a.avg, missing: a.total - a.graded };
+  });
   const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   const same = (a: string, b: string) => { const x = norm(a), y = norm(b); return x.length > 6 && y.length > 6 && (x.includes(y) || y.includes(x)); };
   for (const c of courses) {
@@ -424,7 +432,7 @@ export async function syncEva(env: Env): Promise<SyncResult> {
         const ins = await env.DB.prepare(`INSERT INTO tasks (user_id, moodle_event_id, moodle_key, course_id, title, due_at, url, source, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'eva', 'pending') RETURNING id`)
           .bind(env.UID, e.id, key, courseId, title, e.timesort, e.url || null).first<{ id: number }>();
         result.tasksNew++;
-        if (hadTasks && ins && e.timesort > now) result.changes.push({ kind: 'nueva', taskId: ins.id, title, course: courseName, due: e.timesort });
+        if (hadTasks && ins && e.timesort > now && !noCuenta(title)) result.changes.push({ kind: 'nueva', taskId: ins.id, title, course: courseName, due: e.timesort });
       } else {
         if (prev.due_at !== e.timesort || prev.title !== title) result.tasksUpdated++;
         // El facilitador movió la fecha (más de una hora de diferencia) de algo que todavía no entregas.
@@ -487,6 +495,9 @@ export async function syncEva(env: Env): Promise<SyncResult> {
       const text = htmlToText(a.intro).slice(0, 8000);
       if (text) await env.DB.prepare('UPDATE tasks SET description = ? WHERE user_id = ? AND moodle_key = ? AND (description IS NULL OR description != ?)').bind(text, env.UID, a.key, text).run();
     }
+
+    // Lo que no se corrige (rúbrica de actitudes y valores, espacio fuera de fecha) sale de pendientes.
+    try { await applyAutoIgnore(env); } catch (e) { result.warnings.push('Actividades que no cuentan: ' + (e as Error).message); }
 
     // Pensum automático: lo de este trimestre queda "en curso"; lo de trimestres pasados con 70 o más, "aprobada".
     try { await syncPensumFromCourses(env); } catch (e) { result.warnings.push('Pensum: ' + (e as Error).message); }

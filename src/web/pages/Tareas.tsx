@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Course, type Task } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
+import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, runSync, setActivityIgnored, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 
 type Filter = 'pendientes' | 'plan' | 'mes' | 'hechas' | 'todas';
@@ -131,10 +131,37 @@ export function Tareas() {
           ))}
         </div>
       )}
+      {(filter === 'pendientes' || filter === 'hechas') && !day && !q.trim() && <IgnoredTasks onChanged={tasks.reload} />}
       <p className="swipe-hint hide-desktop">Desliza una tarea a la derecha para marcarla · jala hacia abajo para sincronizar</p>
       {open && <TaskSheet task={open} courses={courses.data || []} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); tasks.reload(); }} />}
       {creating && <TaskModal task={{}} courses={courses.data || []} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); tasks.reload(); }} />}
     </>
+  );
+}
+
+/** Lo que quitaste porque no se corrige (o que Rumbo quitó solo): plegado al final, con «Volver a contar». */
+function IgnoredTasks({ onChanged }: { onChanged: () => void }) {
+  const list = useLoad(() => api<Task[]>('/ignored-tasks'));
+  const [open, setOpen] = useState(false);
+  useEffect(() => { const l = () => list.reload(); window.addEventListener('rumbo:grades', l); return () => window.removeEventListener('rumbo:grades', l); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  const items = list.data || [];
+  if (!items.length) return null;
+  return (
+    <div className="section">
+      <button className="link-btn muted-link" onClick={() => { haptic(4); setOpen((v) => !v); }} aria-expanded={open}>
+        <Icon name="chevron" size={15} style={{ transform: open ? 'rotate(90deg)' : undefined }} />Quitadas: no se corrigen · {items.length}
+      </button>
+      {open && (
+        <div className="card list">
+          {items.map((t) => (
+            <div key={t.id} className="grade-off-row">
+              <span className="grade-name">{t.title}<small>{t.course_name || 'Personal'}</small></span>
+              <button className="btn soft sm" onClick={() => setActivityIgnored({ taskId: t.id }, false, () => { list.reload(); onChanged(); }).catch((e) => toast((e as Error).message, 'err'))}>Volver a contar</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -49,6 +49,26 @@ export function SyncBar() {
 }
 
 /** Marca una tarea como hecha o pendiente; al completarla ofrece «Deshacer» por unos segundos. */
+/**
+ * Quitar una actividad que no se corrige (rúbrica de actitudes y valores, espacio fuera de fecha…): sale de pendientes y del promedio.
+ * Con «Deshacer» por si fue sin querer. Sirve para tareas (taskId) y para renglones de Notas (gradeId).
+ */
+export async function setActivityIgnored(target: { taskId?: number; gradeId?: number }, ignored: boolean, reload: () => void) {
+  const path = target.taskId ? `/tasks/${target.taskId}/ignore` : `/grades/${target.gradeId}/ignore`;
+  await api(path, { method: 'POST', body: { ignored } });
+  haptic(10);
+  reload();
+  window.dispatchEvent(new Event('rumbo:grades'));
+  window.dispatchEvent(new Event('rumbo:badges'));
+  toast(ignored ? 'Quitada: ya no cuenta para tu promedio ni sale en pendientes' : 'Volvió a contar para tu promedio', 'ok', {
+    label: 'Deshacer',
+    run: async () => {
+      try { await api(path, { method: 'POST', body: { ignored: !ignored } }); reload(); window.dispatchEvent(new Event('rumbo:grades')); window.dispatchEvent(new Event('rumbo:badges')); }
+      catch (e) { toast((e as Error).message, 'err'); }
+    },
+  });
+}
+
 export async function toggleTask(t: Task, reload: () => void) {
   const next = t.status === 'done' ? 'pending' : 'done';
   await api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: next } });
@@ -396,8 +416,9 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
   const graded = task.grade !== null && task.grade !== undefined && !!task.grade_max;
   const pct = graded ? Math.round((task.grade! / task.grade_max!) * 100) : null;
   const closed = done && task.notes === 'Plazo cerrado en el EVA';
-  const state = done ? (closed ? 'Plazo cerrado' : task.source === 'eva' ? 'Entregada' : 'Hecha') : u === 'red' && task.due_at ? overdueLabel(task.due_at) : 'Pendiente';
-  const tone = done ? (closed ? 'gray' : 'green') : u === 'red' ? 'red' : u === 'orange' ? 'orange' : 'blue';
+  const ignored = task.status === 'ignored';
+  const state = ignored ? 'Quitada' : done ? (closed ? 'Plazo cerrado' : task.source === 'eva' ? 'Entregada' : 'Hecha') : u === 'red' && task.due_at ? overdueLabel(task.due_at) : 'Pendiente';
+  const tone = ignored ? 'gray' : done ? (closed ? 'gray' : 'green') : u === 'red' ? 'red' : u === 'orange' ? 'orange' : 'blue';
   const userNotes = task.notes && !/en el EVA$/.test(task.notes) ? task.notes : '';
   const dateTime = (s: number) => new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(s * 1000));
   const isForum = !!task.moodle_key?.startsWith('forum:');
@@ -451,6 +472,12 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
         </div>
       )}
 
+      {ignored && (
+        <div className="ignored-note"><Icon name="alert" size={17} /><span><b>No cuenta.</b> La quitaste del promedio y de pendientes (o Rumbo la quitó porque no se corrige).</span>
+          <button className="link-btn" onClick={() => setActivityIgnored({ taskId: task.id }, false, () => { void refresh(); onChanged(); })}>Volver a contar</button>
+        </div>
+      )}
+
       <div className="facts">
         {/* La calificación solo cuando tiene sentido: ya hay nota o ya se entregó. */}
         {(graded || done) && <div className="fact"><Icon name="trend" size={18} /><span>Calificación{srcTag && <small className="src-tag">{srcTag}</small>}</span><b className={graded ? (pct! >= 70 ? 'good' : 'bad') : ''}>{graded ? `${fmtGrade(task.grade!)} / ${fmtGrade(task.grade_max!)} · ${pct}%` : 'Todavía sin nota'}</b></div>}
@@ -467,7 +494,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
         {userNotes && <div className="fact"><Icon name="book" size={18} /><span>Notas</span><b>{userNotes}</b></div>}
       </div>
 
-      {(done || isForum) && (!graded || task.grade_source === 'manual') && <ManualGrade task={task} onSaved={refresh} />}
+      {!ignored && (!graded || task.grade_source === 'manual') && <ManualGrade task={task} onSaved={refresh} />}
 
       {isAssign && !closed && <Suspense fallback={null}><SubmitPanel task={task} onDone={() => { void refresh(); onChanged(); }} /></Suspense>}
 
@@ -492,7 +519,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
       {/* Primero lo que más se hace con una tarea (entregarla y marcarla); después, las ayudas para hacerla. */}
       <div className="ts-actions">
         <div className="ts-row">
-          {!done && <button className="btn primary lg grow" onClick={toggle} disabled={busy}><Icon name="check" size={19} />Ya la entregué</button>}
+          {!done && !ignored && <button className="btn primary lg grow" onClick={toggle} disabled={busy}><Icon name="check" size={19} />Ya la entregué</button>}
           {task.url && <a className={`btn ${done ? 'primary' : 'line'} lg grow`} href={task.url} target="_blank" rel="noopener"><Icon name="link" size={18} />Abrir en el EVA</a>}
         </div>
         {isForum && (
@@ -502,7 +529,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
           </div>
         )}
         {forum && <Suspense fallback={null}><ForumSheet task={task} onClose={() => setForum(false)} onPosted={() => { void refresh(); }} /></Suspense>}
-        {!done && (
+        {!done && !ignored && (
           <div className="ts-help">
             <button className="btn study-btn" onClick={() => { haptic(10); setStudyMode('plan'); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Estudiar con IA</b><small>plan · práctica · explicación</small></span></button>
             <button className="btn focus-btn" onClick={() => { haptic(10); setFocus(true); }}><Icon name="clock" size={19} /><span className="tb-txt"><b>Modo enfoque</b><small>{task.focus_minutes ? `llevas ${task.focus_minutes} min` : 'temporizador para concentrarte'}</small></span></button>
@@ -511,6 +538,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
         {studying && <Suspense fallback={null}><StudyModal task={task} initial={studyMode} onClose={() => setStudying(false)} /></Suspense>}
         <div className="ts-links">
           {done && <button className="link-btn" onClick={toggle} disabled={busy}><Icon name="sync" size={16} />Reabrir</button>}
+          {!ignored && <button className="link-btn" onClick={() => setActivityIgnored({ taskId: task.id }, true, () => onChanged())}><Icon name="trash" size={16} />No se corrige: quitar</button>}
           {!task.description && <button className="link-btn" onClick={copyForAI}><Icon name="upload" size={16} />Copiar para la IA</button>}
           <button className="link-btn" onClick={() => setEditing(true)}><Icon name="gear" size={16} />Editar tarea</button>
         </div>

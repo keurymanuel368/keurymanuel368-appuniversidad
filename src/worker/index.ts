@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from './env';
 import { checkPassword, clearSessionCookie, createSessionCookie, hashPassword, randomHex, safeEqual, sessionUser, verifyMetaSignature } from './auth';
-import { courseSummaries, dashboard, indexTrend, listTasks, payWindow, summaryAlert, summaryShort, summaryText, weekStory } from './data';
+import { GRADE_IGNORED_SQL, bestGrades, courseAverage, courseSummaries, dashboard, indexTrend, listTasks, payWindow, summaryAlert, summaryShort, summaryText, weekStory } from './data';
 import { blocks } from './wa';
 import { DEFAULT_SETTINGS, activeUsers, forUser, getSetting, getSettings, markSent, setSetting, userBySetting } from './db';
 import { classifyNews, cleanNewsText, syncEva } from './moodle';
@@ -27,6 +27,7 @@ import { providers, testEngines } from './llm';
 import { runScheduled } from './cron';
 import { weeklyPlan } from './plan';
 import { cuandoTexto, localDate, localToUnix, nowSec } from './time';
+import { setIgnored } from './ignore';
 import { registerExtras } from './extras';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -595,6 +596,39 @@ app.post('/api/tasks/:id/grade', async (c) => {
   return c.json({ ok: true });
 });
 
+// Quitar una actividad que no se corrige (o devolverla). Sale de pendientes y del promedio.
+app.post('/api/tasks/:id/ignore', async (c) => {
+  const { ignored } = await c.req.json<{ ignored?: boolean }>().catch(() => ({ ignored: true }));
+  const r = await setIgnored(c.env, { taskId: Number(c.req.param('id')) }, ignored !== false);
+  return r.ok ? c.json({ ok: true }) : c.json({ error: r.error }, 404);
+});
+app.post('/api/grades/:id/ignore', async (c) => {
+  const { ignored } = await c.req.json<{ ignored?: boolean }>().catch(() => ({ ignored: true }));
+  const r = await setIgnored(c.env, { gradeId: Number(c.req.param('id')) }, ignored !== false);
+  return r.ok ? c.json({ ok: true }) : c.json({ error: r.error }, 404);
+});
+// Las actividades quitadas, para devolverlas desde Tareas.
+app.get('/api/ignored-tasks', async (c) => c.json(await listTasks(c.env, { status: 'ignored', limit: 100 })));
+
+// Poner tu nota directamente en un renglón de Notas (aunque no haya tarea en Rumbo).
+app.post('/api/grades/:id/grade', async (c) => {
+  const b = await c.req.json<{ grade?: number; max?: number }>().catch(() => ({} as { grade?: number; max?: number }));
+  const g = await c.env.DB.prepare('SELECT id, grade, grade_max, source FROM grades WHERE id = ? AND user_id = ?').bind(Number(c.req.param('id')), c.env.UID).first<{ id: number; grade: number | null; grade_max: number; source: string | null }>();
+  if (!g) return c.json({ error: 'Actividad no encontrada.' }, 404);
+  if (g.grade !== null && g.source !== 'manual') return c.json({ error: 'Esta nota ya la publicó el EVA.' }, 400);
+  const grade = Number(b.grade), max = Number(b.max || g.grade_max || 100);
+  if (!Number.isFinite(grade) || !Number.isFinite(max) || max <= 0 || grade < 0 || grade > max) return c.json({ error: `Escribe una nota entre 0 y ${max || 100}.` }, 400);
+  const scaled = Math.round((grade / max) * g.grade_max * 100) / 100;
+  await c.env.DB.prepare(`UPDATE grades SET grade = ?, source = 'manual', updated_at = ? WHERE id = ?`).bind(scaled, nowSec(), g.id).run();
+  return c.json({ ok: true });
+});
+app.delete('/api/grades/:id/grade', async (c) => {
+  const id = Number(c.req.param('id'));
+  await c.env.DB.prepare(`DELETE FROM grades WHERE id = ? AND user_id = ? AND source = 'manual' AND moodle_item_id <= -2000000000`).bind(id, c.env.UID).run();
+  await c.env.DB.prepare(`UPDATE grades SET grade = NULL, source = NULL WHERE id = ? AND user_id = ? AND source = 'manual'`).bind(id, c.env.UID).run();
+  return c.json({ ok: true });
+});
+
 app.delete('/api/tasks/:id/grade', async (c) => {
   const id = Number(c.req.param('id'));
   const t = await c.env.DB.prepare('SELECT moodle_key FROM tasks WHERE id = ? AND user_id = ?').bind(id, c.env.UID).first<{ moodle_key: string | null }>();
@@ -629,7 +663,7 @@ app.get('/api/search', async (c) => {
   const hit = (...parts: unknown[]) => { const t = fold(parts.join(' ')); return words.every((w) => t.includes(w)); };
   type T = { id: number; title: string; due_at: number | null; status: string; course_name: string | null; course_color: string | null; description: string | null };
   const tasks = (await c.env.DB.prepare(`SELECT t.id, t.title, t.due_at, t.status, t.description, c.name AS course_name, c.color AS course_color FROM tasks t LEFT JOIN courses c ON c.id = t.course_id
-    WHERE t.user_id = ? ORDER BY t.status = 'done', COALESCE(t.due_at, 0) DESC LIMIT 600`).bind(c.env.UID).all<T>()).results
+    WHERE t.user_id = ? AND t.status != 'ignored' ORDER BY t.status = 'done', COALESCE(t.due_at, 0) DESC LIMIT 600`).bind(c.env.UID).all<T>()).results
     .filter((t) => hit(t.title, t.course_name, t.description)).slice(0, 12).map(({ description: _d, ...t }) => t);
   type N = { id: number; title: string; body: string | null; kind: string; created_at: number; course_name: string | null };
   const news = (await c.env.DB.prepare(`SELECT a.id, a.title, a.body, a.kind, a.created_at, c.name AS course_name FROM announcements a LEFT JOIN courses c ON c.id = a.course_id
@@ -905,28 +939,37 @@ app.get('/api/courses', async (c) => c.json(await courseSummaries(c.env)));
 
 // Historial: asignaturas de trimestres anteriores con su promedio final
 app.get('/api/courses/history', async (c) => {
-  const { results } = await c.env.DB.prepare(`SELECT c.id, c.code, c.name, c.color, c.updated_at,
-      (SELECT AVG(g.grade * 100.0 / g.grade_max) FROM grades g WHERE g.course_id = c.id AND g.grade IS NOT NULL AND g.grade_max > 0) AS average,
-      (SELECT COUNT(*) FROM grades g WHERE g.course_id = c.id AND g.grade IS NOT NULL) AS graded,
+  const { results } = await c.env.DB.prepare(`SELECT c.id, c.code, c.name, c.color, c.updated_at, c.eva_total, c.eva_total_max,
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'done') AS delivered
-    FROM courses c WHERE c.user_id = ? AND c.active = 0 AND c.moodle_id IS NOT NULL ORDER BY c.updated_at DESC`).bind(c.env.UID).all<{ average: number | null }>();
-  return c.json(results.map((r) => ({ ...r, average: r.average === null ? null : Math.round(r.average * 10) / 10 })));
+    FROM courses c WHERE c.user_id = ? AND c.active = 0 AND c.moodle_id IS NOT NULL ORDER BY c.updated_at DESC`).bind(c.env.UID).all<{ id: number }>();
+  // Mismo promedio que en el trimestre actual: una nota por actividad, con pesos y sin lo quitado.
+  const rows = await bestGrades(c.env);
+  return c.json(results.map((r) => {
+    const a = courseAverage(rows.filter((g) => g.course_id === r.id));
+    return { ...r, graded: a.graded, total: a.total, average: a.avg === null ? null : Math.round(a.avg * 10) / 10 };
+  }));
 });
 
 app.get('/api/courses/:id/grades', async (c) => {
   // Cada nota trae su tarea (si existe) para abrir la ficha desde Notas.
-  type Row = { id: number; item_name: string; grade: number | null; grade_max: number; weight: number | null; moodle_key: string | null; source: string | null; task_id: number | null; due_at: number | null; status: string | null };
-  const { results } = await c.env.DB.prepare(`SELECT g.id, g.item_name, g.grade, g.grade_max, g.weight, g.moodle_key, g.source, t.id AS task_id, t.due_at, t.status
+  // ignored: 1 si no cuenta para el promedio (la quitaste o es de las que no se corrigen); auto: 1 si la quitó Rumbo por el nombre.
+  type Row = { id: number; item_name: string; grade: number | null; grade_max: number; weight: number | null; moodle_key: string | null; source: string | null; task_id: number | null; due_at: number | null; status: string | null; ignored: number; auto: number };
+  const { results } = await c.env.DB.prepare(`SELECT g.id, g.item_name, g.grade, g.grade_max, g.weight, g.moodle_key, g.source, t.id AS task_id, t.due_at, t.status,
+      ${GRADE_IGNORED_SQL('g')} AS ignored, CASE WHEN g.ignored IS NULL AND ${GRADE_IGNORED_SQL('g')} = 1 THEN 1 ELSE 0 END AS auto
     FROM grades g LEFT JOIN tasks t ON g.moodle_key IS NOT NULL AND t.user_id = g.user_id AND t.moodle_key = g.moodle_key
     WHERE g.user_id = ? AND g.course_id = ? ORDER BY COALESCE(t.due_at, 9999999999), g.id`).bind(c.env.UID, Number(c.req.param('id'))).all<Row>();
-  // Un foro trae dos renglones («… calificación» y «… foro completo»): se muestra uno solo, el que tiene nota.
+  // Un foro trae dos renglones («… calificación» y «… foro completo»): se muestra uno solo, el que tiene nota,
+  // con el peso mayor de los dos (el que usa el EVA).
   const byKey = new Map<string, Row>();
   const out: Row[] = [];
   for (const r of results) {
     if (!r.moodle_key) { out.push(r); continue; }
     const prev = byKey.get(r.moodle_key);
     if (!prev) { byKey.set(r.moodle_key, r); out.push(r); continue; }
-    if (prev.grade === null && r.grade !== null) out[out.indexOf(prev)] = r, byKey.set(r.moodle_key, r);
+    const weight = Math.max(prev.weight ?? -1, r.weight ?? -1);
+    const keep = prev.grade === null && r.grade !== null ? r : prev;
+    const merged = { ...keep, weight: weight < 0 ? null : weight };
+    out[out.indexOf(prev)] = merged; byKey.set(r.moodle_key, merged);
   }
   return c.json(out.map((r) => ({ ...r, item_name: r.moodle_key?.startsWith('forum:') ? r.item_name.replace(/\s+(calificaci[oó]n|foro completo)$/i, '') : r.item_name })));
 });
