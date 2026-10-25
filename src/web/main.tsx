@@ -8,6 +8,7 @@ import './panel.css';
 import './polish.css';
 import './identity.css';
 import './home.css';
+import './today.css';
 import { initTheme } from './theme';
 import { startUpdater } from './updater';
 

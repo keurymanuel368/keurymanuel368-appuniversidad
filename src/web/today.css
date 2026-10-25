@@ -1,0 +1,44 @@
+/* ==========================================================================
+   Inicio v53: «Hoy» (línea de tiempo viva) y «Tu trimestre» (camino con brújula)
+   ========================================================================== */
+.td, .tj { padding: 16px; border-radius: 28px 28px 28px 9px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--sh-card, var(--sh-2)); }
+.td header, .tj header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.td small, .tj small { display: block; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.td h3, .tj h3 { font-size: 22px; font-weight: 800; letter-spacing: -.04em; margin-top: 2px; }
+.td-count { font-size: 12.5px; font-weight: 700; padding: 6px 11px; border-radius: 99px; background: var(--blue-soft); color: var(--blue-dark); white-space: nowrap; }
+
+.td-rail { list-style: none; margin: 0; padding: 0 0 0 0; position: relative; display: grid; gap: 8px; }
+.td-rail::before { content: ""; position: absolute; left: 63px; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: linear-gradient(180deg, var(--line), var(--line-2)); }
+.td-item { display: grid; grid-template-columns: 56px 1fr; gap: 14px; align-items: stretch; position: relative; }
+.td-time { align-self: center; text-align: right; font-size: 11.5px; font-weight: 700; color: var(--muted); line-height: 1.2; }
+.td-item button { position: relative; display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; padding: 10px 12px 10px 10px; border-radius: 18px 18px 18px 6px; border: 1px solid hsl(var(--h) 60% 60% / .28); background: linear-gradient(180deg, hsl(var(--h) 90% 96%), var(--surface)); transition: transform .18s var(--ease); }
+.td-item button:active { transform: scale(.985); }
+.td-item::before { content: ""; position: absolute; left: 59px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: hsl(var(--h) 78% 55%); box-shadow: 0 0 0 3px var(--surface); z-index: 1; }
+.td-ic { width: 32px; height: 32px; border-radius: 11px 11px 11px 4px; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, hsl(var(--h) 85% 62%), hsl(var(--h) 75% 46%)); }
+.td-copy b { display: block; font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.td-copy small { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12px; margin-top: 2px; }
+.td-item.task button { background: var(--surface-2); border-color: var(--line); }
+.td-item.past { opacity: .45; }
+.td-item.live button { border-color: var(--needle); box-shadow: 0 0 0 3px color-mix(in oklab, var(--needle) 16%, transparent); }
+.td-live { display: inline-flex; align-items: center; gap: 5px; font-style: normal; font-size: 11px; font-weight: 800; color: #fff; background: var(--needle); padding: 3px 9px; border-radius: 99px; }
+.td-live i { width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+
+.td-now { display: grid; grid-template-columns: 56px 1fr; gap: 14px; align-items: center; position: relative; }
+.td-now i { position: absolute; left: 56px; width: 16px; height: 16px; border-radius: 50%; background: var(--needle); box-shadow: 0 0 0 4px color-mix(in oklab, var(--needle) 22%, transparent); z-index: 2; }
+.td-now span { grid-column: 2; margin-left: -2px; padding-left: 14px; height: 2px; display: flex; align-items: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--needle); background: linear-gradient(90deg, var(--needle), transparent 80%) center / 100% 2px no-repeat; }
+.td-now span { height: auto; padding: 2px 0 2px 14px; background: none; }
+.td-empty { display: flex; align-items: center; gap: 12px; padding: 4px 2px; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+.td-later { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; width: 100%; margin-top: 12px; padding: 10px 12px; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 1px dashed var(--line); border-radius: 16px; background: transparent; }
+.td-later small { font-size: 10.5px; } .td-later b { font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .td-later em { font-style: normal; font-size: 12px; color: var(--muted); font-weight: 700; }
+
+.tj { background: radial-gradient(90% 140% at 100% 0%, color-mix(in oklab, var(--needle) 9%, transparent), transparent 60%), var(--surface); }
+.tj-left { font-family: var(--display); font-size: 24px; font-weight: 800; letter-spacing: -.04em; color: var(--blue-dark); }
+.tj svg { width: 100%; height: auto; display: block; overflow: visible; }
+.tj-bg { fill: none; stroke: var(--line); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.tj-fg { fill: none; stroke: url(#tjg); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.tj-dot { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; } .tj-dot.on { stroke: #3B8CFF; }
+.tj-flag { stroke: var(--muted); stroke-width: 1.5; } .tj-flagdot { fill: var(--needle); }
+.tj-halo { fill: color-mix(in oklab, var(--needle) 18%, transparent); }
+.tj-ring { fill: #0A5BE0; stroke: #fff; stroke-width: 2; }
+.tj footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.tj footer b { color: var(--ink); }

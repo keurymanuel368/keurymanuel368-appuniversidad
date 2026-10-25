@@ -3,6 +3,7 @@
 import type { Env } from './env';
 import { getSettings } from './db';
 import { courseSummaries, listTasks, overallAverage } from './data';
+import { classes as uapaClasses } from './horario';
 import { cuandoTexto, fechaLarga, horaTexto, localDate, nowSec, ymd } from './time';
 
 /** versionCode del APK publicado en public/rumbo-widget.apk (súbelo junto con android-widget/app/build.gradle). */
@@ -69,6 +70,14 @@ export async function widgetData(env: Env): Promise<WidgetData> {
     .bind(env.UID, now - 3600).all<{ text: string; remind_at: number }>();
   const doneWeek = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'done' AND COALESCE(submitted_at, updated_at) >= ?`).bind(env.UID, now - 7 * 86400).first<{ n: number }>())?.n || 0;
   const seed = today.getUTCDate() + today.getUTCHours();
+  // Clases de hoy (Mi UAPA): la que está en curso o la siguiente se cuela en el titular del widget.
+  const todayIso = ymd(today), dow = (today.getUTCDay() + 6) % 7, nowMin = today.getUTCHours() * 60 + today.getUTCMinutes();
+  const allClasses = await uapaClasses(env);
+  const onDay = (k: { day: number; start_date: string | null; end_date: string | null }, iso: string, d: number) => k.day === d && (!k.start_date || iso >= k.start_date) && (!k.end_date || iso <= k.end_date);
+  const todayClasses = allClasses.filter((k) => onDay(k, todayIso, dow)).sort((a, b) => a.start_min - b.start_min);
+  const liveClass = todayClasses.find((k) => k.start_min <= nowMin && nowMin < k.end_min);
+  const nextClassToday = todayClasses.find((k) => k.start_min > nowMin);
+  const h12 = (m: number) => { const h = Math.floor(m / 60); return `${h % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'a. m.' : 'p. m.'}`; };
   const hi = name ? `, ${name}` : '';
 
   let mood: WidgetData['mood'], headline: string, sub: string;
@@ -90,6 +99,13 @@ export async function widgetData(env: Env): Promise<WidgetData> {
     sub = racha > 1 ? `Llevas ${racha} días seguidos cumpliendo.` : 'Aprovecha para adelantar o descansar.';
   }
 
+  if (liveClass) {
+    mood = 'atento'; headline = `🎓 En clase: ${liveClass.title}`.slice(0, 60); sub = `Termina a las ${h12(liveClass.end_min)}.`;
+  } else if (nextClassToday && nextClassToday.start_min - nowMin <= 90) {
+    const m = nextClassToday.start_min - nowMin;
+    mood = 'atento'; headline = `🎓 ¡Clase en ${m} min!`; sub = `${nextClassToday.title} · ${h12(nextClassToday.start_min)}`.slice(0, 70);
+  }
+
   const list = [...overdue, ...pending.filter((t) => t.due_at! >= now)].slice(0, 5);
   // Tu semana (para el widget grande): cuántas entregas hay cada día de hoy a 6 días.
   const week: { d: string; n: number; count: number; today: boolean }[] = [];
@@ -97,20 +113,25 @@ export async function widgetData(env: Env): Promise<WidgetData> {
     const d = localDate(env, now + i * 86400);
     const key = ymd(d);
     const items = pending.filter((t) => ymd(localDate(env, t.due_at!)) === key);
-    week.push({ d: 'DLMXJVS'[d.getUTCDay()], n: d.getUTCDate(), count: items.length, today: i === 0 });
+    const nCls = allClasses.filter((k) => onDay(k, key, (d.getUTCDay() + 6) % 7)).length;
+    week.push({ d: 'DLMXJVS'[d.getUTCDay()], n: d.getUTCDate(), count: items.length + nCls, today: i === 0 });
   }
   // Última nota (de los últimos 5 días): se alterna con las frases del widget.
   const last = await env.DB.prepare(`SELECT g.item_name, g.grade, g.grade_max FROM grades g WHERE g.user_id = ? AND g.grade IS NOT NULL AND g.updated_at > ? ORDER BY g.updated_at DESC LIMIT 1`)
     .bind(env.UID, now - 5 * 86400).first<{ item_name: string; grade: number; grade_max: number }>();
   const gradeLine = last ? `📊 Última nota: ${Math.round(last.grade * 100) / 100}/${last.grade_max} · ${last.item_name.replace(/\s+(calificaci[oó]n|foro completo)$/i, '').slice(0, 40)}` : null;
+  const clsLine = todayClasses.length ? `🎓 Hoy: ${todayClasses.map((k) => `${k.title.split(' ').slice(0, 2).join(' ')} ${h12(k.start_min).replace(' a. m.', 'a').replace(' p. m.', 'p')}`).join(' · ')}`.slice(0, 90) : null;
+  const classReminders = todayClasses.filter((k) => k.start_min > nowMin).slice(0, 2).map((k) => ({ text: `🎓 ${k.title}`, when: h12(k.start_min) }));
+  const phrases = (gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)));
+  if (clsLine) phrases.unshift(clsLine);
   return {
     mood, headline, sub, streak: racha, pending: pending.length, today: dueToday.length, overdue: overdue.length,
     tasks: list.map((t) => ({ title: t.title, when: t.due_at! < now ? 'Atrasada' : cuandoTexto(env, t.due_at!), course: t.course_short || t.course_name || '', urgent: t.due_at! < now + 86400, late: t.due_at! < now })),
     week,
     name,
     dayTitle: (() => { const f = fechaLarga(localDate(env)); return f.charAt(0).toUpperCase() + f.slice(1); })(),
-    reminders: rem.map((r) => ({ text: r.text, when: cuandoTexto(env, r.remind_at) })),
-    phrases: gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)),
+    reminders: [...classReminders, ...rem.map((r) => ({ text: r.text, when: cuandoTexto(env, r.remind_at) }))].slice(0, 3),
+    phrases,
     lastGrade: last ? { title: last.item_name, grade: last.grade, max: last.grade_max } : null,
     next: (() => {
       const t = pending.filter((x) => x.due_at! >= now).sort((a, b) => a.due_at! - b.due_at!)[0];

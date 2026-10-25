@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 53,
+    date: '2026-10-25',
+    title: '✨ Hoy en vivo, Tu trimestre y el widget con tus clases',
+    items: [
+      'Inicio estrena «Hoy»: una línea de tiempo con tus clases, entregas con hora y exámenes, y una marca de «Ahora» naranja que se mueve sola. Si no hay nada, te dice qué viene después.',
+      'Inicio estrena «Tu trimestre»: el camino de la semana 1 a la última con una brújula que marca dónde vas, tus fechas clave (cambios, retiro, final) y los días que faltan.',
+      'Confeti cuando completas una tarea, recibes una nota de 90 o más o terminas un repaso de tarjetas.',
+      'El widget del teléfono ahora muestra tus clases: «¡Clase en 25 min!», «En clase: …», tus clases de hoy en las frases y los puntos de la semana cuentan clases y entregas. (No hace falta reinstalarlo.)',
+    ],
+  },
+  {
     version: 52,
     date: '2026-10-25',
     title: '🧭 Una app con identidad: la brújula de Rumbo',

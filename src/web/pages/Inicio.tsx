@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { agoLabel, api, cleanTitle, channelsLabel, overdueLabel, type Dashboard, type SendResult, type Task, whenLabel } from '../api';
-import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
+import { CountUp, Empty, confetti, PageHead, PullIndicator, Ring, Skeleton, TaskModal, TaskRow, TaskSheet, fmtGrade, haptic, runSync, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
-import { ClassGlance } from './Horario';
+import { TodayTimeline } from '../Today';
+import { TermJourney } from '../Journey';
 import { Panel } from '../Panel';
 
 function greeting() {
@@ -81,10 +82,12 @@ export function Inicio({ go }: { go: (p: string) => void }) {
 
       <SetupBanner setup={d.setup} go={go} />
       {d.freshGrade && <FreshGrade g={d.freshGrade} onDone={reload} />}
-      <ClassGlance go={go} />
-      {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
 
       <Panel d={d} now1={now1} next={next} syncing={syncing} busy={busy} go={go} onOpen={setEditing} onNew={() => setCreating(true)} onSync={sync} onSummary={sendSummary} />
+
+      <TodayTimeline d={d} go={go} />
+      {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
+      <TermJourney />
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 
@@ -267,6 +270,13 @@ function GoalsCard({ goals, ids, onChanged }: { goals: NonNullable<Dashboard['go
 /** «¡Te calificaron!»: la nota nueva grande, el comentario y cuánto movió tu promedio. */
 function FreshGrade({ g, onDone }: { g: NonNullable<Dashboard['freshGrade']>; onDone: () => void }) {
   const pct = g.max ? (g.grade / g.max) * 100 : 0;
+  // Una nota de 90 o más se celebra (una sola vez por nota)
+  useEffect(() => {
+    if (pct < 90) return;
+    try { const k = `rumbo-celebrada-${g.id}`; if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { /* sin almacenamiento */ }
+    const t = setTimeout(() => confetti(), 500);
+    return () => clearTimeout(t);
+  }, [g.id, pct]);
   async function close() {
     haptic(6);
     await api('/announcements/read', { method: 'POST', body: { ids: [g.id] } }).catch(() => {});

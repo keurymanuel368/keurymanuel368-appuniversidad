@@ -70,11 +70,37 @@ export async function setActivityIgnored(target: { taskId?: number; gradeId?: nu
   });
 }
 
+/** Confeti corto (28 piezas, solo transform/opacity): para celebrar una entrega, una nota alta o terminar un repaso. */
+export function confetti(x = window.innerWidth / 2, y = window.innerHeight * 0.38) {
+  if (typeof document === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const box = document.createElement('div');
+  box.setAttribute('aria-hidden', 'true');
+  box.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden';
+  const colors = ['#3B8CFF', '#FF8A1F', '#34D399', '#A78BFA', '#F472B6', '#FDE047'];
+  for (let i = 0; i < 28; i++) {
+    const p = document.createElement('i');
+    const size = 6 + Math.random() * 6;
+    p.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${size}px;height:${size * (Math.random() > .5 ? 1 : .45)}px;border-radius:${Math.random() > .5 ? '50%' : '2px'};background:${colors[i % colors.length]}`;
+    box.appendChild(p);
+    const ang = (Math.random() * 1.1 - 0.55) * Math.PI - Math.PI / 2;
+    const v = 140 + Math.random() * 220;
+    const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v;
+    p.animate([
+      { transform: 'translate(-50%,-50%) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${180 + Math.random() * 300}deg)`, opacity: 1, offset: 0.45 },
+      { transform: `translate(calc(-50% + ${dx * 1.15}px), calc(-50% + ${dy + 260}px)) rotate(${400 + Math.random() * 300}deg)`, opacity: 0 },
+    ], { duration: 1100 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards' });
+  }
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 1800);
+}
+
 export async function toggleTask(t: Task, reload: () => void) {
   const next = t.status === 'done' ? 'pending' : 'done';
   await api(`/tasks/${t.id}`, { method: 'PATCH', body: { status: next } });
   reload();
   window.dispatchEvent(new Event('rumbo:badges'));
+  if (next === 'done') confetti();
   if (next === 'done') toast('¡Bien hecho! Tarea completada', 'ok', {
     label: 'Deshacer',
     run: async () => {

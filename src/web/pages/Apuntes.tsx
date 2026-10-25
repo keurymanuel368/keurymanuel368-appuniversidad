@@ -1,7 +1,7 @@
 import '../apuntes.css';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Course } from '../api';
-import { Empty, Modal, PageHead, Segmented, Skeleton, haptic, toast, useLoad } from '../components';
+import { Empty, Modal, PageHead, Segmented, Skeleton, confetti, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 
 type Note = { id: number; course: string | null; title: string; body: string; pinned: number; updated_at: number };
@@ -124,7 +124,7 @@ function Review({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
     haptic(g === 0 ? 8 : 12);
     await api(`/cards/${c.id}/review`, { method: 'POST', body: { grade: g } }).catch(() => {});
     setDone((d) => d + 1);
-    if (i + 1 >= cards.length) { onDone(); toast(`Repasaste ${done + 1} tarjetas 🎉`); } else setI(i + 1);
+    if (i + 1 >= cards.length) { confetti(); onDone(); toast(`Repasaste ${done + 1} tarjetas 🎉`); } else setI(i + 1);
   }
   if (!c) return null;
   return (
