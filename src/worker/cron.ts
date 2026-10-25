@@ -8,6 +8,7 @@ import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
 import { flushWhatsApp, sendToMe } from './notify';
 import { classAlerts } from './horario';
+import { calendarAlerts } from './uapa-calendar';
 import { weeklyPlan } from './plan';
 import { announceRelease } from './changelog';
 import { backupDue, makeBackup } from './backup';
@@ -218,6 +219,9 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
 
   // Clases del horario y exámenes del DEA
   if (s.notify_clases !== '0') { try { log.push(...await classAlerts(env)); } catch (e) { log.push('Clases: ' + (e as Error).message); } }
+
+  // Fechas límite del calendario de la UAPA y pago pendiente
+  if (s.notify_avisos !== '0') { try { log.push(...await calendarAlerts(env)); } catch (e) { log.push('Calendario UAPA: ' + (e as Error).message); } }
 
   // Historial del promedio (para la gráfica de Notas)
   try { await recordAverage(env); } catch (e) { log.push('Historial del promedio: ' + (e as Error).message); }

@@ -80,3 +80,5 @@
 .acct-period li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line-2); font-size: 13.5px; }
 .acct-period li b { display: block; font-weight: 600; } .acct-period li small { color: var(--muted); font-size: 11.5px; }
 .acct-period li.pay .num { color: var(--green); font-weight: 700; }
+
+.pn-dock .g8 { background: linear-gradient(160deg, #FFB454, #FF8A1F); }

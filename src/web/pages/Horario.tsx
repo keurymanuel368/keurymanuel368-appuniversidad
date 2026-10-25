@@ -252,9 +252,61 @@ function Importer({ data, reload }: { data: Data; reload: () => void }) {
   );
 }
 
+
+type CalEvent = { id: string; term: string; title: string; from: string; to: string; kind: string; alert?: boolean; note?: string };
+const KIND_ICON: Record<string, string> = { pago: 'wallet', docencia: 'cap', tramite: 'tasks', evaluacion: 'tasks', graduacion: 'cap' };
+const isoDate = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+const dayLabel = (iso: string) => { const d = isoDate(iso); return `${DIAS[dayIdx(d)]} ${d.getDate()} ${MESES[d.getMonth()]}`; };
+
+/** Calendario académico oficial de Grado: lo que viene, con cuenta regresiva en lo que vence. */
+function UapaCalendar() {
+  const cal = useLoad(() => api<{ terms: Record<string, string>; events: CalEvent[] }>('/uapa/calendar'));
+  const sum = useLoad(() => api<{ account: { balance: number } | null }>('/uapa/summary'));
+  if (!cal.data) return <Skeleton rows={2} hero={false} />;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const bal = sum.data?.account?.balance || 0;
+  const terms = Object.keys(cal.data.terms);
+  const stateOf = (e: CalEvent) => {
+    const a = isoDate(e.from), b = isoDate(e.to);
+    if (today > b) return { k: 'past', t: 'Pasó' };
+    if (today >= a) { const left = Math.round((b.getTime() - today.getTime()) / 86400000); return { k: 'now', t: left === 0 ? 'Último día' : `Quedan ${left} d` }; }
+    const days = Math.round((a.getTime() - today.getTime()) / 86400000);
+    return { k: 'soon', t: days === 1 ? 'Mañana' : `En ${days} d` };
+  };
+  const urgent = cal.data.events.find((e) => e.kind === 'pago' && stateOf(e).k === 'now');
+  return (
+    <div className="hz-cal">
+      {urgent && bal > 0 && (
+        <a className="hz-urgent" href="#pagos">
+          <Icon name="wallet" size={20} />
+          <span><b>Tienes RD${Math.round(bal).toLocaleString('es-DO')} por pagar</b><small>{urgent.title}: {stateOf(urgent).t.toLowerCase()}</small></span>
+        </a>
+      )}
+      {terms.map((t) => (
+        <section key={t}>
+          <h3>{cal.data!.terms[t]}</h3>
+          <ul>
+            {cal.data!.events.filter((e) => e.term === t).map((e) => {
+              const st = stateOf(e);
+              return (
+                <li key={e.id} className={`hz-ev ${st.k}`}>
+                  <span className="hz-ev-ic"><Icon name={KIND_ICON[e.kind] || 'calendar'} size={17} /></span>
+                  <div><b>{e.title}</b><small>{e.from === e.to ? dayLabel(e.from) : `${dayLabel(e.from)} → ${dayLabel(e.to)}`}{e.note ? ' · ' + e.note : ''}</small></div>
+                  <span className="hz-badge">{st.t}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+      <p className="hz-src">Fuente: calendario académico de Grado de la UAPA (revisado el 25/10/2026). Confirma siempre en uapa.edu.do.</p>
+    </div>
+  );
+}
+
 export function Horario() {
   const data = useLoad(() => api<Data>('/horario'));
-  const [tab, setTab] = useState<'semana' | 'examenes' | 'proximo'>('semana');
+  const [tab, setTab] = useState<'semana' | 'examenes' | 'calendario' | 'proximo'>('semana');
   const [now, setNow] = useState(() => new Date());
   const [sel, setSel] = useState(() => dayIdx(new Date()));
   const [picked, setPicked] = useState(false);
@@ -276,7 +328,7 @@ export function Horario() {
       {d.classes.length ? <Hero data={d} now={now} /> : (
         <Empty icon="calendar" title="Aún no tienes tu horario aquí" text="Impórtalo desde Mi UAPA con el marcador (abajo) y Rumbo te avisará antes de cada clase." />
       )}
-      <Segmented label="Horario" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'examenes', label: 'Exámenes', count: examsOpen || undefined }, { id: 'proximo', label: 'Próximo' }]} />
+      <Segmented label="Horario" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'examenes', label: 'Exámenes', count: examsOpen || undefined }, { id: 'calendario', label: 'Calendario' }, { id: 'proximo', label: 'Próximo' }]} />
       {tab === 'semana' && d.classes.length > 0 && (
         <>
           <WeekGrid data={d} sel={sel} onSel={(i) => { setPicked(true); setSel(i); }} now={now} />
@@ -285,6 +337,7 @@ export function Horario() {
         </>
       )}
       {tab === 'examenes' && <Exams data={d} />}
+      {tab === 'calendario' && <UapaCalendar />}
       {tab === 'proximo' && <NextTerm data={d} />}
       <Importer data={d} reload={data.reload} />
     </>

@@ -1,0 +1,68 @@
+/* ==========================================================================
+   Rumbo · identidad propia (v48): la brújula.
+   - Sora para títulos y cifras, Figtree para el texto (el tema Apple los cambiaba por la tipografía del sistema).
+   - Azul brújula + naranja aguja: el naranja marca "lo que importa ahora".
+   - Tarjetas con una esquina cerrada, como el globo de diálogo de la mascota.
+   - Una brújula de líneas finas en el fondo de cada portada.
+   ========================================================================== */
+:root:root {
+  --display: 'Sora', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --needle: #FF8A1F;
+  --needle-soft: #FFF0DD;
+  --r-card: 26px 26px 26px 9px;
+  --r-card-sm: 20px 20px 20px 8px;
+  --compass: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><g fill='none' stroke='white' stroke-opacity='.11' stroke-width='1.3'><circle cx='100' cy='100' r='92'/><circle cx='100' cy='100' r='70' stroke-dasharray='1.5 7'/><circle cx='100' cy='100' r='44'/><path d='M100 6v24M100 170v24M6 100h24M170 100h24' stroke-opacity='.16'/></g><path d='M100 50l11 50-11 50-11-50z' fill='white' fill-opacity='.07'/><path d='M100 50l11 50H89z' fill='%23FF8A1F' fill-opacity='.32'/></svg>");
+}
+body, button, input, select, textarea { font-family: var(--body); }
+h1, h2, h3, .num, .amount, .value, .stat .value, .grade, .pn-kpis .num, .pn-tile b, .acct-hero b { font-family: var(--display); }
+.num { letter-spacing: -.03em; }
+
+/* Títulos de pantalla: Sora grande, con un rombo naranja en la etiqueta */
+body .topbar h1 { font-family: var(--display); font-weight: 800; letter-spacing: -.045em; font-size: 38px; line-height: 1.04; background: none; -webkit-text-fill-color: currentColor; color: var(--ink); }
+body .topbar .eyebrow, body .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .07em; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+body .topbar .eyebrow::before, body .eyebrow::before { content: ""; width: 7px; height: 7px; background: var(--needle); transform: rotate(45deg); border-radius: 2px; flex: none; }
+
+/* Esquina cerrada: la firma de las tarjetas */
+body .card, body .stat, body .quick, body .pn-tile, body .hz-next, body .hz-week, body .hz-exam, body .acct-period, body .news, body .course { border-radius: var(--r-card); }
+body .hz-card, body .hz-glance, body .subj, body .task-wrap, body .gf-row { border-radius: var(--r-card-sm); }
+body .pn-card, body .hero, body .career-hero, body .ts-index, body .hz-hero, body .acct-hero, body .pay-hero { border-radius: 34px 34px 34px 10px; }
+
+/* Brújula de fondo en las portadas */
+body .pn-card::after, body .hz-hero::after, body .hero::after, body .career-hero::after, body .ts-index::after, body .acct-hero::after, body .pay-hero::after {
+  content: ""; position: absolute; right: -58px; bottom: -72px; width: 210px; height: 210px; z-index: 0; pointer-events: none;
+  background: var(--compass) center / contain no-repeat; background-image: var(--compass);
+}
+body .pn-card > *:not(.pn-glow), body .hz-hero > *, body .hero > *, body .career-hero > *, body .ts-index > *, body .acct-hero > * { position: relative; z-index: 1; }
+body .pn-card .pn-glow { z-index: 0; }
+
+/* Naranja aguja: lo que está pasando ahora */
+body .hz-pill.live, body .hz-livetag { background: var(--needle); color: #fff; }
+body .hz-pill.live i, body .hz-livetag i { background: #fff; }
+body .hz-item.live .hz-card { box-shadow: 0 0 0 2px color-mix(in oklab, var(--needle) 60%, transparent), var(--sh-card) !important; }
+body .hz-col.today b { color: var(--needle); }
+body .day-pill.today .dw { color: var(--needle); }
+body .pn-kpis em.bad { color: #FFD3A6; }
+body .badge, body .tab-badge { background: var(--needle); }
+body .pill.orange { background: var(--needle-soft); color: #A04A00; }
+
+/* Etiquetas de sección con un trazo de brújula */
+body .section-head h3, body .card-head h3 { font-family: var(--display); letter-spacing: -.03em; }
+body .section > .section-head:first-child h3 { display: inline-flex; align-items: center; gap: 9px; }
+body .section > .section-head:first-child h3::before { content: ""; width: 14px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--blue), var(--needle)); }
+
+/* Botón principal con carácter: pastilla azul brújula y brillo */
+body .btn.primary, body .btn.grad, body .fab { background: linear-gradient(165deg, #3B8CFF 0%, #0A5BE0 100%); }
+body .btn.primary { box-shadow: 0 10px 20px -10px rgba(10, 91, 224, .8), inset 0 1px 0 rgba(255, 255, 255, .3); letter-spacing: -.01em; font-weight: 700; }
+
+/* Fichas de icono: rombo suave en vez de cuadrado genérico */
+body .stat-ic, body .q-ic, body .tile-ic, body .news-ic, body .pn-tile-ic { border-radius: 14px 14px 14px 5px !important; }
+body .set-ic { border-radius: 14px 14px 14px 5px !important; }
+
+/* Pestaña activa de la barra inferior y barra de progreso con la aguja naranja al final */
+body .progress > i, body .progress > div, body .hero-bar > div, body .acct-bar i { position: relative; }
+body .tabbar > button.active { color: var(--blue) !important; }
+
+/* Cifras grandes más contundentes */
+body .stat .value, body .pn-kpis .num, body .pn-tile b { font-weight: 800; letter-spacing: -.045em; }
+body .pn-card h2, body .hz-hero h2, body .hero h2 { font-weight: 800; letter-spacing: -.04em; }

@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 48,
+    date: '2026-10-25',
+    title: '🧭 Estudio, calendario UAPA y una identidad nueva',
+    items: [
+      'Nueva pantalla Estudio: apuntes por materia y tarjetas de repaso con repetición espaciada (Otra vez, Difícil, Bien, Fácil). En un apunte toca «Tarjetas con IA» y Rumbo te las arma.',
+      'Calendario académico oficial de la UAPA en Horario: selección y pago, inicio de docencia, cambios de asignaturas, evaluaciones finales. Te aviso 3 días y 1 día antes de cada fecha límite.',
+      'Aviso de pago pendiente: mientras corre la selección y pago y debas algo en Mi UAPA, te lo recuerdo cada día.',
+      'Look nuevo con la brújula de Rumbo: tipografía Sora, tarjetas con esquina cerrada, acentos naranja aguja y una brújula sutil en las portadas.',
+    ],
+  },
+  {
     version: 47,
     date: '2026-10-25',
     title: '⚡ Mucho más fluida',

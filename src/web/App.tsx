@@ -11,6 +11,7 @@ const Inicio = lazy(() => import('./pages/Inicio').then((m) => ({ default: m.Ini
 const Tareas = lazy(() => import('./pages/Tareas').then((m) => ({ default: m.Tareas })));
 const Asignaturas = lazy(() => import('./pages/Asignaturas').then((m) => ({ default: m.Asignaturas })));
 const Horario = lazy(() => import('./pages/Horario').then((m) => ({ default: m.Horario })));
+const Apuntes = lazy(() => import('./pages/Apuntes').then((m) => ({ default: m.Apuntes })));
 const Pagos = lazy(() => import('./pages/Pagos').then((m) => ({ default: m.Pagos })));
 const Pensum = lazy(() => import('./pages/Pensum').then((m) => ({ default: m.Pensum })));
 const Asistente = lazy(() => import('./pages/Asistente').then((m) => ({ default: m.Asistente })));
@@ -26,6 +27,7 @@ const PAGES: { id: string; label: string; icon: string; hint: string; admin?: bo
   { id: 'tareas', label: 'Tareas', icon: 'tasks', hint: 'Entregas y pendientes' },
   { id: 'asignaturas', label: 'Notas', icon: 'book', hint: 'Asignaturas y calificaciones' },
   { id: 'horario', label: 'Horario', icon: 'calendar', hint: 'Clases, exámenes y qué cursar' },
+  { id: 'apuntes', label: 'Estudio', icon: 'book', hint: 'Apuntes y tarjetas de repaso' },
   { id: 'pensum', label: 'Pensum', icon: 'cap', hint: 'Tu avance en la carrera' },
   { id: 'pagos', label: 'Pagos', icon: 'wallet', hint: 'Cuotas y ventana de pago' },
   { id: 'avisos', label: 'Avisos', icon: 'bell', hint: 'Novedades, pagos y eventos' },
@@ -113,7 +115,7 @@ export function App() {
     api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch((e) => setAuth(e instanceof ApiError && e.status === 401 ? 'out' : 'in'));
     const onHash = () => {
       // «#tareas/12» estando ya en Tareas: se vuelve a montar la pantalla para que abra ese elemento.
-      const ORDER = ['inicio', 'tareas', 'horario', 'asistente', 'asignaturas', 'avisos', 'pensum', 'pagos', 'ajustes', 'ayuda', 'conectar', 'companeros'];
+      const ORDER = ['inicio', 'tareas', 'horario', 'apuntes', 'asistente', 'asignaturas', 'avisos', 'pensum', 'pagos', 'ajustes', 'ayuda', 'conectar', 'companeros'];
       const from = ORDER.indexOf(pageRef.current), to = ORDER.indexOf(currentPage());
       document.documentElement.dataset.nav = to < from ? 'back' : 'fwd';
       const apply = () => { setPage(currentPage()); setMore(false); if (location.hash.includes('/')) setVersion((v) => v + 1); window.scrollTo({ top: 0 }); };
@@ -230,6 +232,7 @@ export function App() {
           {page === 'asignaturas' && <Asignaturas />}
           {page === 'pensum' && <Pensum />}
           {page === 'horario' && <Horario />}
+          {page === 'apuntes' && <Apuntes />}
           {page === 'pagos' && <Pagos />}
           {page === 'avisos' && <Avisos />}
           {page === 'asistente' && <Asistente />}

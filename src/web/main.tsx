@@ -6,6 +6,7 @@ import './styles.css';
 import './aurora.css';
 import './panel.css';
 import './polish.css';
+import './identity.css';
 import { initTheme } from './theme';
 import { startUpdater } from './updater';
 

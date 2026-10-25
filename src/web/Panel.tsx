@@ -88,6 +88,7 @@ export function Panel({ d, now1, next, syncing, busy, go, onOpen, onNew, onSync,
       <nav className="pn-dock" aria-label="Accesos rápidos">
         <button onClick={() => { haptic(8); onNew(); }}><span className="g1"><Icon name="plus" size={18} /></span>Nueva tarea</button>
         <button onClick={() => go('horario')}><span className="g2"><Icon name="calendar" size={18} /></span>Horario</button>
+        <button onClick={() => go('apuntes')}><span className="g8"><Icon name="book" size={18} /></span>Estudio</button>
         <button onClick={() => go('pagos')}><span className="g3"><Icon name="wallet" size={18} /></span>Pagos</button>
         <button onClick={() => go('avisos')}><span className="g4"><Icon name="bell" size={18} /></span>Avisos</button>
         <button onClick={() => go('asistente')}><span className="g5"><Icon name="spark" size={18} /></span>Asistente</button>

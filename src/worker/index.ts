@@ -31,6 +31,8 @@ import { setIgnored } from './ignore';
 import { tokenFromValue, webLoginToken } from './evalogin';
 import { registerExtras } from './extras';
 import { registerHorario } from './horario';
+import { registerKit } from './kit';
+import { CALENDAR, TERMS } from './uapa-calendar';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -477,6 +479,8 @@ app.use('/api/*', async (c, next) => {
 // Foros, entregas, historial del promedio, comentarios, récord y comprobantes (src/worker/extras.ts)
 registerExtras(app);
 registerHorario(app);
+registerKit(app);
+app.get('/api/uapa/calendar', (c) => c.json({ terms: TERMS, events: CALENDAR }));
 
 // ---------- Comentarios y problemas (llegan al administrador) ----------
 app.post('/api/feedback', async (c) => {
@@ -501,7 +505,7 @@ app.post('/api/me/delete', async (c) => {
   const p = `u${uid}:`;
   await c.env.DB.batch([
     // Hijas primero (notas y avisos apuntan a asignaturas; la caché de estudio se va con las tareas).
-    ...['grades', 'announcements', 'tasks', 'courses', 'payments', 'pensum', 'reminders', 'messages', 'push_subs', 'feedback'].map((t) => c.env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(uid)),
+    ...['grades', 'announcements', 'tasks', 'courses', 'payments', 'pensum', 'reminders', 'messages', 'push_subs', 'feedback', 'notes', 'cards', 'uapa_classes', 'uapa_exams'].map((t) => c.env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(uid)),
     c.env.DB.prepare('DELETE FROM settings WHERE substr(key, 1, ?) = ?').bind(p.length, p),
     c.env.DB.prepare('DELETE FROM sent_log WHERE substr(key, 1, ?) = ?').bind(p.length, p),
     c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid),
