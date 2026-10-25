@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_desc">Tu racha y lo próximo que vence, con la mascota de Rumbo</string>
-    <string name="widget_small_desc">La mascota, tu racha y lo próximo que vence</string>
+    <string name="widget_desc">Hoy: tus clases, lo que viene y la brújula de tu trimestre</string>
+    <string name="widget_small_desc">El anillo con la cuenta regresiva a tu próxima clase</string>
+    <string name="widget_bar_desc">Tu siguiente clase y cuánto falta, en una barra</string>
 </resources>

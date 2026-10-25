@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Barra de la siguiente clase (4×1): el dibujo viene de Art.java. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Rumbo"
+        android:scaleType="fitXY" />
+
+    <ImageView
+        android:id="@+id/refresh"
+        android:layout_width="36dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:contentDescription="Actualizar"
+        android:src="@android:color/transparent" />
+
+    <TextView
+        android:id="@+id/update"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_margin="4dp"
+        android:background="@drawable/btn_green"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="2dp"
+        android:text="⬆ Nueva versión"
+        android:textColor="#FFFFFF"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+</FrameLayout>

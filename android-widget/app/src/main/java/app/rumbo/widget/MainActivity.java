@@ -100,7 +100,7 @@ public class MainActivity extends Activity {
 
         status = new TextView(this);
         status.setText(connected
-                ? "Ahora ponlo en tu pantalla de inicio. También puedes mantener presionada la pantalla → Widgets → Rumbo."
+                ? "Ahora ponlo en tu pantalla de inicio. Mantén presionada la pantalla → Widgets → Rumbo: hay tres, «hoy» (4×2), «anillo» (2×2) y «siguiente clase» (4×1)."
                 : "Abre Rumbo → Ajustes → Widget y toca «Conectar widget». Volverás aquí solo.");
         status.setTextSize(15);
         status.setTextColor(muted);
@@ -117,11 +117,11 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(54));
         lp.topMargin = dp(28);
         if (connected) {
-            main.setText("Poner widget en inicio");
+            main.setText("Poner el widget «Hoy» en inicio");
             main.setOnClickListener(x -> {
                 AppWidgetManager mgr = AppWidgetManager.getInstance(this);
                 if (mgr.isRequestPinAppWidgetSupported()) mgr.requestPinAppWidget(new ComponentName(this, RumboWidget.class), null, null);
-                else status.setText("Mantén presionada la pantalla de inicio → Widgets → Rumbo.");
+                else status.setText("Mantén presionada la pantalla de inicio → Widgets → Rumbo (hoy, anillo o siguiente clase).");
             });
         } else {
             main.setText("Abrir Rumbo");

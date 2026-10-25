@@ -2,12 +2,12 @@
 // una mascota con cara según cómo vas, una frase, tu racha y lo próximo que vence.
 import type { Env } from './env';
 import { getSettings } from './db';
-import { courseSummaries, listTasks, overallAverage } from './data';
+import { courseSummaries, listTasks, overallAverage, payWindow } from './data';
 import { classes as uapaClasses } from './horario';
-import { cuandoTexto, fechaLarga, horaTexto, localDate, nowSec, ymd } from './time';
+import { cuandoTexto, fechaLarga, horaTexto, localDate, nowSec, offsetSec, ymd } from './time';
 
 /** versionCode del APK publicado en public/rumbo-widget.apk (súbelo junto con android-widget/app/build.gradle). */
-export const WIDGET_VERSION = 6;
+export const WIDGET_VERSION = 7;
 
 export type WidgetData = {
   mood: 'feliz' | 'tranqui' | 'atento' | 'alerta';
@@ -17,7 +17,7 @@ export type WidgetData = {
   pending: number;
   today: number;
   overdue: number;
-  tasks: { title: string; when: string; course: string; urgent: boolean; late: boolean }[];
+  tasks: { title: string; when: string; course: string; urgent: boolean; late: boolean; dueAt: number | null }[];
   /** Hoy y los 6 días siguientes, con cuántas entregas tiene cada uno (widget grande). */
   week: { d: string; n: number; count: number; today: boolean }[];
   name: string;
@@ -30,6 +30,12 @@ export type WidgetData = {
   doneWeek: number;
   updated: string;
   lastGrade: { title: string; grade: number; max: number } | null;
+  /** Horario semanal de Mi UAPA: el widget calcula solo «en 25 min» con el reloj del teléfono (d: 0 = lunes). */
+  schedule: { t: string; c: string | null; d: number; s: number; e: number; sd: string | null; ed: string | null; r: string }[];
+  term: { start: string; end: string } | null;
+  /** Minutos de diferencia con UTC de la hora local de Rumbo (República Dominicana: -240). */
+  tz: number;
+  pay: { paid: boolean; amount: string; state: 'open' | 'closed'; daysToOpen: number; daysToClose: number };
 };
 
 const dayKey = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
@@ -124,9 +130,16 @@ export async function widgetData(env: Env): Promise<WidgetData> {
   const classReminders = todayClasses.filter((k) => k.start_min > nowMin).slice(0, 2).map((k) => ({ text: `🎓 ${k.title}`, when: h12(k.start_min) }));
   const phrases = (gradeLine ? [gradeLine, pick(FRASES, seed * 3), gradeLine] : [0, 1, 2].map((i) => pick(FRASES, seed * 3 + i)));
   if (clsLine) phrases.unshift(clsLine);
+  const starts = allClasses.map((k) => k.start_date).filter(Boolean).sort() as string[];
+  const ends = allClasses.map((k) => k.end_date).filter(Boolean).sort() as string[];
+  const pw = await payWindow(env, s);
   return {
+    schedule: allClasses.map((k) => ({ t: k.title, c: k.code, d: k.day, s: k.start_min, e: k.end_min, sd: k.start_date, ed: k.end_date, r: [k.building, k.room].filter(Boolean).join(' ') })),
+    term: starts.length && ends.length ? { start: starts[0], end: ends[ends.length - 1] } : null,
+    tz: Math.round(offsetSec(env) / 60),
+    pay: { paid: pw.paid, amount: pw.amount, state: pw.state, daysToOpen: pw.daysToOpen, daysToClose: pw.daysToClose },
     mood, headline, sub, streak: racha, pending: pending.length, today: dueToday.length, overdue: overdue.length,
-    tasks: list.map((t) => ({ title: t.title, when: t.due_at! < now ? 'Atrasada' : cuandoTexto(env, t.due_at!), course: t.course_short || t.course_name || '', urgent: t.due_at! < now + 86400, late: t.due_at! < now })),
+    tasks: list.map((t) => ({ title: t.title, when: t.due_at! < now ? 'Atrasada' : cuandoTexto(env, t.due_at!), course: t.course_short || t.course_name || '', urgent: t.due_at! < now + 86400, late: t.due_at! < now, dueAt: t.due_at })),
     week,
     name,
     dayTitle: (() => { const f = fechaLarga(localDate(env)); return f.charAt(0).toUpperCase() + f.slice(1); })(),

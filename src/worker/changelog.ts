@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 54,
+    date: '2026-10-25',
+    title: '🧭 Widget nuevo: la brújula con tus clases',
+    items: [
+      'Widget «Hoy» (4×2): un anillo de brújula con la cuenta regresiva a tu próxima clase (o los minutos que le quedan a la que está en curso), tus clases de hoy, tus entregas y el estado de tu cuota.',
+      'Widget «anillo» (2×2) y widget «siguiente clase» (4×1): elige el tamaño que te guste.',
+      'Se redibuja solo con el reloj del teléfono (cada 10 min cerca de una clase), sin gastar datos.',
+      'Para instalarlo: desinstala el widget anterior, abre /rumbo-widget.apk, instálalo y conéctalo otra vez en Ajustes → Widget. Las próximas actualizaciones serán automáticas.',
+    ],
+  },
+  {
     version: 53,
     date: '2026-10-25',
     title: '✨ Hoy en vivo, Tu trimestre y el widget con tus clases',

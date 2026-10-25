@@ -1,5 +1,6 @@
 package app.rumbo.widget;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -7,19 +8,14 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.graphics.Typeface;
+import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.RelativeSizeSpan;
-import android.text.style.StyleSpan;
+import android.os.Bundle;
+import android.util.DisplayMetrics;
 import android.view.View;
 import android.widget.RemoteViews;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -27,32 +23,36 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Widget de Rumbo: pide /api/widget/<clave> a tu Rumbo y dibuja la mascota, la frase, la racha y lo próximo.
- * Guarda la última respuesta para mostrarla al instante aunque no haya internet.
+ * Widgets de Rumbo (la brújula): «Hoy» (4×2), el anillo (2×2) y la barra de la siguiente clase (4×1).
+ * Piden /api/widget/<clave> a tu Rumbo, guardan la última respuesta y calculan solos «en 25 min» con el reloj del teléfono.
  */
 public class RumboWidget extends AppWidgetProvider {
     static final String PREFS = "rumbo";
-    static final String ACTION_REFRESH = "app.rumbo.widget.REFRESH";
+    static final String ACTION_REFRESH = "app.rumbo.widget.REFRESH";   // con internet (toque en la esquina)
+    static final String ACTION_LOCAL = "app.rumbo.widget.LOCAL";       // solo redibuja con el reloj (alarma)
 
     @Override
     public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
         RefreshJob.schedule(ctx);
-        render(ctx, mgr, ids, prefs(ctx).getString("last", null));
+        redraw(ctx);
         refreshAsync(ctx, goAsync());
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(Context ctx, AppWidgetManager mgr, int id, Bundle options) {
+        redraw(ctx);
     }
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
         super.onReceive(ctx, intent);
-        if (ACTION_REFRESH.equals(intent.getAction())) refreshAsync(ctx, goAsync());
+        String a = intent.getAction();
+        if (ACTION_REFRESH.equals(a)) refreshAsync(ctx, goAsync());
+        else if (ACTION_LOCAL.equals(a)) redraw(ctx.getApplicationContext());
     }
 
     static SharedPreferences prefs(Context ctx) {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-    }
-
-    static int[] allIds(Context ctx) {
-        return AppWidgetManager.getInstance(ctx).getAppWidgetIds(new ComponentName(ctx, RumboWidget.class));
     }
 
     /** Descarga los datos (hilo actual) y redibuja todos los widgets. */
@@ -62,58 +62,7 @@ public class RumboWidget extends AppWidgetProvider {
         redraw(app);
     }
 
-    static void redraw(Context app) {
-        AppWidgetManager mgr = AppWidgetManager.getInstance(app);
-        String last = prefs(app).getString("last", null);
-        render(app, mgr, allIds(app), last);
-        renderSmall(app, mgr, mgr.getAppWidgetIds(new ComponentName(app, RumboWidgetSmall.class)), last);
-    }
-
-    /** Widget pequeño (2×2): mascota animada, racha y lo próximo que vence. */
-    static void renderSmall(Context ctx, AppWidgetManager mgr, int[] ids, String json) {
-        if (ids == null || ids.length == 0) return;
-        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_small);
-        String base = prefs(ctx).getString("url", null);
-        Intent open = base != null ? new Intent(Intent.ACTION_VIEW, Uri.parse(base + "/#inicio")) : new Intent(ctx, MainActivity.class);
-        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        v.setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(ctx, 11, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        boolean upd = Updater.pending(ctx);
-        v.setViewVisibility(R.id.update, upd ? View.VISIBLE : View.GONE);
-        if (upd) {
-            Intent u = new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            v.setOnClickPendingIntent(R.id.update, PendingIntent.getActivity(ctx, 13, u, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        }
-        String mood = "tranqui";
-        if (json == null) {
-            v.setTextViewText(R.id.headline, base == null ? "Conecta tu Rumbo" : "Cargando…");
-            v.setTextViewText(R.id.sub, "");
-            v.setViewVisibility(R.id.streak, View.GONE);
-        } else {
-            try {
-                JSONObject d = new JSONObject(json);
-                mood = d.optString("mood", "tranqui");
-                v.setViewVisibility(R.id.streak, View.VISIBLE);
-                v.setTextViewText(R.id.streak, "🔥 " + d.optInt("streak"));
-                JSONArray tasks = d.optJSONArray("tasks");
-                if (tasks != null && tasks.length() > 0) {
-                    JSONObject t = tasks.getJSONObject(0);
-                    v.setTextViewText(R.id.headline, t.optString("title"));
-                    v.setTextViewText(R.id.sub, t.optString("when"));
-                } else {
-                    v.setTextViewText(R.id.headline, d.optString("headline"));
-                    v.setTextViewText(R.id.sub, d.optString("updated"));
-                }
-            } catch (Exception e) {
-                v.setTextViewText(R.id.headline, "Rumbo");
-            }
-        }
-        if (!mood.matches("feliz|tranqui|atento|alerta")) mood = "tranqui";
-        v.setInt(R.id.root, "setBackgroundResource", drawable(ctx, "wbg_" + mood));
-        for (int i = 0; i < FRAME_IDS.length; i++) v.setImageViewResource(FRAME_IDS[i], drawable(ctx, "mascot_" + mood + FRAMES[i]));
-        mgr.updateAppWidget(ids, v);
-    }
-
-    /** Descarga los datos en segundo plano, revisa si hay versión nueva y redibuja todos los widgets. */
+    /** Descarga en segundo plano, revisa si hay versión nueva de la app y redibuja. */
     static void refreshAsync(Context ctx, PendingResult pending) {
         final Context app = ctx.getApplicationContext();
         RefreshJob.schedule(app);
@@ -151,116 +100,91 @@ public class RumboWidget extends AppWidgetProvider {
         }
     }
 
-    // Cuadros de la animación de la mascota (mismo orden que f1…f10 del layout).
-    static final String[] FRAMES = {"", "_up", "", "", "_blink", "", "_wave", "_wave2", "_wave", ""};
-    static final int[] FRAME_IDS = {R.id.f1, R.id.f2, R.id.f3, R.id.f4, R.id.f5, R.id.f6, R.id.f7, R.id.f8, R.id.f9, R.id.f10};
+    // ------------------------------------------------------------------ dibujo
 
-    static int drawable(Context ctx, String name) {
-        int id = ctx.getResources().getIdentifier(name, "drawable", ctx.getPackageName());
-        return id != 0 ? id : R.drawable.mascot_tranqui;
+    static void redraw(Context app) {
+        try {
+            AppWidgetManager mgr = AppWidgetManager.getInstance(app);
+            Model m = Model.parse(prefs(app).getString("last", null));
+            draw(app, mgr, m, RumboWidget.class, R.layout.widget, 0, 320, 140);
+            draw(app, mgr, m, RumboWidgetSmall.class, R.layout.widget_small, 1, 110, 110);
+            draw(app, mgr, m, RumboWidgetBar.class, R.layout.widget_bar, 2, 320, 62);
+            scheduleNext(app, m);
+        } catch (Throwable ignored) { /* un widget nunca debe tumbar la app */ }
     }
 
-    static CharSequence row(String title, String when, boolean urgent) {
-        SpannableStringBuilder sb = new SpannableStringBuilder(title);
-        sb.setSpan(new StyleSpan(Typeface.BOLD), 0, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        if (when != null && !when.isEmpty()) {
-            int start = sb.length();
-            sb.append("  ·  ").append(when);
-            sb.setSpan(new ForegroundColorSpan(urgent ? Color.parseColor("#FFE3E3") : Color.parseColor("#D9FFFFFF")), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            if (urgent) sb.setSpan(new StyleSpan(Typeface.BOLD), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
-        return sb;
+    /** Tamaño real del widget en píxeles (con un tope para que Android no rechace la imagen). */
+    static int[] sizePx(Context ctx, AppWidgetManager mgr, int id, int defW, int defH) {
+        Bundle o = mgr.getAppWidgetOptions(id);
+        boolean land = ctx.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        int wDp = o != null ? o.getInt(land ? AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH : AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, defW) : defW;
+        int hDp = o != null ? o.getInt(land ? AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT : AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, defH) : defH;
+        if (wDp < 40) wDp = defW;
+        if (hDp < 40) hDp = defH;
+        DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
+        float w = wDp * dm.density, h = hDp * dm.density;
+        double limit = dm.widthPixels * (double) dm.heightPixels * 1.2;
+        if (w * h > limit) { double k = Math.sqrt(limit / (w * h)); w *= k; h *= k; }
+        return new int[]{Math.max(1, (int) w), Math.max(1, (int) h)};
     }
 
-    static CharSequence stat(String big, String label) {
-        SpannableStringBuilder sb = new SpannableStringBuilder(big);
-        sb.setSpan(new StyleSpan(Typeface.BOLD), 0, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        sb.setSpan(new RelativeSizeSpan(1.7f), 0, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        int start = sb.length();
-        sb.append("\n").append(label);
-        sb.setSpan(new ForegroundColorSpan(Color.parseColor("#D9FFFFFF")), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return sb;
-    }
-
-    static void render(Context ctx, AppWidgetManager mgr, int[] ids, String json) {
+    static void draw(Context ctx, AppWidgetManager mgr, Model m, Class<?> provider, int layout, int kind, int defW, int defH) {
+        int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, provider));
         if (ids == null || ids.length == 0) return;
-        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget);
         SharedPreferences p = prefs(ctx);
         String base = p.getString("url", null);
-
-        // Tocar el widget abre Rumbo; tocar ↻ lo actualiza.
-        Intent open = base != null ? new Intent(Intent.ACTION_VIEW, Uri.parse(base + "/#inicio")) : new Intent(ctx, MainActivity.class);
-        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        v.setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(ctx, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        Intent refresh = new Intent(ctx, RumboWidget.class).setAction(ACTION_REFRESH);
-        v.setOnClickPendingIntent(R.id.refresh, PendingIntent.getBroadcast(ctx, 2, refresh, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-
-        // Aviso de versión nueva: un toque y se actualiza.
         boolean upd = Updater.pending(ctx);
-        v.setViewVisibility(R.id.update, upd ? View.VISIBLE : View.GONE);
-        if (upd) {
-            Intent u = new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            v.setOnClickPendingIntent(R.id.update, PendingIntent.getActivity(ctx, 3, u, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        Art art = new Art(ctx);
+        Plan plan = m != null ? new Plan(m, System.currentTimeMillis()) : null;
+        Drawable mascot = null;
+        if (m != null) {
+            String mood = m.mood.matches("feliz|tranqui|atento|alerta") ? m.mood : "tranqui";
+            int res = ctx.getResources().getIdentifier("mascot_" + mood, "drawable", ctx.getPackageName());
+            if (res != 0) mascot = ctx.getDrawable(res);
         }
-
-        String mood = "tranqui";
-        if (json == null) {
-            v.setTextViewText(R.id.headline, base == null ? "Conecta tu Rumbo" : "Cargando…");
-            v.setTextViewText(R.id.sub, base == null ? "Rumbo → Ajustes → Widget → Conectar" : "Buscando tus tareas");
-            v.setViewVisibility(R.id.streak, View.GONE);
-        } else {
+        for (int id : ids) {
+            RemoteViews v = new RemoteViews(ctx.getPackageName(), layout);
+            int[] sz = sizePx(ctx, mgr, id, defW, defH);
+            Bitmap bmp;
             try {
-                JSONObject d = new JSONObject(json);
-                mood = d.optString("mood", "tranqui");
-                v.setTextViewText(R.id.headline, d.optString("headline"));
-                v.setTextViewText(R.id.sub, d.optString("sub"));
-                int streak = d.optInt("streak"), pending = d.optInt("pending"), done = d.optInt("doneWeek");
-                v.setViewVisibility(R.id.streak, View.VISIBLE);
-                v.setTextViewText(R.id.streak, "🔥 " + streak);
-                v.setTextViewText(R.id.kicker1, "feliz".equals(mood) ? "¡VAS VOLANDO!" : "alerta".equals(mood) ? "¡OJO!" : "atento".equals(mood) ? "HOY TOCA" : "TU DÍA EN RUMBO");
-
-                int[] tRows = {R.id.t1, R.id.t2, R.id.t3};
-                JSONArray tasks = d.optJSONArray("tasks");
-                int nt = tasks == null ? 0 : Math.min(3, tasks.length());
-                for (int i = 0; i < 3; i++) {
-                    if (i < nt) {
-                        JSONObject t = tasks.getJSONObject(i);
-                        v.setTextViewText(tRows[i], row(t.optString("title"), t.optString("when"), t.optBoolean("urgent")));
-                        v.setViewVisibility(tRows[i], View.VISIBLE);
-                    } else v.setViewVisibility(tRows[i], i == 0 ? View.VISIBLE : View.GONE);
-                }
-                if (nt == 0) v.setTextViewText(R.id.t1, "Nada pendiente con fecha 🎉");
-
-                int[] rRows = {R.id.r1, R.id.r2, R.id.r3};
-                JSONArray rem = d.optJSONArray("reminders");
-                int nr = rem == null ? 0 : Math.min(3, rem.length());
-                for (int i = 0; i < 3; i++) {
-                    if (i < nr) {
-                        JSONObject r = rem.getJSONObject(i);
-                        v.setTextViewText(rRows[i], row(r.optString("text"), r.optString("when"), false));
-                        v.setViewVisibility(rRows[i], View.VISIBLE);
-                    } else v.setViewVisibility(rRows[i], i == 0 ? View.VISIBLE : View.GONE);
-                }
-                if (nr == 0) v.setTextViewText(R.id.r1, "Sin recordatorios. Dile al asistente «recuérdame…» ✨");
-
-                JSONArray phrases = d.optJSONArray("phrases");
-                if (phrases != null && phrases.length() > 0) {
-                    int i = (int) ((System.currentTimeMillis() / 1800000L) % phrases.length()); // cambia cada 30 min
-                    v.setTextViewText(R.id.phrase, "“" + phrases.optString(i) + "”");
-                }
-
-                v.setTextViewText(R.id.s1, stat(String.valueOf(streak), streak == 1 ? "día seguido" : "días seguidos"));
-                v.setTextViewText(R.id.s2, stat(String.valueOf(done), "hechas (7 días)"));
-                v.setTextViewText(R.id.s3, stat(String.valueOf(pending), pending == 1 ? "pendiente" : "pendientes"));
-                v.setTextViewText(R.id.updated, d.optString("updated"));
-            } catch (Exception e) {
-                v.setTextViewText(R.id.headline, "Rumbo");
-                v.setTextViewText(R.id.sub, "Toca ↻ para actualizar");
+                if (m == null) bmp = art.message(sz[0], sz[1], base == null ? "Conecta tu Rumbo" : "Cargando…", base == null ? "Rumbo → Ajustes → Widget" : "Buscando tus clases");
+                else if (kind == 0) bmp = art.large(m, plan, sz[0], sz[1], mascot);
+                else if (kind == 1) bmp = art.small(m, plan, sz[0], sz[1], mascot);
+                else bmp = art.bar(m, plan, sz[0], sz[1]);
+            } catch (Throwable e) {
+                // Si algo del dibujo falla, nunca queda un widget roto: se muestra un mensaje sencillo
+                bmp = art.message(sz[0], sz[1], "Rumbo", "Toca para abrir");
             }
+            v.setImageViewBitmap(R.id.art, bmp);
+            if (m != null) v.setContentDescription(R.id.art, Art.describe(m, plan));
+
+            String page = kind == 2 || (plan != null && plan.live == null && plan.next != null && plan.minutesTo(plan.next) < 12 * 60) ? "#horario" : "#inicio";
+            Intent open = base != null ? new Intent(Intent.ACTION_VIEW, Uri.parse(base + "/" + page)) : new Intent(ctx, MainActivity.class);
+            open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            v.setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(ctx, 10 + kind, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            Intent refresh = new Intent(ctx, RumboWidget.class).setAction(ACTION_REFRESH);
+            v.setOnClickPendingIntent(R.id.refresh, PendingIntent.getBroadcast(ctx, 20 + kind, refresh, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            v.setViewVisibility(R.id.update, upd ? View.VISIBLE : View.GONE);
+            if (upd) {
+                Intent u = new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                v.setOnClickPendingIntent(R.id.update, PendingIntent.getActivity(ctx, 30 + kind, u, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            }
+            mgr.updateAppWidget(id, v);
         }
-        if (!mood.matches("feliz|tranqui|atento|alerta")) mood = "tranqui";
-        v.setInt(R.id.root, "setBackgroundResource", drawable(ctx, "wbg_" + mood));
-        for (int i = 0; i < FRAME_IDS.length; i++) v.setImageViewResource(FRAME_IDS[i], drawable(ctx, "mascot_" + mood + FRAMES[i]));
-        mgr.updateAppWidget(ids, v);
+    }
+
+    /** Próximo redibujado con el reloj: cada 10 min cerca de una clase, cada 30 el resto del tiempo. */
+    static void scheduleNext(Context ctx, Model m) {
+        AlarmManager am = ctx.getSystemService(AlarmManager.class);
+        if (am == null) return;
+        long delayMin = 30;
+        if (m != null) {
+            Plan p = new Plan(m, System.currentTimeMillis());
+            if (p.live != null) delayMin = Math.min(10, Math.max(1, p.live.endMin - p.minOfDay));
+            else if (p.next != null && p.minutesTo(p.next) <= 90) delayMin = Math.min(10, Math.max(1, p.minutesTo(p.next)));
+        }
+        Intent i = new Intent(ctx, RumboWidget.class).setAction(ACTION_LOCAL);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, 99, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        am.setAndAllowWhileIdle(AlarmManager.RTC, System.currentTimeMillis() + delayMin * 60000L, pi);
     }
 }

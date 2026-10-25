@@ -294,7 +294,7 @@ export function WidgetCard() {
     <>
       <div className="toggle">
         <span className="set-ic orange"><Icon name="spark" size={18} /></span>
-        <div className="t"><b>Widget en tu pantalla de inicio</b><span>Como Duolingo: la mascota de Rumbo te muestra tu racha y lo próximo que vence.</span></div>
+        <div className="t"><b>Widget en tu pantalla de inicio</b><span>La brújula de Rumbo en tu pantalla: tus clases de hoy, cuánto falta para la siguiente y lo que vence. Tres tamaños.</span></div>
         <button className="btn soft sm" onClick={open}>Poner</button>
       </div>
       {info && w && (

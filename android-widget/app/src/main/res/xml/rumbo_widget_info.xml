@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Se actualiza solo cada 30 minutos (lo mínimo que permite Android) y al tocar ↻ -->
+<!-- Hoy (4×2): tus clases de hoy, lo que viene y el anillo de la brújula. Se redibuja solo con el reloj. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_desc"
     android:initialLayout="@layout/widget"
@@ -9,7 +9,7 @@
     android:minResizeHeight="80dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
-    android:previewLayout="@layout/widget"
+    android:previewLayout="@layout/widget_preview"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

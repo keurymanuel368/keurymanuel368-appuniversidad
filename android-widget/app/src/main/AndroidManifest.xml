@@ -35,7 +35,7 @@
         <receiver
             android:name=".RumboWidget"
             android:exported="true"
-            android:label="Rumbo">
+            android:label="Rumbo · hoy">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -46,13 +46,25 @@
         <receiver
             android:name=".RumboWidgetSmall"
             android:exported="true"
-            android:label="Rumbo (pequeño)">
+            android:label="Rumbo · anillo">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/rumbo_widget_small_info" />
+        </receiver>
+
+        <receiver
+            android:name=".RumboWidgetBar"
+            android:exported="true"
+            android:label="Rumbo · siguiente clase">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/rumbo_widget_bar_info" />
         </receiver>
 
         <service
