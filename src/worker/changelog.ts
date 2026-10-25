@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 56,
+    date: '2026-10-25',
+    title: '💳 Pagos más ordenado y accesos más pulidos',
+    items: [
+      'Pagos: el historial ya cabe completo en el teléfono y «Configuración y avisos» ocupa menos espacio.',
+      'Accesos rápidos y tarjetas de asignatura con más profundidad y respuesta al toque.',
+    ],
+  },
+  {
     version: 55,
     date: '2026-10-25',
     title: '✨ Rumbo Elevate: un diseño con más profundidad',
