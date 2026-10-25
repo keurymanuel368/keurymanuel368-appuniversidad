@@ -11,6 +11,7 @@ import { isAdmin, setMe, type Me } from './me';
 const Inicio = lazy(() => import('./pages/Inicio').then((m) => ({ default: m.Inicio })));
 const Tareas = lazy(() => import('./pages/Tareas').then((m) => ({ default: m.Tareas })));
 const Asignaturas = lazy(() => import('./pages/Asignaturas').then((m) => ({ default: m.Asignaturas })));
+const Horario = lazy(() => import('./pages/Horario').then((m) => ({ default: m.Horario })));
 const Pagos = lazy(() => import('./pages/Pagos').then((m) => ({ default: m.Pagos })));
 const Pensum = lazy(() => import('./pages/Pensum').then((m) => ({ default: m.Pensum })));
 const Asistente = lazy(() => import('./pages/Asistente').then((m) => ({ default: m.Asistente })));
@@ -25,6 +26,7 @@ const PAGES: { id: string; label: string; icon: string; hint: string; admin?: bo
   { id: 'inicio', label: 'Inicio', icon: 'home', hint: 'Tu día de un vistazo' },
   { id: 'tareas', label: 'Tareas', icon: 'tasks', hint: 'Entregas y pendientes' },
   { id: 'asignaturas', label: 'Notas', icon: 'book', hint: 'Asignaturas y calificaciones' },
+  { id: 'horario', label: 'Horario', icon: 'calendar', hint: 'Clases, exámenes y qué cursar' },
   { id: 'pensum', label: 'Pensum', icon: 'cap', hint: 'Tu avance en la carrera' },
   { id: 'pagos', label: 'Pagos', icon: 'wallet', hint: 'Cuotas y ventana de pago' },
   { id: 'avisos', label: 'Avisos', icon: 'bell', hint: 'Novedades, pagos y eventos' },
@@ -40,7 +42,7 @@ const TABS_RIGHT = ['asignaturas'];
 const IN_TABS = [...TABS_LEFT, ...TABS_RIGHT, 'asistente']; // el asistente va en el botón central
 
 function currentPage() {
-  const h = location.hash.replace('#', '').split('/')[0];
+  const h = location.hash.replace('#', '').split('/')[0].replace('importar', 'horario');
   return PAGES.some((p) => p.id === h) ? h : 'inicio';
 }
 /** Código de invitación si se abrió un enlace #unirme/CÓDIGO. */
@@ -112,7 +114,7 @@ export function App() {
     api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch((e) => setAuth(e instanceof ApiError && e.status === 401 ? 'out' : 'in'));
     const onHash = () => {
       // «#tareas/12» estando ya en Tareas: se vuelve a montar la pantalla para que abra ese elemento.
-      const ORDER = ['inicio', 'tareas', 'asistente', 'asignaturas', 'avisos', 'pensum', 'pagos', 'ajustes', 'ayuda', 'conectar', 'companeros'];
+      const ORDER = ['inicio', 'tareas', 'horario', 'asistente', 'asignaturas', 'avisos', 'pensum', 'pagos', 'ajustes', 'ayuda', 'conectar', 'companeros'];
       const from = ORDER.indexOf(pageRef.current), to = ORDER.indexOf(currentPage());
       document.documentElement.dataset.nav = to < from ? 'back' : 'fwd';
       const apply = () => { setPage(currentPage()); setMore(false); if (location.hash.includes('/')) setVersion((v) => v + 1); window.scrollTo({ top: 0 }); };
@@ -165,7 +167,7 @@ export function App() {
   useEffect(() => {
     if (auth !== 'in') return;
     const warm = () => {
-      for (const load of [() => import('./pages/Tareas'), () => import('./pages/Asignaturas'), () => import('./pages/Asistente'), () => import('./pages/Avisos'), () => import('./pages/Pagos'), () => import('./pages/Pensum'), () => import('./pages/Ajustes'), () => import('./pages/Inicio')]) load().catch(() => {});
+      for (const load of [() => import('./pages/Tareas'), () => import('./pages/Asignaturas'), () => import('./pages/Asistente'), () => import('./pages/Avisos'), () => import('./pages/Pagos'), () => import('./pages/Horario'), () => import('./pages/Pensum'), () => import('./pages/Ajustes'), () => import('./pages/Inicio')]) load().catch(() => {});
       for (const path of ['/tasks?status=pending', '/courses', '/courses/history', '/announcements', '/pensum', '/payments', '/mascot', '/messages?channel=app']) api(path).catch(() => {});
     };
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
@@ -229,6 +231,7 @@ export function App() {
           {page === 'tareas' && <Tareas />}
           {page === 'asignaturas' && <Asignaturas />}
           {page === 'pensum' && <Pensum />}
+          {page === 'horario' && <Horario />}
           {page === 'pagos' && <Pagos />}
           {page === 'avisos' && <Avisos />}
           {page === 'asistente' && <Asistente />}

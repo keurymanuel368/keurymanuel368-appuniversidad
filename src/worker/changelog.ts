@@ -10,6 +10,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 44,
+    date: '2026-10-25',
+    title: '🗓️ Horario, exámenes del DEA y un look nuevo',
+    items: [
+      'Nueva pantalla Horario: tu semana en colores, la clase de ahora o la siguiente con cuenta regresiva, y tus clases del trimestre.',
+      'Avisos antes de cada clase (15, 30, 45 o 60 min) y antes de los exámenes finales del DEA.',
+      'Pestaña Próximo: te recomiendo qué materias tomar el siguiente trimestre según tu pensum y prerrequisitos.',
+      'Importa Mi UAPA y el DEA con un marcador en tu navegador: Rumbo nunca ve tu clave.',
+      'Diseño renovado: fondo con luz, tarjetas de cristal, portada con malla de color y barra inferior flotante.',
+    ],
+  },
+  {
     version: 43,
     date: '2026-10-16',
     title: '🔌 Conectar el EVA con el login oficial',

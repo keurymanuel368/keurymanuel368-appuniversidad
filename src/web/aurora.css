@@ -1,0 +1,95 @@
+/* ==========================================================================
+   Rumbo Aurora — capa visual v44: fondo con malla de color, cristal, profundidad y tipografía con más carácter.
+   Va después de styles.css y solo retoca (no cambia estructura), así que cualquier pantalla la hereda.
+   ========================================================================== */
+:root {
+  --aurora-a: 96, 181, 255;
+  --aurora-b: 124, 92, 255;
+  --aurora-c: 31, 95, 224;
+  --glass: rgba(255, 255, 255, .72);
+  --glass-line: rgba(255, 255, 255, .85);
+  --sh-card: 0 1px 1px rgba(14, 38, 92, .04), 0 8px 24px -10px rgba(14, 38, 92, .14), 0 22px 40px -28px rgba(31, 95, 224, .28);
+  --noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+:root[data-mode="dark"] {
+  --aurora-a: 59, 130, 246;
+  --aurora-b: 109, 74, 224;
+  --aurora-c: 31, 95, 224;
+  --glass: rgba(22, 32, 56, .66);
+  --glass-line: rgba(255, 255, 255, .07);
+  --sh-card: 0 1px 1px rgba(0, 0, 0, .3), 0 10px 28px -12px rgba(0, 0, 0, .6);
+}
+
+/* Fondo: tres luces suaves que se quedan quietas detrás del contenido */
+body {
+  background:
+    radial-gradient(620px 380px at 105% -6%, rgba(var(--aurora-a), .30), transparent 62%),
+    radial-gradient(520px 360px at -12% 14%, rgba(var(--aurora-b), .14), transparent 62%),
+    radial-gradient(700px 420px at 50% 112%, rgba(var(--aurora-c), .10), transparent 65%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* Tarjetas: cristal sutil, borde de luz arriba y sombra con tinte azul */
+.card, .stat, .quick, .hz-card, .hz-exam, .hz-next, .hz-import > div, .hz-import details, .hz-week, .hz-glance {
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--sh-card), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+:root[data-mode="dark"] .card, :root[data-mode="dark"] .stat, :root[data-mode="dark"] .quick,
+:root[data-mode="dark"] .hz-card, :root[data-mode="dark"] .hz-exam, :root[data-mode="dark"] .hz-next,
+:root[data-mode="dark"] .hz-import > div, :root[data-mode="dark"] .hz-import details, :root[data-mode="dark"] .hz-week, :root[data-mode="dark"] .hz-glance {
+  box-shadow: var(--sh-card), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.card { border-radius: 26px; }
+.stat { border-radius: 24px; }
+
+/* Números grandes: más presencia */
+.stat .value { font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -.04em; }
+.stat .label { font-weight: 700; }
+
+/* Portada de cada pantalla (Inicio): malla de color + grano fino */
+.hero, .pay-hero, .career-hero {
+  background:
+    radial-gradient(90% 120% at 100% 0%, rgba(124, 92, 255, .55), transparent 55%),
+    radial-gradient(80% 100% at 0% 100%, rgba(56, 189, 248, .45), transparent 60%),
+    linear-gradient(150deg, #0B1E55 0%, #173A97 55%, #2457D6 100%);
+  box-shadow: 0 24px 50px -22px rgba(23, 58, 151, .65), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.hero::before, .pay-hero::before, .career-hero::before, .hz-hero::before {
+  content: ""; position: absolute; inset: 0; background-image: var(--noise); opacity: .09; mix-blend-mode: overlay; pointer-events: none; border-radius: inherit;
+}
+
+/* Barra inferior flotante de cristal */
+.tabbar {
+  background: var(--glass) !important;
+  backdrop-filter: blur(22px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.6) !important;
+  border: 1px solid var(--glass-line) !important;
+  box-shadow: 0 18px 40px -14px rgba(14, 38, 92, .35), inset 0 1px 0 rgba(255, 255, 255, .55) !important;
+}
+
+/* Títulos de pantalla con más carácter */
+.topbar h1 { font-size: 36px; font-weight: 700; letter-spacing: -.035em; background: linear-gradient(180deg, var(--ink) 30%, var(--ink-2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.topbar .eyebrow, .eyebrow { letter-spacing: .08em; font-weight: 700; }
+.section-head h3, .card-head h3 { letter-spacing: -.02em; }
+
+/* Botón principal con brillo */
+.btn.primary, .btn.grad { background: linear-gradient(180deg, #3B82F6 0%, #1F5FE0 100%); box-shadow: 0 10px 22px -10px rgba(31, 95, 224, .75), inset 0 1px 0 rgba(255, 255, 255, .35); }
+
+/* Barras de progreso: relleno con degradado y punta redondeada */
+.progress > i, .progress > span { background: linear-gradient(90deg, #2563EB, #60B5FF); border-radius: 99px; }
+
+/* Tarjeta de Inicio: próxima clase */
+.hz-glance { --c: hsl(var(--h) 78% 55%); display: grid; grid-template-columns: 6px 1fr auto; gap: 14px; align-items: center; width: 100%; margin: 0 0 14px; padding: 14px 16px 14px 14px; border-radius: 22px; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: transform .2s var(--ease); }
+.hz-glance:active { transform: scale(.985); }
+.hz-glance-bar { align-self: stretch; border-radius: 99px; background: linear-gradient(180deg, hsl(var(--h) 85% 62%), hsl(var(--h) 75% 46%)); }
+.hz-glance-body { display: grid; gap: 2px; min-width: 0; }
+.hz-glance-body small { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.hz-glance-body b { font-family: var(--display); font-size: 16px; letter-spacing: -.02em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hz-glance-body em { font-style: normal; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hz-glance-t { display: grid; justify-items: end; font-size: 11px; color: var(--muted); line-height: 1.2; }
+.hz-glance-t b { font-family: var(--display); font-size: 17px; color: var(--blue-dark); white-space: nowrap; }
+:root[data-mode="dark"] .hz-glance-t b { color: var(--blue-3); }

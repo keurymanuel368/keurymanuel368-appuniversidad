@@ -30,6 +30,7 @@ import { cuandoTexto, localDate, localToUnix, nowSec } from './time';
 import { setIgnored } from './ignore';
 import { tokenFromValue, webLoginToken } from './evalogin';
 import { registerExtras } from './extras';
+import { registerHorario } from './horario';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -475,6 +476,7 @@ app.use('/api/*', async (c, next) => {
 
 // Foros, entregas, historial del promedio, comentarios, récord y comprobantes (src/worker/extras.ts)
 registerExtras(app);
+registerHorario(app);
 
 // ---------- Comentarios y problemas (llegan al administrador) ----------
 app.post('/api/feedback', async (c) => {
@@ -1095,7 +1097,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
+const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'notify_clases', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);

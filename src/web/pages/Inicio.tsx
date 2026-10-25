@@ -4,6 +4,7 @@ import { CountUp, Empty, PageHead, PullIndicator, Ring, Skeleton, TaskModal, Tas
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
+import { ClassGlance } from './Horario';
 
 function greeting() {
   const h = Number(new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', hour: 'numeric', hour12: false }).format(new Date()));
@@ -79,6 +80,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
 
       <SetupBanner setup={d.setup} go={go} />
       {d.freshGrade && <FreshGrade g={d.freshGrade} onDone={reload} />}
+      <ClassGlance go={go} />
       {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
 
       <nav className="quick-row hide-mobile" aria-label="Accesos rápidos">

@@ -138,7 +138,7 @@ function plain(text: string): string {
 }
 
 /** Tipos de aviso que puedes encender o apagar en Ajustes. */
-export type NotifyType = 'tareas' | 'notas' | 'pagos' | 'avisos' | 'resumen' | 'novedades' | 'plan';
+export type NotifyType = 'tareas' | 'notas' | 'pagos' | 'avisos' | 'resumen' | 'novedades' | 'plan' | 'clases';
 /** tg: versión con formato y botones para Telegram (si no viene, se convierte el texto normal). */
 export type SendOptions = { title?: string; tag?: string; url?: string; pushBody?: string; type?: NotifyType; tg?: { html: string; kb?: TgKb } };
 

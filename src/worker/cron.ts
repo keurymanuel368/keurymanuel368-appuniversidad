@@ -7,6 +7,7 @@ import { notifyLive } from './live';
 import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
 import { flushWhatsApp, sendToMe } from './notify';
+import { classAlerts } from './horario';
 import { weeklyPlan } from './plan';
 import { announceRelease } from './changelog';
 import { backupDue, makeBackup } from './backup';
@@ -214,6 +215,9 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
     if (!r.ok) await unmarkSent(env, `plan:${today}`);
     log.push(`Plan semanal: ${r.ok ? 'enviado' : r.error}`);
   }
+
+  // Clases del horario y exámenes del DEA
+  if (s.notify_clases !== '0') { try { log.push(...await classAlerts(env)); } catch (e) { log.push('Clases: ' + (e as Error).message); } }
 
   // Historial del promedio (para la gráfica de Notas)
   try { await recordAverage(env); } catch (e) { log.push('Historial del promedio: ' + (e as Error).message); }

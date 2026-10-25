@@ -114,6 +114,7 @@ const TYPES: { key: string; icon: string; tone: string; label: string; hint: str
   { key: 'pagos', icon: 'wallet', tone: 'orange', label: 'Pagos', hint: 'Ventana de pago y correos de cobro' },
   { key: 'avisos', icon: 'bell', tone: 'violet', label: 'Avisos y eventos', hint: 'Foro de avisos, correos y eventos' },
   { key: 'resumen', icon: 'calendar', tone: 'blue', label: 'Resumen diario', hint: 'Tu día a la hora que elijas' },
+  { key: 'clases', icon: 'calendar', tone: 'blue', label: 'Clases y exámenes', hint: 'Antes de cada clase y de los exámenes del DEA' },
   { key: 'plan', icon: 'tasks', tone: 'green', label: 'Plan de la semana', hint: 'Los domingos: lo que vence y en qué orden hacerlo' },
   { key: 'novedades', icon: 'spark', tone: 'violet', label: 'Novedades de Rumbo', hint: 'Cuando la app trae algo nuevo' },
 ];
