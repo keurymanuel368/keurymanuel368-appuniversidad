@@ -46,7 +46,7 @@ def app_icon(size, rounded, scale):
     bg = Image.composite(Image.new('RGBA', (S, S), (255, 255, 255, 255)), bg, glow.point(lambda v: v * 0.5))
     d = ImageDraw.Draw(bg)
     r = S * 0.30 * scale
-    compass(d, S / 2, S / 2, r, (255, 255, 255, 255), (255, 255, 255, 255), (178, 208, 255, 255), max(2, round(r * 0.16)))
+    compass(d, S / 2, S / 2, r, (255, 255, 255, 255), (255, 138, 31, 255), (255, 255, 255, 255), max(2, round(r * 0.16)))
     if rounded:
         mask = Image.new('L', (S, S), 0)
         ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=S * 0.225, fill=255)

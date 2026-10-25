@@ -19,7 +19,7 @@ h1, h2, h3, .num, .amount, .value, .stat .value, .grade, .pn-kpis .num, .pn-tile
 .num { letter-spacing: -.03em; }
 
 /* Títulos de pantalla: Sora grande, con un rombo naranja en la etiqueta */
-body .topbar h1 { font-family: var(--display); font-weight: 800; letter-spacing: -.045em; font-size: 38px; line-height: 1.04; background: none; -webkit-text-fill-color: currentColor; color: var(--ink); }
+body .topbar h1 { font-family: var(--display); font-weight: 800; letter-spacing: -.045em; font-size: clamp(30px, 9.2vw, 38px); line-height: 1.04; background: none; -webkit-text-fill-color: currentColor; color: var(--ink); }
 body .topbar .eyebrow, body .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .07em; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
 body .topbar .eyebrow::before, body .eyebrow::before { content: ""; width: 7px; height: 7px; background: var(--needle); transform: rotate(45deg); border-radius: 2px; flex: none; }
 
@@ -33,7 +33,7 @@ body .pn-card::after, body .hz-hero::after, body .hero::after, body .career-hero
   content: ""; position: absolute; right: -78px; bottom: -96px; width: 200px; height: 200px; z-index: 0; pointer-events: none;
   background: var(--compass) center / contain no-repeat; background-image: var(--compass);
 }
-body .pn-card > *:not(.pn-glow), body .hz-hero > *, body .hero > *, body .career-hero > *, body .ts-index > *, body .acct-hero > * { position: relative; z-index: 1; }
+body .pn-card > *:not(.pn-glow), body .hz-hero > *, body .hero > *:not(.b1):not(.b2):not(.b3), body .career-hero > *:not(.b1):not(.b2):not(.b3), body .pay-hero > *:not(.b1):not(.b2):not(.b3), body .ts-index > *, body .acct-hero > * { position: relative; z-index: 1; }
 body .pn-card .pn-glow { z-index: 0; }
 
 /* Naranja aguja: lo que está pasando ahora */
@@ -66,3 +66,46 @@ body .tabbar > button.active { color: var(--blue) !important; }
 /* Cifras grandes más contundentes */
 body .stat .value, body .pn-kpis .num, body .pn-tile b { font-weight: 800; letter-spacing: -.045em; }
 body .pn-card h2, body .hz-hero h2, body .hero h2 { font-weight: 800; letter-spacing: -.04em; }
+
+
+/* ==========================================================================
+   Identidad 2: la brújula en cada pantalla, la mascota en los vacíos, la aguja en lo activo
+   ========================================================================== */
+:root:root { --compass-ink: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><g fill='none' stroke='%231F5FE0' stroke-opacity='.10' stroke-width='1.2'><circle cx='100' cy='100' r='92'/><circle cx='100' cy='100' r='70' stroke-dasharray='1.5 7'/><circle cx='100' cy='100' r='44'/><path d='M100 6v24M100 170v24M6 100h24M170 100h24' stroke-opacity='.16'/></g><path d='M100 52l10 48H90z' fill='%23FF8A1F' fill-opacity='.22'/></svg>"); }
+body .page { position: relative; }
+html, body { overflow-x: clip; }
+body .page::before { content: ""; position: absolute; z-index: -1; top: -70px; right: -60px; width: 280px; height: 280px; pointer-events: none; background: var(--compass-ink) center / contain no-repeat; }
+
+/* Estados vacíos: la mascota hace compañía */
+body .empty { position: relative; }
+body .empty-art { position: relative; display: inline-grid; place-items: center; }
+body .empty-art .empty-ic { position: absolute; right: -14px; bottom: 2px; width: 34px; height: 34px; border-radius: 12px 12px 12px 4px; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, #4C9BFF, #1F5FE0); box-shadow: 0 8px 16px -8px rgba(31, 95, 224, .7); }
+
+/* Lo que está "ahora": naranja aguja */
+body .term.now .pill, body .term .now-pill, body .pill.blue.now, body .tag-now { background: var(--needle-soft); color: #A04A00; }
+body .check, body .task .check { border-color: color-mix(in oklab, var(--blue) 40%, var(--line)); }
+body .mini-bar { font-family: var(--display); font-weight: 700; }
+
+/* Avisos y listas con el mismo lenguaje */
+body .news { border-radius: var(--r-card); }
+body .news-ic { color: #fff; }
+body .settings-tab, body .set-card { border-radius: var(--r-card); }
+body .modal, body .sheet { border-radius: 30px 30px 0 0; }
+body .lbl-section, body .section-label { display: inline-flex; align-items: center; gap: 8px; }
+
+:root[data-mode="dark"] body .page::before { opacity: .55; }
+.lg2-emblem { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .25)); }
+
+/* Menú «Más»: cada destino con su color (antes todos azules) */
+body .more-grid > button .tile-ic, body .more-grid > a .tile-ic { color: #fff; box-shadow: 0 10px 18px -10px rgba(14, 38, 92, .6), inset 0 1px 0 rgba(255, 255, 255, .3); border-radius: 15px 15px 15px 5px; }
+body .more-grid > :nth-child(6n+1) .tile-ic { background: linear-gradient(160deg, #8B5CF6, #6D4AE0); }
+body .more-grid > :nth-child(6n+2) .tile-ic { background: linear-gradient(160deg, #FFB454, #FF8A1F); }
+body .more-grid > :nth-child(6n+3) .tile-ic { background: linear-gradient(160deg, #4C9BFF, #1F5FE0); }
+body .more-grid > :nth-child(6n+4) .tile-ic { background: linear-gradient(160deg, #3FD98B, #16A36A); }
+body .more-grid > :nth-child(6n+5) .tile-ic { background: linear-gradient(160deg, #F472B6, #DB2777); }
+body .more-grid > :nth-child(6n) .tile-ic { background: linear-gradient(160deg, #38BDF8, #0EA5E9); }
+body .more-grid > button, body .more-grid > a { border-radius: var(--r-card); }
+
+/* Acciones secundarias de la ficha de tarea: tres columnas parejas */
+body .ts-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
+body .ts-links .link-btn { flex-direction: column; justify-content: flex-start; gap: 4px; text-align: center; font-size: 12.5px; line-height: 1.25; padding: 8px 4px; }

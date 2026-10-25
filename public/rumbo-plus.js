@@ -428,7 +428,7 @@
   }
 
   // ---------- Pantalla de entrada: logo animado ----------
-  var LOGO = '<svg viewBox="0 0 96 96" aria-hidden="true"><defs><linearGradient id="rwlg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5AA2FF"/><stop offset=".55" stop-color="#1F6FFF"/><stop offset="1" stop-color="#0A4FD0"/></linearGradient></defs><rect width="96" height="96" rx="26" fill="url(#rwlg)"/><circle cx="48" cy="48" r="27" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="5"/><circle class="bt-ring" cx="48" cy="48" r="27" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" pathLength="100" transform="rotate(-90 48 48)"/><g class="bt-needle"><path d="M61 35 53.6 53.6 35 61 42.4 42.4Z" fill="#fff"/><path d="M61 35 53.6 53.6 48 48Z" fill="rgba(10,79,208,.28)"/><circle cx="48" cy="48" r="3" fill="#1F6FFF"/></g></svg>';
+  var LOGO = '<svg viewBox="0 0 96 96" aria-hidden="true"><defs><linearGradient id="rwlg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5AA2FF"/><stop offset=".55" stop-color="#1F6FFF"/><stop offset="1" stop-color="#0A4FD0"/></linearGradient></defs><rect width="96" height="96" rx="26" fill="url(#rwlg)"/><g transform="translate(16 16)"><circle cx="32" cy="32" r="27" fill="none" stroke="#fff" stroke-opacity=".92" stroke-width="3"/><circle cx="32" cy="32" r="20" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="1.5" stroke-dasharray="1.5 4.5"/><path d="M32 9l7 23H25z" fill="#FF8A1F"/><path d="M32 55l-7-23h14z" fill="#fff"/><circle cx="32" cy="32" r="3" fill="#0A5BE0" stroke="#fff" stroke-width="2"/></g></svg>';
   function ensureLogin() {
     var mark = $('#root .lg2-mark');
     if (!mark || mark.__rw) return;

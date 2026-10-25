@@ -7,6 +7,7 @@ const SubmitPanel = lazy(() => import('./EvaActions').then((m) => ({ default: m.
 import { createPortal } from 'react-dom';
 import { api, cap, type Course, type Task, unixToLocalInput, localInputToUnix, overdueLabel, urgency, whenLabel } from './api';
 import { Icon } from './icons';
+import { Mascot } from './Mascot';
 
 /** Vibración corta en móviles (si el navegador la soporta). */
 export const haptic = (ms = 8) => { try { navigator.vibrate?.(ms); } catch { /* sin vibración */ } };
@@ -840,7 +841,7 @@ export function Skeleton({ rows = 3, hero = true }: { rows?: number; hero?: bool
 export function Empty({ icon, title, text, children }: { icon: string; title: string; text?: string; children?: ReactNode }) {
   return (
     <div className="empty">
-      <span className="empty-ic"><Icon name={icon} size={26} /></span>
+      <span className="empty-art"><Mascot mood="tranqui" size={78} /><span className="empty-ic"><Icon name={icon} size={18} /></span></span>
       <b>{title}</b>
       {text && <span>{text}</span>}
       {children}

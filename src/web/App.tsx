@@ -308,7 +308,7 @@ function Login({ onIn }: { onIn: () => void }) {
       <section className="lg2-hero" aria-hidden="false">
         <div className="lg2-sky" aria-hidden="true"><i /><i /><i /></div>
         <div className="lg2-brand">
-          <div className="lg2-logo"><span className="lg2-halo" /><span className="lg2-halo h2" /><div className="lg2-mark"><Icon name="compass" size={42} style={{ strokeWidth: 2 }} /></div></div>
+          <div className="lg2-logo"><span className="lg2-halo" /><span className="lg2-halo h2" /><div className="lg2-mark"><svg className="lg2-emblem" viewBox="0 0 64 64" width="52" height="52" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="none" stroke="#fff" strokeOpacity=".9" strokeWidth="3" /><circle cx="32" cy="32" r="20" fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="1.5" strokeDasharray="1.5 4.5" /><path d="M32 9l7 23H25z" fill="#FF8A1F" /><path d="M32 55l-7-23h14z" fill="#fff" /><circle cx="32" cy="32" r="3" fill="#0A5BE0" stroke="#fff" strokeWidth="2" /></svg></div></div>
           <h1>Rumbo</h1>
           <p>Tu universidad, bajo control.</p>
         </div>

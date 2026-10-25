@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 52,
+    date: '2026-10-25',
+    title: '🧭 Una app con identidad: la brújula de Rumbo',
+    items: [
+      'Nuevo ícono: brújula con la aguja naranja. Y la misma brújula en la pantalla de entrada.',
+      'Una brújula tenue de fondo en cada pantalla, y la mascota acompaña en los estados vacíos («Todo al día», «Sin notas»…).',
+      'El menú «Más» con un color por destino y acciones de la ficha de tarea mejor acomodadas.',
+      'Arreglé las portadas de Pensum y Pagos, que se estiraban, y los títulos largos que se partían en dos líneas.',
+    ],
+  },
+  {
     version: 51,
     date: '2026-10-25',
     title: '📚 Solo lo de este trimestre',
