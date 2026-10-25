@@ -505,7 +505,7 @@ app.post('/api/me/delete', async (c) => {
   const p = `u${uid}:`;
   await c.env.DB.batch([
     // Hijas primero (notas y avisos apuntan a asignaturas; la caché de estudio se va con las tareas).
-    ...['grades', 'announcements', 'tasks', 'courses', 'payments', 'pensum', 'reminders', 'messages', 'push_subs', 'feedback', 'notes', 'cards', 'uapa_classes', 'uapa_exams'].map((t) => c.env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(uid)),
+    ...['grades', 'announcements', 'tasks', 'courses', 'payments', 'pensum', 'reminders', 'messages', 'push_subs', 'feedback', 'notes', 'cards', 'uapa_classes', 'uapa_exams', 'uapa_sections'].map((t) => c.env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(uid)),
     c.env.DB.prepare('DELETE FROM settings WHERE substr(key, 1, ?) = ?').bind(p.length, p),
     c.env.DB.prepare('DELETE FROM sent_log WHERE substr(key, 1, ?) = ?').bind(p.length, p),
     c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid),

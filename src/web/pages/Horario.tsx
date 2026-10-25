@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { Empty, PageHead, Segmented, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
+import { AttendanceCard, Planner, RequestsCard } from './Planner';
 
 type Cls = { id: number; term: string; crn: string; code: string | null; title: string; day: number; start_min: number; end_min: number; room: string | null; building: string | null; start_date: string | null; end_date: string | null };
 type Exam = { id: number; course: string | null; title: string; opens_at: number | null; closes_at: number | null };
@@ -44,38 +45,51 @@ function nextClass(list: Cls[], from = new Date()): { k: Cls; at: Date } | null 
 }
 
 /** Marcador del navegador: corre dentro de Banner o del DEA (donde ya iniciaste sesión) y manda los datos a Rumbo. */
-function bookmarklet(origin: string) {
+function bookmarklet(origin: string, codes: string[]) {
   const code = `(async()=>{try{
-var O='${origin}',H=location.host,P=H.indexOf('pruebas')>-1;
+var O='${origin}',H=location.host,PA=location.pathname,CODES=${JSON.stringify(codes)};
+var dec=function(s){var t=document.createElement('textarea');t.innerHTML=s==null?'':String(s);return t.value};
 var send=function(o){location.href=O+'/#importar/'+btoa(unescape(encodeURIComponent(JSON.stringify(o))))};
-if(H.indexOf('bancascade')>-1){send({kind:'account',text:document.body.innerText.slice(0,16000)})}
-else if(H.indexOf('banservices')>-1){var tj=await (await fetch('/StudentSelfService/ssb/academicTranscript/academicTranscriptPageData?level=&type=UAPA')).json();var dn=[],cu=[],ic=tj.institutionCredit||{};
-Object.keys(ic).forEach(function(t){ic[t].forEach(function(x){(x.subjectGrid||[]).forEach(function(g){if(g.grade!=null&&g.grade!=='')dn.push({code:g.subjectCode+'-'+g.courseNumber,grade:Number(g.grade),credits:Number(g.creditHours),term:t})})})});
-var cp=tj.courseInProgress||{},ct='';Object.keys(cp).forEach(function(t){ct=t;cp[t].forEach(function(x){(x.subjectGrid||[]).forEach(function(g){cu.push({code:g.subjectCode+'-'+g.courseNumber})})})});
-if(!dn.length&&!cu.length){alert('Rumbo: no encontré histórico.');return}
-send({kind:'transcript',transcript:{done:dn,current:cu,term:ct}})}
-else if(P){var sk=M.cfg.sesskey,now=new Date(),ex={};
-for(var i=-1;i<5;i++){var d=new Date(now.getFullYear(),now.getMonth()+i,1);
-var r=await fetch('/lib/ajax/service.php?sesskey='+sk,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([{index:0,methodname:'core_calendar_get_calendar_monthly_view',args:{year:d.getFullYear(),month:d.getMonth()+1,courseid:1,categoryid:0,includenavigation:false,mini:false}}])});
-var j=(await r.json())[0];if(!j.data)continue;
-j.data.weeks.forEach(function(w){w.days.forEach(function(dy){(dy.events||[]).forEach(function(e){
-var t=e.name.replace(/^Se (abre|cierra) /,'');var k=t+'|'+(e.course&&e.course.shortname);
-ex[k]=ex[k]||{title:t,course:e.course&&e.course.shortname};
-if(e.eventtype=='open')ex[k].opens=e.timestart;if(e.eventtype=='close')ex[k].closes=e.timestart;if(e.eventtype=='due'){ex[k].closes=e.timestart}})})})}
-var L=Object.keys(ex).map(function(k){return ex[k]});
-if(!L.length){alert('Rumbo: no encontré exámenes en el DEA.');return}
-send({kind:'dea',exams:L})}
-else{var f=function(u){return fetch(u).then(function(r){return r.json()})};
-var a=new Date(),s=new Date(a.getFullYear(),a.getMonth()-1,1),e2=new Date(a.getFullYear(),a.getMonth()+4,1);
-var q=function(x){return x.toISOString().slice(0,10)};
-var ev=await f('/StudentRegistrationSsb/ssb/classRegistration/getRegistrationEvents?termFilter=&startDate='+q(s)+'&endDate='+q(e2));
-var seen={};ev.forEach(function(x){seen[x.crn]=x});var out=[],term='';
 var D=['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-for(var c in seen){var x=seen[c];term=x.term;
-var m=await f('/StudentRegistrationSsb/ssb/searchResults/getFacultyMeetingTimes?term='+x.term+'&courseReferenceNumber='+x.crn);
-out.push({crn:x.crn,code:x.subject+'-'+x.courseNumber,title:x.title,meetings:(m.fmt||[]).map(function(y){var t=y.meetingTime;return{b:t.beginTime,e:t.endTime,d:D.filter(function(n){return t[n]}),sd:t.startDate,ed:t.endDate,room:t.room,bldg:t.building}})})}
-if(!out.length){alert('Rumbo: abre primero «Inscribir asignaturas» (elige el periodo y pulsa Continuar) y vuelve a tocar el marcador.');return}
-send({kind:'schedule',term:term,classes:out})}
+if(H.indexOf('bancascade')>-1){
+ if(PA.indexOf('P_DispView_Protocols')>-1){var rows=[].slice.call(document.querySelectorAll('table tr')).map(function(tr){return [].slice.call(tr.querySelectorAll('td')).map(function(td){return td.innerText.replace(/\s+/g,' ').trim()})}).filter(function(r){return r.length>=5});
+  send({kind:'requests',requests:{rows:rows,empty:/No tiene Solicitudes/i.test(document.body.innerText)}})}
+ else send({kind:'account',text:document.body.innerText.slice(0,16000)})}
+else if(H.indexOf('banservices')>-1){
+ if(PA.indexOf('studentAttendanceTracking')>-1){var at=[].slice.call(document.querySelectorAll('table tbody tr')).map(function(tr){var c=[].slice.call(tr.querySelectorAll('td')).map(function(td){return dec(td.innerText.replace(/\s+/g,' ').trim())});return {term:c[0],crn:c[1],title:c[5],hora:c[7],absences:Number(c[8])||0,pct:parseFloat(c[9])||0}}).filter(function(x){return x.crn});
+  if(!at.length){alert('Rumbo: no encontré la lista de asistencia.');return}send({kind:'attendance',attendance:at})}
+ else{var tj=await (await fetch('/StudentSelfService/ssb/academicTranscript/academicTranscriptPageData?level=&type=UAPA')).json();var dn=[],cu=[],ic=tj.institutionCredit||{};
+ Object.keys(ic).forEach(function(t){ic[t].forEach(function(x){(x.subjectGrid||[]).forEach(function(g){if(g.grade!=null&&g.grade!=='')dn.push({code:g.subjectCode+'-'+g.courseNumber,grade:Number(g.grade),credits:Number(g.creditHours),term:t})})})});
+ var cp=tj.courseInProgress||{},ct='';Object.keys(cp).forEach(function(t){ct=t;cp[t].forEach(function(x){(x.subjectGrid||[]).forEach(function(g){cu.push({code:g.subjectCode+'-'+g.courseNumber})})})});
+ if(!dn.length&&!cu.length){alert('Rumbo: no encontré histórico.');return}send({kind:'transcript',transcript:{done:dn,current:cu,term:ct}})}}
+else if(H.indexOf('pruebas')>-1){var sk=M.cfg.sesskey,now=new Date(),ex={};
+ for(var i=-1;i<5;i++){var d=new Date(now.getFullYear(),now.getMonth()+i,1);
+ var r=await fetch('/lib/ajax/service.php?sesskey='+sk,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([{index:0,methodname:'core_calendar_get_calendar_monthly_view',args:{year:d.getFullYear(),month:d.getMonth()+1,courseid:1,categoryid:0,includenavigation:false,mini:false}}])});
+ var j=(await r.json())[0];if(!j.data)continue;
+ j.data.weeks.forEach(function(w){w.days.forEach(function(dy){(dy.events||[]).forEach(function(e){
+ var t=e.name.replace(/^Se (abre|cierra) /,'');var k=t+'|'+(e.course&&e.course.shortname);
+ ex[k]=ex[k]||{title:t,course:e.course&&e.course.shortname};
+ if(e.eventtype=='open')ex[k].opens=e.timestart;if(e.eventtype=='close')ex[k].closes=e.timestart;if(e.eventtype=='due'){ex[k].closes=e.timestart}})})})}
+ var L=Object.keys(ex).map(function(k){return ex[k]});
+ if(!L.length){alert('Rumbo: no encontré exámenes en el DEA.');return}send({kind:'dea',exams:L})}
+else{var f=function(u){return fetch(u).then(function(r){return r.json()})};
+ var a=new Date(),s=new Date(a.getFullYear(),a.getMonth()-1,1),e2=new Date(a.getFullYear(),a.getMonth()+4,1);
+ var q=function(x){return x.toISOString().slice(0,10)};
+ var ev=[];try{ev=await f('/StudentRegistrationSsb/ssb/classRegistration/getRegistrationEvents?termFilter=&startDate='+q(s)+'&endDate='+q(e2))}catch(er){ev=[]}
+ var seen={};ev.forEach(function(x){seen[x.crn]=x});var out=[],term='';
+ var mt=function(y){var t=y.meetingTime;return{b:t.beginTime,e:t.endTime,d:D.filter(function(n){return t[n]}),sd:t.startDate,ed:t.endDate,room:t.room,bldg:t.building}};
+ for(var c in seen){var x=seen[c];term=x.term;
+ var m=await f('/StudentRegistrationSsb/ssb/searchResults/getFacultyMeetingTimes?term='+x.term+'&courseReferenceNumber='+x.crn);
+ out.push({crn:x.crn,code:x.subject+'-'+x.courseNumber,title:x.title,meetings:(m.fmt||[]).map(mt)})}
+ if(!out.length){alert('Rumbo: abre primero «Inscribir asignaturas» (elige el periodo y pulsa Continuar) y vuelve a tocar el marcador.');return}
+ var secs=[];
+ if(CODES.length){var sid='r'+Date.now().toString(36);
+  await fetch('/StudentRegistrationSsb/ssb/term/search?mode=search&term='+term+'&uniqueSessionId='+sid,{method:'POST'});
+  for(var ci=0;ci<CODES.length;ci++){var pr=CODES[ci].split('-');
+   await fetch('/StudentRegistrationSsb/ssb/classSearch/resetDataForm',{method:'POST'});
+   var res=await f('/StudentRegistrationSsb/ssb/searchResults/searchResults?txt_subject='+pr[0]+'&txt_courseNumber='+pr[1]+'&txt_term='+term+'&startDatepicker=&endDatepicker=&uniqueSessionId='+sid+'&pageOffset=0&pageMaxSize=50&sortColumn=subjectDescription&sortDirection=asc');
+   (res.data||[]).forEach(function(z){secs.push({crn:z.courseReferenceNumber,code:z.subject+'-'+z.courseNumber,title:dec(z.courseTitle),section:z.sequenceNumber,credits:Number(z.creditHourLow||z.creditHours)||0,seats:z.seatsAvailable,cap:z.maximumEnrollment,campus:dec(z.campusDescription),faculty:(z.faculty||[]).map(function(p){return dec(p.displayName)}).join(', '),meetings:(z.meetingsFaculty||[]).map(mt)})})}}
+ send({kind:'schedule',term:term,classes:out,sections:secs})}
 }catch(e){alert('Rumbo: '+e.message)}})()`;
   return 'javascript:' + encodeURIComponent(code.replace(/\n/g, ''));
 }
@@ -91,7 +105,7 @@ export function useImportFromHash(onDone: () => void) {
         const body = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
         body0 = body;
         const r = await api<{ count: number }>('/uapa/import', { method: 'POST', body });
-        toast(body.kind === 'dea' ? `Exámenes del DEA importados (${r.count})` : body.kind === 'transcript' ? `Histórico importado: ${(r as { approved?: number }).approved ?? 0} aprobadas, ${(r as { inCourse?: number }).inCourse ?? 0} en curso` : body.kind === 'account' ? `Estado de cuenta importado: debes RD$${Math.round((r as { balance?: number }).balance ?? 0).toLocaleString('es-DO')}` : `Horario importado (${r.count} bloques)`); haptic(14);
+        toast(body.kind === 'dea' ? `Exámenes del DEA importados (${r.count})` : body.kind === 'transcript' ? `Histórico importado: ${(r as { approved?: number }).approved ?? 0} aprobadas, ${(r as { inCourse?: number }).inCourse ?? 0} en curso` : body.kind === 'attendance' ? `Asistencia importada (${r.count} materias)` : body.kind === 'requests' ? 'Solicitudes importadas' : body.kind === 'account' ? `Estado de cuenta importado: debes RD$${Math.round((r as { balance?: number }).balance ?? 0).toLocaleString('es-DO')}` : `Horario importado (${r.count} bloques y secciones)`); haptic(14);
         onDone();
       } catch (e) { toast((e as Error).message, 'err'); }
       history.replaceState(null, '', body0?.kind === 'account' ? '#pagos' : body0?.kind === 'transcript' ? '#pensum' : '#horario');
@@ -125,7 +139,7 @@ function Hero({ data, now }: { data: Data; now: Date }) {
 }
 
 /** Semana completa de un vistazo: columnas por día y bloques de color donde hay clase. */
-function WeekGrid({ data, sel, onSel, now }: { data: Data; sel: number; onSel: (d: number) => void; now: Date }) {
+export function WeekGrid({ data, sel, onSel, now }: { data: Data; sel: number; onSel: (d: number) => void; now: Date }) {
   const list = data.classes;
   const lo = Math.min(...list.map((k) => k.start_min), 8 * 60);
   const hi = Math.max(...list.map((k) => k.end_min), 17 * 60);
@@ -228,7 +242,8 @@ function NextTerm({ data }: { data: Data }) {
 }
 
 function Importer({ data, reload }: { data: Data; reload: () => void }) {
-  const link = useMemo(() => bookmarklet(location.origin), []);
+  const codes = useMemo(() => Array.from(new Set([...data.recommend.list.map((r) => r.code || ''), ...data.projection.map((p) => p.code)])).filter((c) => /^[A-Z]{2,4}-\d{2,4}$/.test(c) && !data.classes.some((k) => k.code === c)).slice(0, 14), [data]);
+  const link = useMemo(() => bookmarklet(location.origin, codes), [codes]);
   const [lead, setLead] = useState(data.lead);
   async function saveLead(v: number) { setLead(v); await api('/horario/lead', { method: 'POST', body: { lead: v } }); toast(`Te aviso ${v} min antes`); reload(); }
   const ago = data.synced_at ? Math.max(1, Math.round((Date.now() / 1000 - data.synced_at) / 3600)) : 0;
@@ -334,11 +349,12 @@ export function Horario() {
           <WeekGrid data={d} sel={sel} onSel={(i) => { setPicked(true); setSel(i); }} now={now} />
           <h3 className="hz-day">{DIAS_LARGO[sel]}{dayIdx(now) === sel ? <span>hoy</span> : null}</h3>
           <DayAgenda data={d} day={sel} now={now} />
+          <AttendanceCard />
         </>
       )}
       {tab === 'examenes' && <Exams data={d} />}
-      {tab === 'calendario' && <UapaCalendar />}
-      {tab === 'proximo' && <NextTerm data={d} />}
+      {tab === 'calendario' && <><UapaCalendar /><RequestsCard /></>}
+      {tab === 'proximo' && <><NextTerm data={d} /><h3 className="hz-day">Planificador de selección</h3><Planner /></>}
       <Importer data={d} reload={data.reload} />
     </>
   );

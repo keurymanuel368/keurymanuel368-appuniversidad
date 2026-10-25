@@ -56,6 +56,9 @@ type ImportBody = {
   projection?: { code: string; title: string }[];
   text?: string;
   transcript?: TranscriptBody;
+  sections?: { crn: string; code: string; title: string; section?: string; credits?: number; seats?: number; cap?: number; campus?: string; faculty?: string; meetings: { b: string; e: string; d: string[]; sd?: string; ed?: string; room?: string | null; bldg?: string | null }[] }[];
+  attendance?: { term: string; crn: string; code?: string; title: string; absences: number; pct: number; hora?: string }[];
+  requests?: { rows: string[][]; empty?: boolean };
 };
 
 export function registerHorario(app: App) {
@@ -89,6 +92,23 @@ export function registerHorario(app: App) {
       }
       if (b.projection?.length) await setSetting(env, 'uapa_projection', JSON.stringify(b.projection.slice(0, 60)));
     }
+    if (b.kind === 'schedule' && b.term && b.sections?.length) {
+      stmts.push(env.DB.prepare('DELETE FROM uapa_sections WHERE user_id = ? AND term = ?').bind(env.UID, b.term));
+      for (const x of b.sections.slice(0, 600)) {
+        const meetings = x.meetings.map((m) => ({ b: m.b, e: m.e, d: m.d, sd: m.sd ? isoOf(m.sd) : null, ed: m.ed ? isoOf(m.ed) : null, room: m.room || null, bldg: m.bldg || null }));
+        stmts.push(env.DB.prepare('INSERT OR REPLACE INTO uapa_sections (user_id, term, crn, code, title, section, credits, seats, capacity, campus, faculty, meetings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(env.UID, b.term, String(x.crn), x.code, x.title, x.section || null, Number(x.credits) || 0, x.seats ?? null, x.cap ?? null, x.campus || null, x.faculty || null, JSON.stringify(meetings)));
+        n++;
+      }
+    }
+    if (b.kind === 'attendance' && b.attendance?.length) {
+      await setSetting(env, 'uapa_attendance', JSON.stringify({ at: nowSec(), rows: b.attendance.slice(0, 40) }));
+      n = b.attendance.length;
+    }
+    if (b.kind === 'requests' && b.requests) {
+      await setSetting(env, 'uapa_requests', JSON.stringify({ at: nowSec(), empty: !!b.requests.empty, rows: (b.requests.rows || []).slice(0, 40) }));
+      n = Math.max(1, b.requests.rows?.length || 0);
+    }
     if (b.kind === 'dea' && b.exams?.length) {
       for (const x of b.exams) {
         stmts.push(env.DB.prepare('INSERT INTO uapa_exams (user_id, course, title, opens_at, closes_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, title, course) DO UPDATE SET opens_at = excluded.opens_at, closes_at = excluded.closes_at')
@@ -116,7 +136,29 @@ export function registerHorario(app: App) {
     account: JSON.parse(await getSetting(c.env, 'uapa_account', 'null')),
     account_at: Number(await getSetting(c.env, 'uapa_account_at', '0')) || null,
     transcript: JSON.parse(await getSetting(c.env, 'uapa_transcript', 'null')),
+    attendance: JSON.parse(await getSetting(c.env, 'uapa_attendance', 'null')),
+    requests: JSON.parse(await getSetting(c.env, 'uapa_requests', 'null')),
   }));
+
+  // Planificador de selección: oferta de secciones importada + lo que ya elegiste
+  app.get('/api/planner', async (c) => {
+    const { results } = await c.env.DB.prepare('SELECT term, crn, code, title, section, credits, seats, capacity, campus, faculty, meetings FROM uapa_sections WHERE user_id = ? ORDER BY code, section').bind(c.env.UID).all<{ term: string; meetings: string }>();
+    const term = results[0]?.term || null;
+    return c.json({
+      term,
+      sections: results.map((r) => ({ ...r, meetings: JSON.parse(r.meetings) })),
+      picks: JSON.parse(await getSetting(c.env, 'planner_picks', '{}')),
+      enrolled: term ? (await classes(c.env)).filter((k) => k.term === term) : [],
+      enrolled_credits: term ? ((await c.env.DB.prepare('SELECT COALESCE(SUM(p.credits), 0) AS n FROM pensum p WHERE p.user_id = ? AND p.code IN (SELECT DISTINCT code FROM uapa_classes WHERE user_id = ? AND term = ? AND code IS NOT NULL)').bind(c.env.UID, c.env.UID, term).first<{ n: number }>())?.n ?? 0) : 0,
+    });
+  });
+  app.put('/api/planner', async (c) => {
+    const { picks } = await c.req.json<{ picks: Record<string, string> }>();
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(picks || {})) if (/^[A-Z]{2,4}-\d{2,4}$/.test(k) && /^\d{1,8}$/.test(String(v))) clean[k] = String(v);
+    await setSetting(c.env, 'planner_picks', JSON.stringify(clean));
+    return c.json({ ok: true });
+  });
 
   app.post('/api/horario/lead', async (c) => {
     const { lead } = await c.req.json<{ lead: number }>();

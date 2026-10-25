@@ -30,7 +30,7 @@ body .pn-card, body .hero, body .career-hero, body .ts-index, body .hz-hero, bod
 
 /* Brújula de fondo en las portadas */
 body .pn-card::after, body .hz-hero::after, body .hero::after, body .career-hero::after, body .ts-index::after, body .acct-hero::after, body .pay-hero::after {
-  content: ""; position: absolute; right: -58px; bottom: -72px; width: 210px; height: 210px; z-index: 0; pointer-events: none;
+  content: ""; position: absolute; right: -78px; bottom: -96px; width: 200px; height: 200px; z-index: 0; pointer-events: none;
   background: var(--compass) center / contain no-repeat; background-image: var(--compass);
 }
 body .pn-card > *:not(.pn-glow), body .hz-hero > *, body .hero > *, body .career-hero > *, body .ts-index > *, body .acct-hero > * { position: relative; z-index: 1; }

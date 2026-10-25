@@ -10,6 +10,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 49,
+    date: '2026-10-25',
+    title: '🗓️ Planificador de selección, asistencia y trámites',
+    items: [
+      'Planificador en Horario → Próximo: ves las secciones reales de Mi UAPA de tus materias siguientes (horario, cupos, recinto), eliges una por materia y Rumbo cuenta tus créditos y te avisa si hay choques de horario.',
+      'Botón «Copiar NRC» con los números de tu plan para pegarlos en «Inscribir asignaturas → Ingresar NRC».',
+      'Asistencia por materia (ausencias y porcentaje) en Horario → Semana.',
+      'Estado de tus solicitudes de servicio de Mi UAPA en Horario → Calendario.',
+      'El marcador del navegador ahora también trae la asistencia, las solicitudes y las secciones.',
+    ],
+  },
+  {
     version: 48,
     date: '2026-10-25',
     title: '🧭 Estudio, calendario UAPA y una identidad nueva',
