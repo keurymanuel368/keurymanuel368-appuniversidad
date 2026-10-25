@@ -120,15 +120,24 @@ export function Inicio({ go }: { go: (p: string) => void }) {
 
         <div className="col">
           {d.news.length > 0 && (
-            <button className="card news-card" onClick={() => go('avisos')}>
-              <div className="card-head"><h3>Avisos</h3>{d.unreadNews > 0 && <span className="pill orange num">{d.unreadNews} nuevos</span>}<Icon name="chevron" size={18} className="spacer row-chevron" /></div>
-              {d.news.map((n) => (
-                <span key={n.id} className={`mini-news ${n.read ? '' : 'unread'}`}>
-                  <i className={`mn-dot ${n.kind}`} />
-                  <span><b>{cleanTitle(n.title)}</b><small>{n.course_name || (n.kind === 'pago' ? 'Pagos' : n.kind === 'evento' ? 'Evento' : 'UAPA')}</small></span>
-                </span>
-              ))}
-            </button>
+            <section className="nw" aria-label="Avisos">
+              <header>
+                <h3>Avisos</h3>
+                {d.unreadNews > 0 && <span className="nw-count num">{d.unreadNews} nuevos</span>}
+                <button className="link-btn spacer" onClick={() => go('avisos')}>Ver todos<Icon name="chevron" size={16} /></button>
+              </header>
+              <ul>
+                {d.news.map((n) => (
+                  <li key={n.id}>
+                    <button className={n.read ? '' : 'unread'} onClick={() => go(`avisos/${n.id}`)}>
+                      <span className={`nw-ic ${n.kind}`}><Icon name={n.kind === 'pago' ? 'wallet' : n.kind === 'evento' ? 'calendar' : 'bell'} size={17} /></span>
+                      <span className="nw-body"><b>{cleanTitle(n.title)}</b><small>{n.course_name || (n.kind === 'pago' ? 'Pagos' : n.kind === 'evento' ? 'Evento' : 'UAPA')} · {agoLabel(n.created_at)}</small></span>
+                      {!n.read && <i className="nw-dot" aria-label="Sin leer" />}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           <div className="card hide-mobile">
@@ -147,20 +156,22 @@ export function Inicio({ go }: { go: (p: string) => void }) {
           </div>
 
           {d.graded.length > 0 && (
-            <div className="card">
-              <div className="card-head"><h3>Últimas calificaciones</h3><button className="link-btn spacer" onClick={() => go('tareas')}>Ver todas<Icon name="chevron" size={16} /></button></div>
-              <div className="grade-feed">
+            <section className="gs" aria-label="Últimas calificaciones">
+              <header><h3>Últimas calificaciones</h3><button className="link-btn spacer" onClick={() => go('asignaturas')}>Ver notas<Icon name="chevron" size={16} /></button></header>
+              <div className="gs-row">
                 {d.graded.map((t) => {
                   const pct = (t.grade! / t.grade_max!) * 100;
                   return (
-                    <button key={t.id} className="gf-row" onClick={() => setEditing(t)}>
-                      <span className={`gf-score ${pct >= 70 ? 'good' : 'bad'}`}><b className="num">{fmtGrade(t.grade!)}</b><small className="num">/{fmtGrade(t.grade_max!)}</small></span>
-                      <span className="gf-copy"><b>{t.title}</b><span><i className="dot" style={{ background: t.course_color || 'var(--blue)' }} />{t.course_short || t.course_name}</span></span>
+                    <button key={t.id} className={`gs-card ${pct >= 90 ? 'top' : pct >= 70 ? 'ok' : 'low'}`} style={{ ['--c' as string]: t.course_color || '#1F5FE0' }} onClick={() => setEditing(t)}>
+                      <span className="gs-course"><i />{t.course_short || t.course_name}</span>
+                      <span className="gs-score"><b className="num">{fmtGrade(t.grade!)}</b><small className="num">/{fmtGrade(t.grade_max!)}</small></span>
+                      <span className="gs-title">{t.title}</span>
+                      <span className="gs-bar"><i style={{ width: `${Math.min(100, pct)}%` }} /></span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </section>
           )}
 
         </div>
@@ -234,12 +245,18 @@ function GoalsCard({ goals, ids, onChanged }: { goals: NonNullable<Dashboard['go
     <div className="card goals">
       <div className="card-head"><h3>Metas de la semana</h3><button className="link-btn spacer" onClick={() => setEditing(true)}>Cambiar</button></div>
       {goals.map((g) => {
-        const pct = g.id.startsWith('promedio') ? Math.min(100, (g.done / g.total) * 100) : g.total ? (g.done / g.total) * 100 : 0;
+        const isAvg = g.id.startsWith('promedio');
+        const pct = isAvg ? Math.min(100, (g.done / g.total) * 100) : g.total ? (g.done / g.total) * 100 : 0;
+        const R = 18, C = 2 * Math.PI * R;
         return (
           <div key={g.id} className={`goal ${g.ok ? 'ok' : ''}`}>
-            <div className="goal-top"><b>{g.ok ? '✅ ' : ''}{g.label}</b><span className="num">{g.id.startsWith('promedio') ? (g.done ? fmtGrade(g.done) : '—') : `${g.done}/${g.total}`}</span></div>
-            <div className="progress thin"><div className={g.ok ? 'green' : ''} style={{ width: `${pct}%` }} /></div>
-            <small>{g.detail}</small>
+            <svg className="goal-ring" viewBox="0 0 44 44" aria-hidden="true">
+              <circle cx="22" cy="22" r={R} className="gr-bg" />
+              <circle cx="22" cy="22" r={R} className="gr-fg" strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(1, pct / 100))} transform="rotate(-90 22 22)" />
+              {g.ok && <path d="M15 22.5l5 5 9-10" className="gr-ok" />}
+            </svg>
+            <div className="goal-copy"><b>{g.label}</b><small>{g.detail}</small></div>
+            <span className="goal-n num">{isAvg ? (g.done ? fmtGrade(g.done) : '—') : `${g.done}/${g.total}`}</span>
           </div>
         );
       })}

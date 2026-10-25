@@ -68,13 +68,14 @@ export function Panel({ d, now1, next, syncing, busy, go, onOpen, onNew, onSync,
       </div>
 
       <div className="pn-tiles">
-        <button className={`pn-tile money ${acc && acc.balance > 0 ? 'owe' : ''}`} onClick={() => go('pagos')}>
+        <button className={`pn-tile money ${acc && acc.balance > 0 && !p.paid ? 'owe' : ''}`} onClick={() => go('pagos')}>
           <span className="pn-tile-ic"><Icon name="wallet" size={18} /></span>
-          <small>{acc ? (acc.balance > 0 ? 'Saldo pendiente' : 'Cuenta al día') : p.paid ? 'Cuota pagada' : 'Cuota del mes'}</small>
+          <small>{acc ? (acc.balance > 0 ? 'Por pagar en cuotas' : 'Cuenta al día') : p.paid ? 'Cuota pagada' : 'Cuota del mes'}</small>
           <b className="num">{acc ? (acc.balance > 0 ? rd(acc.balance) : '✓') : p.paid ? '✓' : p.amount ? rd(Number(p.amount)) : '—'}</b>
           {acc && cur && cur.charges > 0 ? (
-            <><span className="pn-bar"><i style={{ width: `${Math.min(100, (cur.paid / cur.charges) * 100)}%` }} /></span><em>{rd(cur.paid)} de {rd(cur.charges)} pagados</em></>
-          ) : <em>{p.state === 'open' ? `Cierra en ${p.daysToClose} d` : `Abre en ${p.daysToOpen} d`}</em>}
+            <><span className="pn-bar"><i style={{ width: `${Math.min(100, (cur.paid / cur.charges) * 100)}%` }} /></span>
+            <em>{p.paid ? '✓ Este mes pagado' : p.state === 'open' ? `Cierra en ${p.daysToClose} d` : `Abre en ${p.daysToOpen} d`}{Number(p.amount) > 0 && acc.balance > 0 ? ` · ${Math.max(1, Math.round(acc.balance / Number(p.amount)))} cuotas de ${rd(Number(p.amount))}` : ''}</em></>
+          ) : <em>{p.paid ? '✓ Este mes pagado' : p.state === 'open' ? `Cierra en ${p.daysToClose} d` : `Abre en ${p.daysToOpen} d`}</em>}
         </button>
         <button className="pn-tile career" onClick={() => go('pensum')}>
           <span className="pn-tile-ic"><Icon name="cap" size={18} /></span>

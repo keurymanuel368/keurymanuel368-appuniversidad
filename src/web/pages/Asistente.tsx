@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { Modal, RichText, haptic, toast } from '../components';
+import { useLoad } from '../components';
 import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { VoiceCall, speakable, utterance } from '../VoiceCall';
@@ -23,13 +24,8 @@ const IDEAS = [
 ];
 const QUICK = ['hoy', 'tareas', 'notas', 'entregadas', 'pagos', 'sincronizar'];
 const VOICES = [
-  { id: 'device', name: 'Voz del teléfono', hint: 'Recomendada · gratis, ilimitada y rápida' },
-  { id: 'aquila', name: 'Aquila (IA premium)', hint: 'Masculina · joven y relajada · pocas al día' },
-  { id: 'celeste', name: 'Celeste (IA premium)', hint: 'Femenina · alegre y enérgica · pocas al día' },
-  { id: 'selena', name: 'Selena (IA premium)', hint: 'Femenina · cálida · pocas al día' },
-  { id: 'sirio', name: 'Sirio (IA premium)', hint: 'Masculina · tranquila · pocas al día' },
-  { id: 'javier', name: 'Javier (IA premium)', hint: 'Masculina · clara · pocas al día' },
-  { id: 'estrella', name: 'Estrella (IA premium)', hint: 'Femenina · natural · pocas al día' },
+  { id: 'rumbo', name: 'Voz de Rumbo (neural)', hint: 'Natural · gratis · usa ElevenLabs si la conectas' },
+  { id: 'device', name: 'Voz del teléfono', hint: 'Gratis, ilimitada y rápida' },
 ];
 
 const store = {
@@ -76,7 +72,7 @@ export function Asistente() {
   const [now, setNow] = useState(Date.now());
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [autoVoice, setAutoVoice] = useState(() => store.get('rumbo-autovoz', '1') === '1');
-  const [voice, setVoice] = useState(() => store.get('rumbo-voz2', 'device'));
+  const [voice, setVoice] = useState(() => { const v = store.get('rumbo-voz2', 'rumbo'); return v === 'device' ? 'device' : 'rumbo'; });
   const [sheet, setSheet] = useState<'' | 'voz' | 'memoria'>('');
   const [call, setCall] = useState(() => /llamada/.test(location.hash));
   const recorder = useRef<MediaRecorder | null>(null);
@@ -91,7 +87,7 @@ export function Asistente() {
     window.speechSynthesis?.getVoices();
     return () => { stopSpeaking(); };
   }, []);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [lines?.length, lines?.[lines.length - 1]?.text.length]);
+  useEffect(() => { if (lines && lines.length) endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [lines?.length, lines?.[lines.length - 1]?.text.length]);
   useEffect(() => { if (!rec) return; const t = setInterval(() => setNow(Date.now()), 200); return () => clearInterval(t); }, [rec]);
 
   const patch = (key: string, p: Partial<Line>) => setLines((l) => (l || []).map((x) => (x.key === key ? { ...x, ...p } : x)));
@@ -241,7 +237,7 @@ export function Asistente() {
             <Mascot mood="feliz" size={92} wave className="ai-hello-mascot" />
             <b>Klk 👋 ¿en qué te ayudo?</b>
             <span>Pregúntame lo que sea o pídeme que haga algo. Háblame normal, como a un pana. Toca el micrófono para mandarme una nota de voz.</span>
-            <div className="ideas">{IDEAS.map((x) => <button key={x.text} className="idea" onClick={() => send(x.text)}><Icon name={x.icon} size={16} />{x.text}</button>)}</div>
+            <div className="ideas">{IDEAS.map((x, i) => <button key={x.text} className="idea" data-i={i % 6} onClick={() => send(x.text)}><span className="idea-ic"><Icon name={x.icon} size={17} /></span><span>{x.text}</span></button>)}</div>
           </div>
         )}
         {lines?.map((m) => m.me ? (
@@ -323,15 +319,23 @@ function VoicePill({ url, secs }: { url?: string; secs: number }) {
   );
 }
 
+type TtsStatus = { elevenlabs: { connected: boolean; used: number; cap: number; voice: string; voices: { id: string; name: string; hint: string }[] }; melo: { used: number; cap: number } };
+
 function VoiceSheet({ voice, onPick, onClose }: { voice: string; onPick: (v: string) => void; onClose: () => void }) {
   const [playing, setPlaying] = useState('');
+  const st = useLoad(() => api<TtsStatus>('/tts/status'));
   function preview(id: string) {
     setPlaying(id); onPick(id);
     void speak('Qué lo que, manito. Soy Rumbo. Tranquilo, que yo te ayudo con tus tareas y tus notas.', id, () => setPlaying(''));
   }
+  async function pickEl(id: string) {
+    await api('/settings', { method: 'PUT', body: { el_voice: id } }).catch(() => {});
+    st.reload();
+    setTimeout(() => preview('rumbo'), 250);
+  }
+  const el = st.data?.elevenlabs;
   return (
     <Modal title="Voz del asistente" onClose={() => { stopSpeaking(); onClose(); }}>
-      <p className="hint"><Icon name="alert" size={16} />La voz del teléfono es gratis e ilimitada. Las voces «IA premium» gastan la energía gratis de la IA (unas pocas respuestas al día); cuando se acaba, Rumbo usa la del teléfono.</p>
       <div className="voice-list">
         {VOICES.map((v) => (
           <button key={v.id} className={`voice-opt ${voice === v.id ? 'on' : ''}`} onClick={() => preview(v.id)}>
@@ -341,6 +345,21 @@ function VoiceSheet({ voice, onPick, onClose }: { voice: string; onPick: (v: str
           </button>
         ))}
       </div>
+      <div className="vs-engine">
+        <div className="vs-head"><b>ElevenLabs</b><span className={`pill ${el?.connected ? 'green' : 'gray'}`}>{el?.connected ? 'Conectada' : 'Sin conectar'}</span></div>
+        {el?.connected ? (
+          <>
+            <div className="vs-bar"><i style={{ width: `${Math.min(100, (el.used / el.cap) * 100)}%` }} /></div>
+            <small>{el.used.toLocaleString('es-DO')} de {el.cap.toLocaleString('es-DO')} letras este mes (plan gratis). Al agotarse, Rumbo sigue con la voz neural gratis.</small>
+            <div className="vs-voices">
+              {el.voices.map((v) => <button key={v.id} className={el.voice === v.id ? 'on' : ''} onClick={() => pickEl(v.id)}><b>{v.name}</b><small>{v.hint}</small></button>)}
+            </div>
+          </>
+        ) : (
+          <small>Voz humana de ElevenLabs, gratis: crea una cuenta en elevenlabs.io (plan gratuito, unas 10 000 letras al mes), copia tu API key y guárdala tú mismo en la terminal con <code>npx wrangler secret put ELEVENLABS_API_KEY</code>. Sin ella, Rumbo usa su voz neural gratis.</small>
+        )}
+      </div>
+      {st.data && <small className="vs-foot">Voz neural gratis de hoy: {st.data.melo.used.toLocaleString('es-DO')} de {st.data.melo.cap.toLocaleString('es-DO')} letras.</small>}
     </Modal>
   );
 }

@@ -276,10 +276,8 @@ const dayLabel = (iso: string) => { const d = isoDate(iso); return `${DIAS[dayId
 /** Calendario académico oficial de Grado: lo que viene, con cuenta regresiva en lo que vence. */
 function UapaCalendar() {
   const cal = useLoad(() => api<{ terms: Record<string, string>; events: CalEvent[] }>('/uapa/calendar'));
-  const sum = useLoad(() => api<{ account: { balance: number } | null }>('/uapa/summary'));
   if (!cal.data) return <Skeleton rows={2} hero={false} />;
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const bal = sum.data?.account?.balance || 0;
   const terms = Object.keys(cal.data.terms);
   const stateOf = (e: CalEvent) => {
     const a = isoDate(e.from), b = isoDate(e.to);
@@ -288,15 +286,8 @@ function UapaCalendar() {
     const days = Math.round((a.getTime() - today.getTime()) / 86400000);
     return { k: 'soon', t: days === 1 ? 'Mañana' : `En ${days} d` };
   };
-  const urgent = cal.data.events.find((e) => e.kind === 'pago' && stateOf(e).k === 'now');
   return (
     <div className="hz-cal">
-      {urgent && bal > 0 && (
-        <a className="hz-urgent" href="#pagos">
-          <Icon name="wallet" size={20} />
-          <span><b>Tienes RD${Math.round(bal).toLocaleString('es-DO')} por pagar</b><small>{urgent.title}: {stateOf(urgent).t.toLowerCase()}</small></span>
-        </a>
-      )}
       {terms.map((t) => (
         <section key={t}>
           <h3>{cal.data!.terms[t]}</h3>

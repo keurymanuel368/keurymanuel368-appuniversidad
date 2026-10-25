@@ -63,7 +63,7 @@ export function Pagos() {
   return (
     <>
       <PageHead eyebrow="Cuotas del trimestre" title="Pagos" />
-      <AccountCard />
+      <AccountCard cuota={Number(data.data.window.amount) || 0} paidMonth={data.data.window.paid} />
       <section className="grid2 stagger">
         <div className={`pay-hero ${tone}`}>
           <div className="b1" /><div className="b2" />
@@ -137,7 +137,7 @@ type Acc = { balance: number; currency: string; periods: { period: string; charg
 const rd = (n: number) => 'RD$' + Math.round(n).toLocaleString('es-DO');
 
 /** Lo que debes en Mi UAPA (estado de cuenta oficial), por periodo. Se actualiza con el marcador de la pantalla Horario. */
-function AccountCard() {
+function AccountCard({ cuota, paidMonth }: { cuota: number; paidMonth: boolean }) {
   const sum = useLoad(() => api<{ account: Acc | null; account_at: number | null }>('/uapa/summary'));
   const a = sum.data?.account;
   if (!a) return null;
@@ -145,20 +145,21 @@ function AccountCard() {
   const ago = sum.data?.account_at ? Math.max(1, Math.round((Date.now() / 1000 - sum.data.account_at) / 3600)) : 0;
   return (
     <section className="acct">
-      <div className={`acct-hero ${a.balance > 0 ? 'owe' : 'ok'}`}>
-        <small>{a.balance > 0 ? 'Debes en Mi UAPA' : 'Estás al día en Mi UAPA'}</small>
-        <b className="num">{a.balance > 0 ? rd(a.balance) : rd(0)}</b>
+      <div className={`acct-hero ${a.balance > 0 ? 'plan' : 'ok'}`}>
+        <small>{a.balance > 0 ? 'Por pagar en cuotas mensuales' : 'Estás al día en Mi UAPA'}</small>
+        <b className="num">{rd(a.balance)}</b>
         {cur && cur.charges > 0 && (
           <>
             <span className="acct-bar"><i style={{ width: `${Math.min(100, (cur.paid / cur.charges) * 100)}%` }} /></span>
             <em>{cur.period}: pagaste {rd(cur.paid)} de {rd(cur.charges)}</em>
           </>
         )}
+        {a.balance > 0 && cuota > 0 && <em>{paidMonth ? '✓ La cuota de este mes ya está pagada · ' : ''}Quedan {Math.max(1, Math.round(a.balance / cuota))} cuotas de {rd(cuota)}</em>}
         {ago > 0 && <em className="acct-at">Actualizado hace {ago} h · <a href="#horario">actualizar</a></em>}
       </div>
       {a.periods.map((p, i) => (
         <details key={p.period} className="acct-period" open={i === 0}>
-          <summary><span>{p.period}</span><b className={`num ${p.balance > 0 ? 'owe' : 'ok'}`}>{p.balance > 0 ? 'Debes ' + rd(p.balance) : 'Saldado'}</b></summary>
+          <summary><span>{p.period}</span><b className={`num ${p.balance > 0 ? 'owe' : 'ok'}`}>{p.balance > 0 ? 'Por pagar ' + rd(p.balance) : 'Saldado'}</b></summary>
           <ul>
             {p.lines.map((l, j) => (
               <li key={l.code + j} className={l.payment ? 'pay' : ''}>

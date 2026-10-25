@@ -32,6 +32,7 @@ import { tokenFromValue, webLoginToken } from './evalogin';
 import { registerExtras } from './extras';
 import { registerHorario } from './horario';
 import { registerKit } from './kit';
+import { synthesize, ttsStatus } from './tts';
 import { CALENDAR, TERMS } from './uapa-calendar';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -1101,7 +1102,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'notify_clases', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
+const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'notify_clases', 'el_voice', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);
@@ -1362,31 +1363,14 @@ app.post('/api/assistant/transcribe', async (c) => {
   catch (e) { return c.json({ error: (e as Error).message }, 502); }
 });
 
-// Voz del asistente (Deepgram Aura-2 en español). Tope diario para no gastar la cuota gratis de IA:
-// si se pasa, la app usa la voz del teléfono.
-const VOICES = ['aquila', 'celeste', 'selena', 'sirio', 'javier', 'estrella', 'nestor', 'carina', 'alvaro', 'diana'];
-// Aura-2 es cara en la cuota gratis de Workers AI (~2.7 neuronas por letra): tope bajo y el resto con la voz del teléfono.
-const TTS_DAILY_CHARS = 700;
+// Voz del asistente: ElevenLabs (si está conectada) → MeloTTS gratis → voz del teléfono (ver tts.ts)
 app.post('/api/tts', async (c) => {
-  const { text, voice } = await c.req.json<{ text?: string; voice?: string }>();
-  const t = (text || '').replace(/[*_~#•]/g, '').replace(/\s+/g, ' ').trim().slice(0, 400);
-  if (!t) return c.json({ error: 'Sin texto' }, 400);
-  const s = await getSettings(c.env);
-  const today = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
-  const used = s.tts_day === today ? Number(s.tts_chars || 0) : 0;
-  if (used + t.length > TTS_DAILY_CHARS) return c.json({ error: 'Se acabó la voz premium de hoy', fallback: true }, 429);
-  try {
-    const speaker = VOICES.includes(voice || '') ? voice : 'aquila';
-    const out = await c.env.AI.run('@cf/deepgram/aura-2-es' as Parameters<Ai['run']>[0], { text: t, speaker, encoding: 'mp3' } as never, { returnRawResponse: true } as never) as unknown;
-    if (out instanceof Response && !/audio/.test(out.headers.get('content-type') || '')) throw new Error((await out.text()).slice(0, 160));
-    const body = out instanceof Response ? out.body : (out as { audio?: string }).audio ? Uint8Array.from(atob((out as { audio: string }).audio), (ch) => ch.charCodeAt(0)) : (out as ReadableStream);
-    await setSetting(c.env, 'tts_day', today);
-    await setSetting(c.env, 'tts_chars', String(used + t.length));
-    return new Response(body as BodyInit, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' } });
-  } catch (e) {
-    return c.json({ error: (e as Error).message, fallback: true }, 502);
-  }
+  const { text } = await c.req.json<{ text?: string }>();
+  const r = await synthesize(c.env, text || '');
+  if (!r.ok) return c.json({ error: r.error, fallback: true }, r.error === 'Sin texto' ? 400 : 429);
+  return new Response(r.body, { headers: { 'Content-Type': r.type, 'Cache-Control': 'no-store', 'X-Voice-Engine': r.engine } });
 });
+app.get('/api/tts/status', async (c) => c.json(await ttsStatus(c.env)));
 
 // Memoria de largo plazo del asistente (ver / editar / borrar)
 app.get('/api/assistant/memory', async (c) => c.json({ memory: await getMemory(c.env) }));

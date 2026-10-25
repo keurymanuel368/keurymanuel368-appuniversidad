@@ -23,6 +23,8 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   // Motores de IA gratis (opcionales, se usan en cadena)
   GROQ_API_KEY?: string;
+  /** Voz natural opcional (plan gratis de ElevenLabs). Se guarda con `wrangler secret put ELEVENLABS_API_KEY`. */
+  ELEVENLABS_API_KEY?: string;
   GROQ_MODEL?: string;
   NVIDIA_API_KEY?: string;
   NVIDIA_MODEL?: string;

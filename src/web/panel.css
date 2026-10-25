@@ -82,3 +82,6 @@
 .acct-period li.pay .num { color: var(--green); font-weight: 700; }
 
 .pn-dock .g8 { background: linear-gradient(160deg, #FFB454, #FF8A1F); }
+
+.acct-hero.plan { background: radial-gradient(80% 100% at 100% 0%, rgba(124, 92, 255, .5), transparent 60%), linear-gradient(155deg, #0B2A7A 0%, #0F4FD1 60%, #2F8BFF 100%); }
+.pn-tile.money:not(.owe) .pn-tile-ic { color: var(--green); background: var(--green-soft); }

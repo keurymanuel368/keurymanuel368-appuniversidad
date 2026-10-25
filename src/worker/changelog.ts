@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 50,
+    date: '2026-10-25',
+    title: '🎙️ Voz neural, asistente nuevo y un Inicio más claro',
+    items: [
+      'Pagos entiende tus cuotas: el saldo de Mi UAPA se muestra como «por pagar en cuotas mensuales» (ya no como deuda atrasada) y se acabó el recordatorio diario de pago.',
+      'Inicio rediseñado: Avisos con iconos de color, Últimas calificaciones en tarjetas deslizables y Metas con anillos de progreso.',
+      'Asistente renovado: cabecera con la mascota, ideas en tarjetas de colores y burbujas con identidad de Rumbo.',
+      'Voz neural gratis para el asistente (MeloTTS). Si conectas tu cuenta gratis de ElevenLabs, habla con una voz mucho más natural y Rumbo cuida tu cuota del mes.',
+    ],
+  },
+  {
     version: 49,
     date: '2026-10-25',
     title: '🗓️ Planificador de selección, asistencia y trámites',
