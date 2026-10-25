@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 55,
+    date: '2026-10-25',
+    title: '✨ Rumbo Elevate: un diseño con más profundidad',
+    items: [
+      'Títulos más grandes, tarjetas con borde de luz y sombras por capas, barra inferior y selectores de cristal más limpios.',
+      'Cada pantalla entra con una animación suave en cascada y los espacios son más compactos en el móvil.',
+    ],
+  },
+  {
     version: 54,
     date: '2026-10-25',
     title: '🧭 Widget nuevo: la brújula con tus clases',
