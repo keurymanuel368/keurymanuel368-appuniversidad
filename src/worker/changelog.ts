@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 51,
+    date: '2026-10-25',
+    title: '📚 Solo lo de este trimestre',
+    items: [
+      'Las materias del trimestre anterior ya no salen en Inicio, Tareas ni Notas: pasan solas a «Trimestres anteriores» cuando Mi UAPA te muestra un trimestre nuevo.',
+      'Sus tareas viejas dejan de contar como atrasadas.',
+      'Si todavía no hay notas del trimestre actual, Inicio muestra tu índice acumulado.',
+    ],
+  },
+  {
     version: 50,
     date: '2026-10-25',
     title: '🎙️ Voz neural, asistente nuevo y un Inicio más claro',

@@ -21,6 +21,20 @@ const minOf = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(2, 4));
 const isoOf = (s: string) => { const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+/** Trimestre actual según el horario de Mi UAPA (el más reciente que tengas importado), p. ej. «202634». */
+export async function currentTerm(env: Env): Promise<string | null> {
+  const r = await env.DB.prepare('SELECT MAX(term) AS t FROM uapa_classes WHERE user_id = ?').bind(env.UID).first<{ t: string | null }>();
+  return r?.t || null;
+}
+
+/** Las asignaturas del EVA de trimestres anteriores (su nombre corto empieza con el trimestre, ej. 202633-CBE109…) pasan al historial. */
+export async function archivePastCourses(env: Env): Promise<number> {
+  const term = await currentTerm(env);
+  if (!term) return 0;
+  const r = await env.DB.prepare(`UPDATE courses SET active = 0 WHERE user_id = ? AND active = 1 AND moodle_id IS NOT NULL AND substr(short_name, 1, 6) GLOB '[0-9][0-9][0-9][0-9][0-9][0-9]' AND substr(short_name, 1, 6) < ?`).bind(env.UID, term).run();
+  return r.meta.changes ?? 0;
+}
+
 export async function classes(env: Env): Promise<ClassRow[]> {
   const { results } = await env.DB.prepare('SELECT id, term, crn, code, title, day, start_min, end_min, room, building, start_date, end_date FROM uapa_classes WHERE user_id = ? ORDER BY day, start_min').bind(env.UID).all<ClassRow>();
   return results;
@@ -129,6 +143,7 @@ export function registerHorario(app: App) {
     if (!n) return c.json({ error: 'No llegó nada para guardar.' }, 400);
     if (stmts.length) await env.DB.batch(stmts);
     await setSetting(env, 'uapa_synced_at', String(nowSec()));
+    if (b.kind === 'schedule') extra = { ...extra, archived: await archivePastCourses(env) };
     return c.json({ ok: true, count: n, ...extra });
   });
 

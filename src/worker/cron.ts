@@ -7,7 +7,7 @@ import { notifyLive } from './live';
 import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
 import { flushWhatsApp, sendToMe } from './notify';
-import { classAlerts } from './horario';
+import { archivePastCourses, classAlerts } from './horario';
 import { calendarAlerts } from './uapa-calendar';
 import { weeklyPlan } from './plan';
 import { announceRelease } from './changelog';
@@ -60,6 +60,9 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   const now = nowSec();
   const local = localDate(env);
   const today = ymd(local);
+
+  // Asignaturas de trimestres anteriores → historial
+  try { const n = await archivePastCourses(env); if (n) log.push(`Historial: ${n} asignaturas archivadas`); } catch (e) { log.push('Historial: ' + (e as Error).message); }
 
   // 1) Sincronizar el EVA cada N horas
   if (syncNow && env.MOODLE_TOKEN) {

@@ -17,6 +17,11 @@ export function Panel({ d, now1, next, syncing, busy, go, onOpen, onNew, onSync,
   const total = rows.reduce((a, r) => a + r.credits, 0);
   const done = rows.filter((r) => r.status === 'aprobada').reduce((a, r) => a + r.credits, 0);
   const taking = rows.filter((r) => r.status === 'en_curso').reduce((a, r) => a + r.credits, 0);
+  // Sin notas del trimestre en curso, el promedio que se muestra es el acumulado de tus materias aprobadas (ponderado por créditos).
+  const graded = rows.filter((r) => r.status === 'aprobada' && r.grade !== null && r.credits > 0);
+  const gw = graded.reduce((a, r) => a + r.credits, 0);
+  const cumulative = gw ? Math.round((graded.reduce((a, r) => a + (r.grade as number) * r.credits, 0) / gw) * 10) / 10 : null;
+  const avg = d.average ?? cumulative;
   const acc = sum.data?.account;
   const cur = acc?.periods[0];
   const p = d.pay;
@@ -55,9 +60,9 @@ export function Panel({ d, now1, next, syncing, busy, go, onOpen, onNew, onSync,
             <em className={d.counts.overdue ? 'bad' : ''}>{d.counts.overdue ? `${d.counts.overdue} vencida${d.counts.overdue > 1 ? 's' : ''}` : 'al día'}</em>
           </button>
           <button onClick={() => go('asignaturas')}>
-            <span className="num">{d.average === null ? '—' : <CountUp value={d.average} decimals={1} />}</span>
-            <small>Promedio</small>
-            <em>{d.average === null ? 'sin notas' : d.average >= 70 ? 'sobre el mínimo' : 'bajo 70'}</em>
+            <span className="num">{avg === null ? '—' : <CountUp value={avg} decimals={1} />}</span>
+            <small>{d.average === null && cumulative !== null ? 'Índice acum.' : 'Promedio'}</small>
+            <em>{avg === null ? 'sin notas' : avg >= 70 ? 'sobre el mínimo' : 'bajo 70'}</em>
           </button>
           <button onClick={() => go('pensum')}>
             <span className="num"><CountUp value={done} /></span>

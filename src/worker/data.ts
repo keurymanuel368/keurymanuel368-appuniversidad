@@ -62,6 +62,8 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
   if (opts.id !== undefined) { where.push('t.id = ?'); binds.push(opts.id); }
   // Las actividades quitadas (no se corrigen) no salen en ninguna lista; abriéndola por id sí, para poder devolverla.
   if (!opts.status && opts.id === undefined) where.push("t.status != 'ignored'");
+  // Las tareas de asignaturas de trimestres anteriores (historial) no salen en las listas del día a día.
+  if (opts.id === undefined) where.push('(c.id IS NULL OR c.active = 1)');
   if (opts.from !== undefined) { where.push('(t.due_at IS NULL OR t.due_at >= ?)'); binds.push(opts.from); }
   if (opts.to !== undefined) { where.push('(t.due_at IS NULL OR t.due_at <= ?)'); binds.push(opts.to); }
   const sql = `SELECT t.id, t.title, t.due_at, t.url, t.source, t.status, t.notes, t.submitted_at, t.course_id, t.focus_minutes,${opts.id !== undefined ? ' t.description,' : ''}

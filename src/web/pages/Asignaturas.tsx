@@ -31,7 +31,7 @@ export function Asignaturas() {
       </PageHead>
       {courses.error && <div className="error">{courses.error}</div>}
       {!courses.data ? <Skeleton hero={false} rows={4} /> : list.length === 0 ? (
-        <div className="card"><Empty icon="book" title="Sin asignaturas todavía" text="Se traen solas del EVA. Si acabas de conectarlo, revísalo ahora; también puedes agregarlas a mano.">
+        <div className="card"><Empty icon="book" title="Aún no hay asignaturas de este trimestre" text="El EVA las publica cuando empieza la docencia. Tus notas del trimestre anterior están abajo, en «Trimestres anteriores».">
           <button className="btn primary" onClick={() => runSync().then((r) => { syncToast(r); courses.reload(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA ahora</button>
         </Empty></div>
       ) : (<>

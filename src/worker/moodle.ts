@@ -1,6 +1,7 @@
 // Sincronización con el EVA de la UAPA (Moodle) usando los servicios web de la app móvil.
 // Solo lee TUS datos con TU token personal.
 import type { Env } from './env';
+import { currentTerm } from './horario';
 import { getSetting, setSetting } from './db';
 import { nowSec } from './time';
 import { notifyChanges, notifyGrades } from './grades';
@@ -328,7 +329,10 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     // 1) Asignaturas: las actuales quedan activas; las de trimestres anteriores se guardan inactivas
     //    para traer tu historial de entregas y notas sin mezclarlas con lo que cursas ahora.
     const all = await moodleCall<MoodleCourse[]>(env, 'core_enrol_get_users_courses', { userid: site.userid });
-    const isCurrent = (c: MoodleCourse) => (c.visible ?? 1) === 1 && (!c.enddate || c.enddate > now - 30 * 86400) && (!c.startdate || c.startdate < now + 30 * 86400);
+    // Trimestre actual según Mi UAPA: un curso cuyo nombre corto empieza con un trimestre anterior (202633-…) ya es historial.
+    const curTerm = await currentTerm(env);
+    const pastTerm = (c: MoodleCourse) => !!curTerm && /^\d{6}/.test(c.shortname || '') && (c.shortname as string).slice(0, 6) < curTerm;
+    const isCurrent = (c: MoodleCourse) => !pastTerm(c) && (c.visible ?? 1) === 1 && (!c.enddate || c.enddate > now - 30 * 86400) && (!c.startdate || c.startdate < now + 30 * 86400);
     const current = all.filter(isCurrent);
     const existing = await env.DB.prepare('SELECT moodle_id, color FROM courses WHERE user_id = ?').bind(env.UID).all<{ moodle_id: number; color: string }>();
     const used = new Set(existing.results.map((r) => r.color));
