@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
 import './aurora.css';
+import './panel.css';
 import { initTheme } from './theme';
 import { startUpdater } from './updater';
 

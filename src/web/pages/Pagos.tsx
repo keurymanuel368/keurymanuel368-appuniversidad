@@ -63,6 +63,7 @@ export function Pagos() {
   return (
     <>
       <PageHead eyebrow="Cuotas del trimestre" title="Pagos" />
+      <AccountCard />
       <section className="grid2 stagger">
         <div className={`pay-hero ${tone}`}>
           <div className="b1" /><div className="b2" />
@@ -129,5 +130,45 @@ export function Pagos() {
         </Modal>
       )}
     </>
+  );
+}
+
+type Acc = { balance: number; currency: string; periods: { period: string; charges: number; paid: number; balance: number; lines: { code: string; desc: string; amount: number; balance: number; payment: boolean }[] }[] };
+const rd = (n: number) => 'RD$' + Math.round(n).toLocaleString('es-DO');
+
+/** Lo que debes en Mi UAPA (estado de cuenta oficial), por periodo. Se actualiza con el marcador de la pantalla Horario. */
+function AccountCard() {
+  const sum = useLoad(() => api<{ account: Acc | null; account_at: number | null }>('/uapa/summary'));
+  const a = sum.data?.account;
+  if (!a) return null;
+  const cur = a.periods[0];
+  const ago = sum.data?.account_at ? Math.max(1, Math.round((Date.now() / 1000 - sum.data.account_at) / 3600)) : 0;
+  return (
+    <section className="acct">
+      <div className={`acct-hero ${a.balance > 0 ? 'owe' : 'ok'}`}>
+        <small>{a.balance > 0 ? 'Debes en Mi UAPA' : 'Estás al día en Mi UAPA'}</small>
+        <b className="num">{a.balance > 0 ? rd(a.balance) : rd(0)}</b>
+        {cur && cur.charges > 0 && (
+          <>
+            <span className="acct-bar"><i style={{ width: `${Math.min(100, (cur.paid / cur.charges) * 100)}%` }} /></span>
+            <em>{cur.period}: pagaste {rd(cur.paid)} de {rd(cur.charges)}</em>
+          </>
+        )}
+        {ago > 0 && <em className="acct-at">Actualizado hace {ago} h · <a href="#horario">actualizar</a></em>}
+      </div>
+      {a.periods.map((p, i) => (
+        <details key={p.period} className="acct-period" open={i === 0}>
+          <summary><span>{p.period}</span><b className={`num ${p.balance > 0 ? 'owe' : 'ok'}`}>{p.balance > 0 ? 'Debes ' + rd(p.balance) : 'Saldado'}</b></summary>
+          <ul>
+            {p.lines.map((l, j) => (
+              <li key={l.code + j} className={l.payment ? 'pay' : ''}>
+                <span><b>{l.desc || l.code}</b><small>{l.code}{!l.payment && l.balance > 0 ? ' · pendiente ' + rd(l.balance) : ''}</small></span>
+                <span className="num">{l.payment ? '− ' : ''}{rd(l.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
+    </section>
   );
 }

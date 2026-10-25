@@ -46,9 +46,15 @@ function nextClass(list: Cls[], from = new Date()): { k: Cls; at: Date } | null 
 /** Marcador del navegador: corre dentro de Banner o del DEA (donde ya iniciaste sesión) y manda los datos a Rumbo. */
 function bookmarklet(origin: string) {
   const code = `(async()=>{try{
-var O='${origin}',P=location.host.indexOf('pruebas')>-1;
+var O='${origin}',H=location.host,P=H.indexOf('pruebas')>-1;
 var send=function(o){location.href=O+'/#importar/'+btoa(unescape(encodeURIComponent(JSON.stringify(o))))};
-if(P){var sk=M.cfg.sesskey,now=new Date(),ex={};
+if(H.indexOf('bancascade')>-1){send({kind:'account',text:document.body.innerText.slice(0,16000)})}
+else if(H.indexOf('banservices')>-1){var tj=await (await fetch('/StudentSelfService/ssb/academicTranscript/academicTranscriptPageData?level=&type=UAPA')).json();var dn=[],cu=[],ic=tj.institutionCredit||{};
+Object.keys(ic).forEach(function(t){ic[t].forEach(function(x){(x.subjectGrid||[]).forEach(function(g){if(g.grade!=null&&g.grade!=='')dn.push({code:g.subjectCode+'-'+g.courseNumber,grade:Number(g.grade),credits:Number(g.creditHours),term:t})})})});
+var cp=tj.courseInProgress||{},ct='';Object.keys(cp).forEach(function(t){ct=t;cp[t].forEach(function(x){(x.subjectGrid||[]).forEach(function(g){cu.push({code:g.subjectCode+'-'+g.courseNumber})})})});
+if(!dn.length&&!cu.length){alert('Rumbo: no encontré histórico.');return}
+send({kind:'transcript',transcript:{done:dn,current:cu,term:ct}})}
+else if(P){var sk=M.cfg.sesskey,now=new Date(),ex={};
 for(var i=-1;i<5;i++){var d=new Date(now.getFullYear(),now.getMonth()+i,1);
 var r=await fetch('/lib/ajax/service.php?sesskey='+sk,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([{index:0,methodname:'core_calendar_get_calendar_monthly_view',args:{year:d.getFullYear(),month:d.getMonth()+1,courseid:1,categoryid:0,includenavigation:false,mini:false}}])});
 var j=(await r.json())[0];if(!j.data)continue;
@@ -79,14 +85,16 @@ export function useImportFromHash(onDone: () => void) {
   useEffect(() => {
     const m = location.hash.match(/^#importar\/(.+)$/);
     if (!m) return;
+    let body0: { kind?: string } | null = null;
     (async () => {
       try {
         const body = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+        body0 = body;
         const r = await api<{ count: number }>('/uapa/import', { method: 'POST', body });
-        toast(body.kind === 'dea' ? `Exámenes del DEA importados (${r.count})` : `Horario importado (${r.count} bloques)`); haptic(14);
+        toast(body.kind === 'dea' ? `Exámenes del DEA importados (${r.count})` : body.kind === 'transcript' ? `Histórico importado: ${(r as { approved?: number }).approved ?? 0} aprobadas, ${(r as { inCourse?: number }).inCourse ?? 0} en curso` : body.kind === 'account' ? `Estado de cuenta importado: debes RD$${Math.round((r as { balance?: number }).balance ?? 0).toLocaleString('es-DO')}` : `Horario importado (${r.count} bloques)`); haptic(14);
         onDone();
       } catch (e) { toast((e as Error).message, 'err'); }
-      history.replaceState(null, '', '#horario');
+      history.replaceState(null, '', body0?.kind === 'account' ? '#pagos' : body0?.kind === 'transcript' ? '#pensum' : '#horario');
     })();
   }, []);
 }
@@ -236,6 +244,7 @@ function Importer({ data, reload }: { data: Data; reload: () => void }) {
           <li>En tu computadora, arrastra este botón a la barra de marcadores: <a className="hz-bm" href={link} onClick={(e) => { e.preventDefault(); toast('Arrástralo a tu barra de marcadores, no lo toques aquí'); }}>Importar a Rumbo</a></li>
           <li>Entra a <b>Mi UAPA → Inscripción → Inscribir asignaturas</b> (elige el periodo) y toca el marcador.</li>
           <li>Entra al <b>DEA</b> (Plataforma de exámenes) y toca el marcador otra vez.</li>
+          <li>Para tus <b>notas finales</b> abre «Histórico académico» y, para <b>lo que debes</b>, «Resumen de cuenta por periodo»: toca el marcador en cada una.</li>
         </ol>
         <p>El marcador corre en tu navegador con tu sesión: Rumbo nunca ve tu clave.</p>
       </details>

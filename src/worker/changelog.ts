@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 45,
+    date: '2026-10-25',
+    title: '🏠 Panel nuevo, notas finales y estado de cuenta',
+    items: [
+      'Inicio rediseñado: portada con tu día, promedio, créditos aprobados, tu saldo en Mi UAPA, tu avance de carrera y accesos rápidos.',
+      'Notas finales del histórico de Mi UAPA: las materias con nota quedan aprobadas con su calificación y las del trimestre actual pasan a «en curso».',
+      'Pagos: estado de cuenta oficial de Mi UAPA con lo que debes y el detalle por periodo.',
+      'El marcador del navegador ahora también importa el histórico y el estado de cuenta.',
+    ],
+  },
+  {
     version: 44,
     date: '2026-10-25',
     title: '🗓️ Horario, exámenes del DEA y un look nuevo',

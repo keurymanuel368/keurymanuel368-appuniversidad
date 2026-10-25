@@ -5,6 +5,7 @@ import { Icon } from '../icons';
 import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
 import { ClassGlance } from './Horario';
+import { Panel } from '../Panel';
 
 function greeting() {
   const h = Number(new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', hour: 'numeric', hour12: false }).format(new Date()));
@@ -83,74 +84,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
       <ClassGlance go={go} />
       {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
 
-      <nav className="quick-row hide-mobile" aria-label="Accesos rápidos">
-        <button className="quick" onClick={() => go('asistente')}><span className="q-ic grad"><Icon name="spark" size={19} /></span>Hablar con Rumbo</button>
-        <button className="quick" onClick={() => { haptic(8); setCreating(true); }}><span className="q-ic blue"><Icon name="plus" size={19} /></span>Nueva tarea</button>
-        <button className="quick" onClick={() => go('tareas')}><span className="q-ic violet"><Icon name="calendar" size={19} /></span>Mi semana</button>
-        <button className={`quick ${syncing ? 'spinning' : ''}`} onClick={sync} disabled={syncing}><span className="q-ic green"><Icon name="sync" size={19} /></span>{syncing ? 'Sincronizando…' : 'Sincronizar'}</button>
-      </nav>
-
-      <section className="grid2 stagger">
-        <div className="hero">
-          <div className="b1" /><div className="b2" /><div className="b3" />
-          <div className="copy">
-            {d.mascot ? (
-              <div className="hero-mascot">
-                <Mascot mood={d.mascot.mood} size={48} />
-                <span className="bubble">{d.mascot.sub}</span>
-              </div>
-            ) : <span className="kicker"><Icon name="spark" size={14} />TU DÍA EN RUMBO</span>}
-            <h2>{headline}</h2>
-            {next && next.id !== now1?.id ? (
-              <button className="next" onClick={() => setEditing(next)}>
-                <span className="next-dot" style={{ background: next.course_color || '#fff' }} />
-                <span className="next-txt"><b>{next.title}</b><span>{whenLabel(next.due_at)}{next.course_short ? ' · ' + next.course_short : ''}</span><Countdown to={next.due_at!} /></span>
-                <Icon name="chevron" size={18} />
-              </button>
-            ) : <p>Nada pendiente con fecha. Aprovecha para adelantar.</p>}
-            {d.weekProgress.total > 0 && (
-              <div className="hero-week">
-                <span><b className="num">{d.weekProgress.done}</b> de <b className="num">{d.weekProgress.total}</b> entregas de esta semana listas</span>
-                <div className="hero-bar"><div style={{ width: `${(d.weekProgress.done / d.weekProgress.total) * 100}%` }} /></div>
-              </div>
-            )}
-            <div className="actions">
-              <button className="btn white" onClick={() => go('tareas')}>Ver tareas</button>
-              <button className="btn ghost" onClick={sendSummary} disabled={busy}><Icon name="send" size={17} />{busy ? 'Enviando…' : 'Resumen'}</button>
-            </div>
-          </div>
-          {d.termProgress !== null && <div className="hero-ring"><Ring value={d.termProgress} label="del trimestre pasó" /></div>}
-        </div>
-
-        <div className="stats">
-          <button className="stat" onClick={() => go('tareas')}>
-            <span className="stat-ic blue"><Icon name="tasks" size={18} /></span>
-            <span className="value num"><CountUp value={d.counts.pending} /></span>
-            <span className="label">Pendientes</span>
-            {/* Lo vencido pesa más que lo de hoy: si hay, es lo primero que tiene que ver. */}
-            <span className={`foot ${d.counts.overdue || d.counts.today ? 'warn' : ''}`}>{d.counts.overdue ? `${d.counts.overdue} ${d.counts.overdue > 1 ? 'vencidas' : 'vencida'} sin marcar` : d.counts.today ? `${d.counts.today} ${d.counts.today > 1 ? 'vencen' : 'vence'} hoy` : 'Nada vence hoy'}</span>
-          </button>
-          <button className="stat" onClick={() => go('asignaturas')}>
-            <span className="stat-ic green"><Icon name="trend" size={18} /></span>
-            <span className="value num">{d.average === null ? '—' : <CountUp value={d.average} decimals={1} />}</span>
-            <span className="label">Índice del trimestre</span>
-            <span className={`foot ${d.average !== null && d.average >= 70 ? 'good' : ''}`}>{d.average === null ? 'Sin notas aún' : d.average >= 70 ? 'Sobre el mínimo' : 'Bajo 70'}</span>
-          </button>
-          <button className="stat" onClick={() => go('asignaturas')}>
-            <span className="stat-ic violet"><Icon name="book" size={18} /></span>
-            <span className="value num"><CountUp value={d.courses.length} /></span>
-            <span className="label">Asignaturas</span>
-            <span className="foot">{syncing ? 'Actualizando el EVA…' : d.lastSync ? `EVA ${agoLabel(d.lastSync)}` : 'EVA sin sincronizar'}</span>
-          </button>
-          <button className="stat" onClick={() => go('pagos')}>
-            <span className={`stat-ic ${payTone}`}><Icon name="wallet" size={18} /></span>
-            <span className="value num">{p.paid ? '✓' : p.state === 'open' ? <><CountUp value={p.daysToClose} /><small className="unit"> {p.daysToClose === 1 ? 'día' : 'días'}</small></> : <><CountUp value={p.daysToOpen} /><small className="unit"> {p.daysToOpen === 1 ? 'día' : 'días'}</small></>}</span>
-            <span className="label">{p.paid ? 'Cuota pagada' : p.state === 'open' ? 'Para pagar la cuota' : 'Para que abra el pago'}</span>
-            <span className={`foot ${payTone === 'orange' ? 'warn' : payTone === 'green' ? 'good' : 'info'}`}>{p.paid ? payState : `Ventana del ${p.openDay} al ${p.closeDay}`}</span>
-          </button>
-        </div>
-      </section>
-
+      <Panel d={d} now1={now1} next={next} syncing={syncing} busy={busy} go={go} onOpen={setEditing} onNew={() => setCreating(true)} onSync={sync} onSummary={sendSummary} />
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 
@@ -229,12 +163,6 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             </div>
           )}
 
-          <button className="card pay-card" onClick={() => go('pagos')}>
-            <div className="card-head"><h3>Cuota del mes</h3><span className={`pill ${payTone} spacer`}>{p.paid ? 'Pagado' : p.state === 'open' ? 'Abierta' : 'Aún no abre'}</span></div>
-            <span className="amount num">{p.amount ? <><small>RD$</small>{Number(p.amount).toLocaleString('es-DO')}</> : <><small>RD$</small>—</>}</span>
-            <div className="paybar"><div className={payTone} style={{ width: `${p.paid ? 100 : p.state === 'open' ? 100 - Math.min(100, (p.daysToClose / 11) * 100) : Math.max(4, 100 - (p.daysToOpen / 30) * 100)}%` }} /></div>
-            <div className="pay-legend"><span>{p.paid ? `Pagaste la cuota de este mes` : p.state === 'open' ? `Abrió el ${p.openDay} · cierra el ${p.closeDay}` : `Abre el ${p.openDay} · cierra el ${p.closeDay}`}</span><b className="num">{p.paid ? '✓' : p.state === 'open' ? `${p.daysToClose} d` : `en ${p.daysToOpen} d`}</b></div>
-          </button>
         </div>
       </section>
 

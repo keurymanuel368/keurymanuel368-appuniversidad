@@ -6,6 +6,7 @@ import type { Env } from './env';
 import { getSetting, setSetting, markSent } from './db';
 import { localDate, nowSec, ymd } from './time';
 import { sendToMe } from './notify';
+import { applyTranscript, parseAccount, type TranscriptBody } from './uapa';
 
 type App = Hono<{ Bindings: Env }>;
 
@@ -53,6 +54,8 @@ type ImportBody = {
   exams?: { course?: string; title: string; opens?: number; closes?: number }[];
   profile?: Record<string, string>;
   projection?: { code: string; title: string }[];
+  text?: string;
+  transcript?: TranscriptBody;
 };
 
 export function registerHorario(app: App) {
@@ -93,12 +96,27 @@ export function registerHorario(app: App) {
         n++;
       }
     }
+    let extra = {};
+    if (b.kind === 'account' && b.text) {
+      const acc = parseAccount(b.text);
+      if (!acc.periods.length) return c.json({ error: 'No pude leer el estado de cuenta. Abre «Resumen de cuenta por periodo» y toca el marcador de nuevo.' }, 400);
+      await setSetting(env, 'uapa_account', JSON.stringify(acc));
+      await setSetting(env, 'uapa_account_at', String(nowSec()));
+      n = acc.periods.length; extra = { balance: acc.balance };
+    }
+    if (b.kind === 'transcript' && b.transcript) { extra = await applyTranscript(env, b.transcript); n = (b.transcript.done?.length || 0) + (b.transcript.current?.length || 0); }
     if (b.kind === 'profile' && b.profile) { await setSetting(env, 'uapa_profile', JSON.stringify(b.profile)); n = 1; }
     if (!n) return c.json({ error: 'No llegó nada para guardar.' }, 400);
     if (stmts.length) await env.DB.batch(stmts);
     await setSetting(env, 'uapa_synced_at', String(nowSec()));
-    return c.json({ ok: true, count: n });
+    return c.json({ ok: true, count: n, ...extra });
   });
+
+  app.get('/api/uapa/summary', async (c) => c.json({
+    account: JSON.parse(await getSetting(c.env, 'uapa_account', 'null')),
+    account_at: Number(await getSetting(c.env, 'uapa_account_at', '0')) || null,
+    transcript: JSON.parse(await getSetting(c.env, 'uapa_transcript', 'null')),
+  }));
 
   app.post('/api/horario/lead', async (c) => {
     const { lead } = await c.req.json<{ lead: number }>();
