@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 47,
+    date: '2026-10-25',
+    title: '⚡ Mucho más fluida',
+    items: [
+      'Cambiar de pantalla ya no se congela: la pantalla anterior se queda hasta que la nueva está lista y entra con un deslizamiento corto.',
+      'Las pantallas que ya viste aparecen al instante y se actualizan por detrás (antes salían en blanco).',
+      'Tareas cargaba las fechas muy lento; ahora es casi inmediata.',
+      'Menos efectos pesados: sin desenfoques en las tarjetas, sombras más ligeras y la mascota sin animaciones constantes.',
+    ],
+  },
+  {
     version: 46,
     date: '2026-10-25',
     title: '✨ Toda la app, más pulida',

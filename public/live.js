@@ -197,46 +197,12 @@
         slot.appendChild(card(j.on, j.configured));
       }).catch(function () { busy = false; });
     }
-    new MutationObserver(function () { mount(); }).observe(document.documentElement, { childList: true, subtree: true });
+    var mt = 0; new MutationObserver(function () { if (mt) return; mt = setTimeout(function () { mt = 0; mount(); }, 250); }).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener('hashchange', function () { setTimeout(mount, 60); });
   })();
 
   // ---------- Números que cuentan al aparecer (como en las apps de Apple) ----------
-  (function () {
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    var SEL = '.stat .value, .ts-index b, .fg-score b, .course .grade, .amount, .gf-score b';
-    function run(el) {
-      if (el.__rc) return; el.__rc = 1;
-      var tn = null;
-      for (var i = 0; i < el.childNodes.length; i++) { var n = el.childNodes[i]; if (n.nodeType === 3 && /\d/.test(n.nodeValue)) { tn = n; break; } }
-      if (!tn) return;
-      var txt = tn.nodeValue, m = txt.match(/^(\s*)(\d+(?:\.\d+)?)(\s*)$/);
-      if (!m) return;
-      var target = parseFloat(m[2]), dec = (m[2].split('.')[1] || '').length;
-      if (!isFinite(target) || target === 0) return;
-      var last = null, t0 = 0, D = 450;
-      function f(t) {
-        if (!t0) t0 = t;
-        if (last !== null && tn.nodeValue !== last) return;           // la app cambió el número: se deja
-        var p = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - p, 4);
-        last = m[1] + (target * e).toFixed(dec) + m[3];
-        tn.nodeValue = last;
-        if (p < 1) requestAnimationFrame(f); else tn.nodeValue = txt;
-      }
-      requestAnimationFrame(f);
-    }
-    var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); run(e.target); } });
-    }, { threshold: .4 }) : null;
-    function scan(root) {
-      if (!root.querySelectorAll) return;
-      var list = root.matches && root.matches(SEL) ? [root] : [];
-      list = list.concat([].slice.call(root.querySelectorAll(SEL)));
-      list.forEach(function (el) { if (!el.__rcSeen) { el.__rcSeen = 1; io ? io.observe(el) : run(el); } });
-    }
-    new MutationObserver(function (ms) { ms.forEach(function (m) { m.addedNodes.forEach(scan); }); })
-      .observe(document.documentElement, { childList: true, subtree: true });
-  })();
+  // (el contador de números lo hace ahora CountUp dentro de la app)
 
   // ---------- Vibración suave al tocar (Android) ----------
   (function () {

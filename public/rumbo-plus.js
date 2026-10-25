@@ -449,7 +449,7 @@
     try { fillAsk(); } catch (e) {}
     try { applyBuddy(); } catch (e) {}
   }
-  function schedule() { if (!pend) { pend = true; requestAnimationFrame(run); } }
+  function schedule() { if (!pend) { pend = true; setTimeout(function () { (window.requestIdleCallback || requestAnimationFrame)(run); }, 180); } }
   function boot() {
     applyAccent(store.get('rumbo-accent', 'azul'));
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });

@@ -82,3 +82,43 @@ body .seg button { min-width: 0; }
 
 /* Listas dentro de una tarjeta de cristal: las filas no llevan fondo propio */
 body .card.list .task-wrap, body .card.list .task, body .card .task-wrap { background: transparent !important; box-shadow: none !important; }
+
+/* ==========================================================================
+   Fluidez (v47): solo se animan transform y opacity; nada de desenfoques, mezclas ni sombras animadas.
+   ========================================================================== */
+/* El fondo fijo se pinta aparte (con background-attachment: fixed el teléfono repinta todo al desplazar) */
+body { background: var(--bg) !important; background-attachment: scroll !important; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; transform: translateZ(0);
+  background:
+    radial-gradient(620px 380px at 105% -6%, rgba(var(--aurora-a), .26), transparent 62%),
+    radial-gradient(520px 360px at -12% 14%, rgba(var(--aurora-b), .12), transparent 62%); }
+
+/* Cristal solo en la barra inferior; el resto son superficies normales */
+body *:not(.tabbar):not(.tabbar *) { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+body .card, body .stat, body .quick, body .pn-tile, body .hz-card, body .hz-exam, body .hz-next, body .hz-week, body .hz-glance, body .acct-period, body .term, body .day-pill, body .seg, body .ai-composer .composer-row {
+  background: color-mix(in oklab, var(--surface) 94%, transparent);
+}
+
+/* Sin grano mezclado ni brillos que se mueven para siempre */
+body .pn-card::before, body .hz-hero::before, body .hero::before, body .pay-hero::before, body .career-hero::before, body .ts-index::before { background-image: none !important; mix-blend-mode: normal !important; }
+body .pn-glow, body .hero .b1, body .pay-hero .b1, body .career-hero .b1, body .hz-pill.live i { animation: none !important; }
+
+/* Cambio de pantalla: entra con un deslizamiento corto en la GPU; los hijos no se animan uno por uno */
+body .page { animation: pgIn .22s cubic-bezier(.22, 1, .36, 1) both !important; }
+body .stagger > * { animation: none !important; }
+@keyframes pgIn { from { opacity: 0; transform: translate3d(0, 8px, 0); } to { opacity: 1; transform: none; } }
+body .main, body .tabbar, body .sidebar { view-transition-name: none !important; }
+@media (prefers-reduced-motion: reduce) { body .page { animation: none !important; } }
+
+/* Sombras livianas (las grandes y encimadas cuestan mucho al pintar en el teléfono) */
+:root:root {
+  --sh-1: 0 1px 2px rgba(14, 38, 92, .05);
+  --sh-2: 0 2px 8px -2px rgba(14, 38, 92, .09);
+  --sh-3: 0 10px 22px -10px rgba(14, 38, 92, .22);
+  --sh-card: 0 1px 3px rgba(14, 38, 92, .06), 0 6px 14px -8px rgba(14, 38, 92, .12);
+}
+body .card, body .stat, body .quick, body .pn-tile, body .hz-card, body .hz-exam, body .hz-next, body .hz-week, body .hz-glance { box-shadow: var(--sh-card) !important; }
+
+/* La mascota ya no respira ni mueve la borla sin parar: solo parpadea */
+body .mascot .m-body, body .mascot .m-tassel, body .mascot .m-needle, body .mascot .m-needle2 { animation: none !important; }
+body .buddy *, body .buddy-bubble { animation-iteration-count: 1 !important; }

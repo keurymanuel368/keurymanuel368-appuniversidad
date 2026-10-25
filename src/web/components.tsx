@@ -274,20 +274,23 @@ export function RichText({ text }: { text: string }) {
 
 /** Número que sube animado hasta su valor (como en las apps de finanzas). */
 export function CountUp({ value, decimals = 0 }: { value: number; decimals?: number }) {
-  const [v, setV] = useState(0);
+  // Escribe el número directo en el DOM: sin volver a pintar React 60 veces por segundo.
+  const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(value); return; }
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || value === 0) { el.textContent = value.toFixed(decimals); return; }
     let raf = 0;
     const t0 = performance.now();
     const step = (t: number) => {
-      const p = Math.min(1, (t - t0) / 900);
-      setV(value * (1 - Math.pow(1 - p, 3)));
+      const p = Math.min(1, (t - t0) / 600);
+      el.textContent = (value * (1 - Math.pow(1 - p, 3))).toFixed(decimals);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [value]);
-  return <>{v.toFixed(decimals)}</>;
+  }, [value, decimals]);
+  return <span ref={ref}>{value.toFixed(decimals)}</span>;
 }
 
 export function Ring({ value, label, size = 140, stroke = 11, light = true, display }: { value: number; label?: string; size?: number; stroke?: number; light?: boolean; display?: ReactNode }) {
@@ -845,13 +848,25 @@ export function Empty({ icon, title, text, children }: { icon: string; title: st
   );
 }
 
+/** Datos ya vistos: al volver a una pantalla se pinta al instante y se refresca por detrás (nada de pantallas en blanco). */
+const loadCache = new Map<string, unknown>();
+export function clearLoadCache() { loadCache.clear(); }
+
 export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
-  const [data, setData] = useState<T | null>(null);
+  const key = fn.toString() + '|' + JSON.stringify(deps);
+  const [data, setDataRaw] = useState<T | null>(() => (loadCache.get(key) as T | undefined) ?? null);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
+  const setData = (d: T | null | ((prev: T | null) => T | null)) => setDataRaw((prev) => {
+    const next = typeof d === 'function' ? (d as (p: T | null) => T | null)(prev) : d;
+    if (next !== null) loadCache.set(key, next);
+    return next;
+  });
   useEffect(() => {
     let alive = true;
-    fn().then((d) => { if (alive) { setData(d); setError(''); } }).catch((e) => alive && setError(e.message));
+    const cached = loadCache.get(key) as T | undefined;
+    if (cached !== undefined) setDataRaw(cached);
+    fn().then((d) => { loadCache.set(key, d); if (alive) { setDataRaw(d); setError(''); } }).catch((e) => alive && setError(e.message));
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);

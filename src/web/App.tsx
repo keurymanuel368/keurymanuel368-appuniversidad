@@ -1,8 +1,7 @@
-import { Suspense, lazy, useEffect, useRef, useState, type FormEvent } from 'react';
-import { flushSync } from 'react-dom';
+import { Suspense, lazy, startTransition, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, ApiError, type Course } from './api';
 import { Icon } from './icons';
-import { Modal, SyncBar, TaskModal, Toaster, haptic, toast } from './components';
+import { Modal, SyncBar, TaskModal, Toaster, clearLoadCache, haptic, toast } from './components';
 import { SearchModal } from './Search';
 import { Welcome } from './Welcome';
 import { isAdmin, setMe, type Me } from './me';
@@ -118,10 +117,8 @@ export function App() {
       const from = ORDER.indexOf(pageRef.current), to = ORDER.indexOf(currentPage());
       document.documentElement.dataset.nav = to < from ? 'back' : 'fwd';
       const apply = () => { setPage(currentPage()); setMore(false); if (location.hash.includes('/')) setVersion((v) => v + 1); window.scrollTo({ top: 0 }); };
-      // Transición suave entre pantallas donde el navegador la soporta (Chrome/Android, Safari 18+).
-      const d = document as Document & { startViewTransition?: (cb: () => void) => unknown };
-      if (d.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) d.startViewTransition(() => flushSync(apply));
-      else apply();
+      // El cambio va en una transición de React: la pantalla de antes sigue viva hasta que la nueva está lista (sin parpadeos ni congelones).
+      startTransition(apply);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -157,6 +154,7 @@ export function App() {
   const go = (p: string) => { haptic(5); if (location.hash === '#' + p) { setMore(false); window.scrollTo({ top: 0, behavior: 'smooth' }); } else location.hash = p; };
   async function logout() {
     await api('/logout', { method: 'POST' });
+    clearLoadCache();
     navigator.serviceWorker?.controller?.postMessage('clear-api'); // borra los datos guardados del teléfono
     // El siguiente que entre (puede ser otra persona en este teléfono) empieza limpio en Inicio.
     setMore(false); setMe(null);
