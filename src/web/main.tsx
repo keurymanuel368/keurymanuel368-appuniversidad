@@ -4,6 +4,7 @@ import { App } from './App';
 import './styles.css';
 import './aurora.css';
 import './panel.css';
+import './polish.css';
 import { initTheme } from './theme';
 import { startUpdater } from './updater';
 

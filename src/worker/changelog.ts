@@ -10,6 +10,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 46,
+    date: '2026-10-25',
+    title: '✨ Toda la app, más pulida',
+    items: [
+      'Portadas con el mismo azul en Inicio, Pagos, Pensum y Notas (antes algunas salían en negro).',
+      'Tareas: la tira de días y las pestañas con cristal y brillo azul.',
+      'Notas: cada asignatura con su color. Pensum: materias aprobadas con borde verde.',
+      'Asistente: la barra de escribir ahora es una sola píldora con el micrófono dentro.',
+      'Ajustes: pestañas del mismo ancho y fichas de color en cada conexión.',
+    ],
+  },
+  {
     version: 45,
     date: '2026-10-25',
     title: '🏠 Panel nuevo, notas finales y estado de cuenta',

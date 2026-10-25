@@ -1,0 +1,84 @@
+/* ==========================================================================
+   Rumbo Pulido (v46): una sola familia de portadas, controles y tarjetas en todas las pantallas.
+   Usa `body` / `:root:root` para ganarle a /theme.css (que carga después y usa !important).
+   ========================================================================== */
+:root:root {
+  --grad-deep:
+    radial-gradient(90% 120% at 100% 0%, rgba(124, 92, 255, .55), transparent 58%),
+    radial-gradient(80% 100% at 0% 100%, rgba(56, 189, 248, .38), transparent 62%),
+    linear-gradient(155deg, #0A1B4F 0%, #15348F 55%, #2457D6 100%);
+  --grad: linear-gradient(165deg, #3B8CFF 0%, #0A66E8 100%);
+  --mesh-blue:
+    radial-gradient(90% 120% at 100% 0%, rgba(124, 92, 255, .5), transparent 58%),
+    radial-gradient(80% 100% at 0% 100%, rgba(56, 189, 248, .4), transparent 62%),
+    linear-gradient(155deg, #0B2A7A 0%, #0F4FD1 55%, #2F8BFF 100%);
+}
+:root:root[data-mode="dark"] {
+  --grad-deep:
+    radial-gradient(90% 120% at 100% 0%, rgba(109, 74, 224, .5), transparent 58%),
+    radial-gradient(80% 100% at 0% 100%, rgba(14, 116, 190, .35), transparent 62%),
+    linear-gradient(155deg, #0A1230 0%, #11276B 55%, #1B45B8 100%);
+}
+
+/* Portadas: Inicio/Pagos/Pensum comparten la malla azul; los demás bloques oscuros usan el azul noche */
+body .hero, body .pay-hero.blue, body .career-hero {
+  background: var(--mesh-blue) !important;
+  box-shadow: 0 26px 50px -24px rgba(15, 79, 209, .7), inset 0 1px 0 rgba(255, 255, 255, .28) !important;
+}
+body .ts-index, body .ts-hero, body .simulator {
+  box-shadow: 0 26px 50px -26px rgba(10, 27, 79, .8), inset 0 1px 0 rgba(255, 255, 255, .18) !important;
+}
+body .career-hero::before, body .ts-index::before { content: ""; position: absolute; inset: 0; background-image: var(--noise); opacity: .08; mix-blend-mode: overlay; pointer-events: none; border-radius: inherit; }
+
+/* Selector de pestañas: cristal con pulgar azul */
+body .seg { background: var(--glass) !important; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--glass-line); box-shadow: var(--sh-1), inset 0 1px 0 rgba(255, 255, 255, .5); }
+body .seg-thumb { background: var(--surface) !important; box-shadow: 0 4px 12px -4px rgba(14, 38, 92, .28), 0 0 0 1px rgba(14, 38, 92, .05) !important; }
+body .seg button.on { color: var(--blue-dark) !important; }
+
+/* Tareas: tira de días */
+body .day-pill { border-radius: 20px; background: var(--glass); backdrop-filter: blur(10px); border-color: var(--glass-line); box-shadow: var(--sh-1); }
+body .day-pill.today { border-color: color-mix(in oklab, var(--blue) 45%, transparent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--blue) 14%, transparent); }
+body .day-pill.on { background: var(--grad); border-color: transparent; box-shadow: var(--sh-blue); }
+body .day-pill.on .dots i { box-shadow: 0 0 0 1.5px #1F5FE0; }
+body .task .title { letter-spacing: -.012em; }
+
+/* Notas y asignaturas: tarjetas con el color de cada materia */
+body .course { background: linear-gradient(180deg, color-mix(in oklab, var(--c, #1F5FE0) 13%, var(--surface)) 0%, var(--surface) 58%); border-color: color-mix(in oklab, var(--c, #1F5FE0) 22%, transparent); }
+body .course .grade { font-family: var(--display); }
+body .gf-score { border-radius: 16px; }
+
+/* Pensum: estados con más lectura */
+body .subj { border-radius: 18px; }
+body .subj.aprobada { background: linear-gradient(180deg, #E6F8EE, #F2FBF6); border-color: #BFE8D1; box-shadow: inset 3px 0 0 var(--green-2); }
+body .subj.en_curso { background: var(--grad); }
+body .term { border-radius: 26px; background: var(--glass); border: 1px solid var(--glass-line); }
+body .term.now { background: linear-gradient(180deg, color-mix(in oklab, var(--blue) 9%, var(--surface)), var(--glass)); border-color: color-mix(in oklab, var(--blue) 28%, transparent); }
+:root[data-mode="dark"] body .subj.aprobada, :root[data-mode="dark"] .subj.aprobada { background: rgba(52, 199, 89, .12); border-color: rgba(52, 199, 89, .3); }
+
+/* Ajustes y Conexiones: iconos como fichas de color */
+body .set-ic { width: 40px; height: 40px; border-radius: 13px !important; display: grid; place-items: center; color: #fff; box-shadow: 0 8px 16px -8px rgba(14, 38, 92, .5), inset 0 1px 0 rgba(255, 255, 255, .35); }
+body .set-ic.blue { background: linear-gradient(160deg, #4C9BFF, #1F5FE0); }
+body .set-ic.green { background: linear-gradient(160deg, #3FD98B, #16A36A); }
+body .set-ic.violet { background: linear-gradient(160deg, #A98BFF, #6D4AE0); }
+body .set-ic.orange { background: linear-gradient(160deg, #FFB454, #F08A1C); }
+body .set-ic.red { background: linear-gradient(160deg, #FF8A7D, #E5484D); }
+body .set-ic.gray { background: linear-gradient(160deg, #94A3B8, #64748B); }
+body .set-ic .ic .ph-r { fill: #fff; }
+
+/* Asistente: barra de escritura en una sola píldora (antes el micrófono caía debajo) */
+body .ai-composer .composer-row { display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: center; gap: 8px; padding: 6px 6px 6px 16px; border-radius: 99px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(14px); box-shadow: var(--sh-card); }
+body .ai-composer .pill-input { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 10px 0; height: auto; }
+body .ai-composer .send-btn { flex: 0 0 auto; width: 46px; height: 46px; min-height: 0; border-radius: 50%; }
+body .ai-composer .send-btn.mic { background: var(--grad); color: #fff; box-shadow: var(--sh-blue); }
+body .ai-composer .chip { background: var(--glass); border-color: var(--glass-line); backdrop-filter: blur(10px); }
+
+/* Avisos y listas de tarjetas */
+body .news { border-radius: 22px; }
+body .section-head h3, body .lbl-section { letter-spacing: .06em; }
+
+/* Pestañas de igual ancho (con contador la etiqueta es más larga y el pulgar se descuadraba) */
+body .seg { display: grid !important; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); }
+body .seg button { min-width: 0; }
+
+/* Listas dentro de una tarjeta de cristal: las filas no llevan fondo propio */
+body .card.list .task-wrap, body .card.list .task, body .card .task-wrap { background: transparent !important; box-shadow: none !important; }
