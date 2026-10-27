@@ -14,6 +14,7 @@ export const TEXT_SIZES = [{ id: '1', label: 'Normal' }, { id: '1.1', label: 'Gr
 export function applyTextSize(z: string) {
   const v = TEXT_SIZES.some((x) => x.id === z) ? z : '1';
   (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom = v === '1' ? '' : v;
+  document.documentElement.style.setProperty('--zoom', v); // para que las alturas basadas en la pantalla (dvh) cuenten el zoom
 }
 export const storedTextSize = () => { try { return localStorage.getItem('rumbo-texto') || '1'; } catch { return '1'; } };
 
