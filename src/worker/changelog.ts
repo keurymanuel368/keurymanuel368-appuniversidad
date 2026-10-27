@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 59,
+    date: '2026-10-27',
+    title: '📱 Más pulido en el móvil',
+    items: [
+      'Cabecera del asistente en una línea, pestañas de Ajustes sin amontonarse y el botón «Nuevo» de Estudio ya cabe.',
+      'Horario, Pensum y tu cuenta se ven más ordenados en pantallas pequeñas.',
+    ],
+  },
+  {
     version: 58,
     date: '2026-10-27',
     title: '📱 Pulido para el móvil',

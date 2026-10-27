@@ -47,7 +47,7 @@ export function Pensum() {
 
   return (
     <>
-      <PageHead eyebrow={career ? `${career.name} · UAPA` : 'Tu carrera en la UAPA'} title="Mi pensum">
+      <PageHead eyebrow={career ? career.name : 'Tu carrera en la UAPA'} title="Mi pensum">
         <button className="btn line" onClick={() => setChoosing(true)} aria-label="Elegir carrera"><Icon name="cap" size={18} /><span className="lbl">{career ? 'Cambiar carrera' : 'Elegir carrera'}</span></button>
         <button className="btn primary" onClick={() => setEdit({ term: terms.at(-1) || 1, status: 'pendiente', credits: 3 })} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Asignatura</span></button>
       </PageHead>
