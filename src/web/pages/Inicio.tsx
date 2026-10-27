@@ -338,7 +338,7 @@ function FirstSteps({ d, go, initial }: { d: Dashboard; go: (p: string) => void;
   ];
   return (
     <>
-      <PageHead eyebrow={d.today} title={`${greeting()}${d.name ? ', ' + d.name : ''}`}>
+      <PageHead eyebrow={String(d.today || '').replace(/ de (\S{3})\S*/, ' $1').replace(/^(\S{3})\S*/, '$1')} title={`${greeting()}${d.name ? ', ' + d.name.split(' ')[0] : ''}`}>
         <button className="avatar hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
       </PageHead>
       <div className="welcome-card">

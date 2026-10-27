@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 58,
+    date: '2026-10-27',
+    title: '📱 Pulido para el móvil',
+    items: [
+      'Títulos más compactos y etiquetas que ya no se cortan; el saludo usa solo tu primer nombre.',
+      'Tarjeta de bienvenida más pequeña y el chat del asistente deja más espacio sobre la barra inferior.',
+    ],
+  },
+  {
     version: 57,
     date: '2026-10-27',
     title: '🧠 Asistente más listo y EVA caído sin sustos',
