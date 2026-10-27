@@ -189,3 +189,8 @@ html body .pay-config:not([open]) > summary { padding: 0; margin: 0; }
   html body .page .toggle:has(> .pill) .t { flex: 1 1 140px; }
   html body .page .toggle:has(> .pill) > .pill { margin-left: 44px; }
 }
+
+/* --- Móvil: títulos de sección largos se parten en vez de cortarse --- */
+@media (max-width: 520px) {
+  html body .section-head h3 { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; min-width: 0; flex: 1 1 auto; }
+}
