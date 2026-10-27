@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 57,
+    date: '2026-10-27',
+    title: '🧠 Asistente más listo y EVA caído sin sustos',
+    items: [
+      'La IA ahora usa primero los modelos más fuertes, hace las cuentas (promedios, cuánto falta para aprobar) y da pasos concretos.',
+      'Si el EVA de la universidad se cae, Rumbo lo explica claro y reintenta solo, sin alarmas falsas.',
+    ],
+  },
+  {
     version: 56,
     date: '2026-10-25',
     title: '💳 Pagos más ordenado y accesos más pulidos',

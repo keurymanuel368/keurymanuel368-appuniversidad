@@ -31,7 +31,7 @@ describe('splitOutput (respuesta de la IA)', () => {
 describe('rankModels (elegir el mejor modelo disponible)', () => {
   it('prefiere los modelos grandes y descarta los que no son de chat', () => {
     const top = rankModels(['whisper-large-v3', 'llama-guard-4', 'openai/gpt-oss-20b', 'meta-llama/llama-4-maverick-17b', 'openai/gpt-oss-120b']);
-    expect(top[0]).toBe('meta-llama/llama-4-maverick-17b');
+    expect(top[0]).toBe('openai/gpt-oss-120b');
     expect(top).not.toContain('whisper-large-v3');
     expect(top).not.toContain('llama-guard-4');
     expect(top.indexOf('openai/gpt-oss-120b')).toBeLessThan(top.indexOf('openai/gpt-oss-20b'));

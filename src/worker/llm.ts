@@ -27,8 +27,8 @@ export function providers(env: Env): Provider[] {
 
 // Preferencia: primero modelos grandes que responden directo (sin "pensar" largo), buenos en español.
 const PREFER = [
-  /llama-4-maverick/i, /llama-3\.3-70b/i, /kimi-k2/i, /deepseek-v3/i, /qwen3-235b|qwen-3-235b/i, /llama-4-scout/i,
-  /gemini-[\d.]+-flash(?!-lite)/i, /mistral-large|mistral-medium/i, /gpt-oss-120b/i, /llama-3\.1-405b/i,
+  /gpt-oss-120b/i, /kimi-k2/i, /qwen3-235b|qwen-3-235b/i, /gemini-[\d.]+-flash(?!-lite)/i, /llama-4-maverick/i, /deepseek-v3/i, /llama-3\.3-70b/i,
+  /mistral-large|mistral-medium/i, /llama-4-scout/i, /llama-3\.1-405b/i,
   /qwen3-32b|qwen-3-32b|qwen3-next/i, /gemini-[\d.]+-flash-lite/i, /gpt-oss-20b/i, /gemma-3-27b/i, /llama-3\.1-70b|llama3-70b/i,
   /llama-3\.1-8b|llama3\.1-8b|llama-3\.2-3b/i,
 ];
