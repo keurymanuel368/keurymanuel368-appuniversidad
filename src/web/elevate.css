@@ -182,3 +182,10 @@ html body .pay-config:not([open]) > summary { padding: 0; margin: 0; }
   html body details summary:has(small) { flex-wrap: wrap; row-gap: 2px; }
   html body details summary > small { flex-basis: 100%; margin-left: 24px; font-size: 12px; }
 }
+
+/* --- Móvil: filas de conexión con etiqueta de estado («Activo») --- */
+@media (max-width: 520px) {
+  html body .page .toggle:has(> .pill) { flex-wrap: wrap; }
+  html body .page .toggle:has(> .pill) .t { flex: 1 1 140px; }
+  html body .page .toggle:has(> .pill) > .pill { margin-left: 44px; }
+}
