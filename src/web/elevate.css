@@ -142,13 +142,14 @@ html body .pay-config:not([open]) > summary { padding: 0; margin: 0; }
 /* --- Asistente en móvil: cabecera en una línea, sin tapar el primer mensaje --- */
 @media (max-width: 520px) {
   html body .ai-top { gap: 5px; padding: 8px 8px 8px 10px; margin: 4px 8px 8px; flex: none; position: relative; z-index: 2; min-width: 0; }
-  html body .ai-top .ai-mascot svg, html body .ai-top .ai-mascot img { width: 32px; height: 32px; }
+  html body .ai-top .ai-mascot { width: 32px; padding: 0; margin: 0; flex: none; }
+  html body .ai-top .ai-mascot svg { width: 30px; height: auto; }
   html body .ai-top-copy { min-width: 0; overflow: hidden; }
   html body .ai-badge { display: none; }
   html body .ai-top .ai-mascot { flex: none; }
   html body .ai-top-copy b { display: flex; align-items: center; gap: 6px; font-size: 15px; line-height: 1.1; }
   html body .ai-top-copy span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; }
-  html body .ai-top .ai-icon { width: 34px; height: 34px; flex: none; border-radius: 11px 11px 11px 4px; }
+  html body .ai-top .ai-icon { width: 32px; height: 32px; min-width: 32px; padding: 0; flex: none; border-radius: 11px 11px 11px 4px; }
   html body .ai-top .ai-icon svg { width: 17px; height: 17px; }
   html body .ai-chat { padding-top: 6px; }
 }
