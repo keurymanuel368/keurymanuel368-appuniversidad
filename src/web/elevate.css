@@ -176,7 +176,7 @@ html body .pay-config:not([open]) > summary { padding: 0; margin: 0; }
 /* --- Móvil: historial de pagos y «Actualizar desde Mi UAPA» sin apretarse --- */
 @media (max-width: 520px) {
   html body .task:has(.money) { flex-wrap: wrap; row-gap: 6px; }
-  html body .task:has(.money) .body { flex: 1 1 calc(100% - 50px); min-width: 0; }
+  html body .task:has(.money) > .body, html body .task:has(.money) > .body.static { flex: 1 1 calc(100% - 50px) !important; width: calc(100% - 50px); max-width: none; min-width: 0; }
   html body .task:has(.money) .sub-txt { white-space: normal; overflow: visible; text-overflow: clip; }
   html body .task:has(.money) .money { margin-left: 44px; margin-right: auto; font-size: 15px; }
   html body details summary:has(small) { flex-wrap: wrap; row-gap: 2px; }
