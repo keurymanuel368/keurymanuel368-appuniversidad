@@ -527,7 +527,10 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     if (result.changes.length) await notifyChanges(env, result.changes).catch((e) => console.log('Aviso de cambios falló: ' + (e as Error).message));
     return result;
   } catch (e) {
-    await setSetting(env, 'eva_last_error', (e as Error).message.slice(0, 300));
-    throw e;
+    const msg = (e as Error).message;
+    // Falla del servidor de la universidad (Moodle caído / base de datos): no es culpa de Rumbo ni del token.
+    const down = /database driver|<p>|site administrator|\b50[0-4]\b|maintenance|mantenimiento/i.test(msg);
+    await setSetting(env, 'eva_last_error', down ? 'El servidor del EVA está caído o en mantenimiento (error de la universidad). Rumbo reintenta solo.' : msg.slice(0, 300));
+    throw down ? new Error('El servidor del EVA está caído o en mantenimiento. Reintento solo más tarde.') : e;
   }
 }

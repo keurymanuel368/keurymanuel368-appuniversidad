@@ -23,14 +23,16 @@ export async function checkHealth(env: Env, extra: { backupError?: string } = {}
   const s = await getSettings(env);
 
   // EVA: token vencido o sin conexión
-  if (env.MOODLE_TOKEN && s.eva_last_error) {
+  const evaDown = /servidor del EVA está caído/.test(s.eva_last_error || '');
+  // Si el EVA está caído por la universidad, no alarmar: solo avisa la regla de «más de 12 horas».
+  if (env.MOODLE_TOKEN && s.eva_last_error && !evaDown) {
     const expired = /token|invalid|inválid|expir|accessexception|webservice/i.test(s.eva_last_error);
     if (await alertOnce(env, 'eva', expired ? '⚠️ El EVA dejó de conectar' : '⚠️ No pude sincronizar el EVA',
       expired ? 'Parece que la conexión con el EVA venció. Vuelve a conectarlo en Ajustes → Conexiones (toma un minuto).'
         : `Error: ${s.eva_last_error.slice(0, 160)}. Lo vuelvo a intentar solo.`)) log.push('Alerta: EVA');
   }
   // EVA sin sincronizar hace más de 12 horas
-  if (env.MOODLE_TOKEN && Number(s.eva_last_sync || 0) && nowSec() - Number(s.eva_last_sync) > 12 * 3600 && !s.eva_last_error) {
+  if (env.MOODLE_TOKEN && Number(s.eva_last_sync || 0) && nowSec() - Number(s.eva_last_sync) > 12 * 3600 && (!s.eva_last_error || evaDown)) {
     if (await alertOnce(env, 'eva-old', '⚠️ El EVA lleva horas sin sincronizar', 'Abre Rumbo y toca Sincronizar. Si falla, revisa la conexión del EVA en Ajustes.')) log.push('Alerta: EVA atrasado');
   }
   // IA: todos los motores fallaron en la última media hora
