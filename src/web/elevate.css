@@ -136,7 +136,7 @@ html body .pay-config:not([open]) > summary { padding: 0; margin: 0; }
   html body .welcome-card h2 { font-size: 20px; line-height: 1.15; }
   html body .welcome-card p { font-size: 14px; line-height: 1.45; }
   html body .welcome-card svg, html body .welcome-card img { max-width: 64px; height: auto; }
-  html body .ai-screen { height: calc(100dvh - 14px - env(safe-area-inset-top, 0px) - 118px - env(safe-area-inset-bottom, 0px)); }
+  html body .ai-screen { --ai-h: calc(100dvh - 14px - env(safe-area-inset-top, 0px) - 126px - env(safe-area-inset-bottom, 0px)); height: var(--ai-h); min-height: 0; max-height: var(--ai-h); flex: none; }
 }
 
 /* --- Asistente en móvil: cabecera en una línea, sin tapar el primer mensaje --- */
