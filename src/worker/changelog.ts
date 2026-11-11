@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 74,
+    date: '2026-11-11',
+    title: '📓 Cuadernos y Rumbo en PC',
+    items: [
+      'Estudio → Cuadernos: un cuaderno por materia, con hojas rayadas y fecha. Guarda ahí lo que te explica la IA (tareas y clases en vivo) y tus apuntes.',
+      'Clase en vivo: ahora eliges la asignatura de un menú con las de tu trimestre.',
+      'Versión de PC rediseñada: Inicio en dos columnas y «Qué me toca» ya cuenta todas las atrasadas.',
+    ],
+  },
+  {
     version: 73,
     date: '2026-11-11',
     title: '🎧 Explicación en vivo y versión de PC',

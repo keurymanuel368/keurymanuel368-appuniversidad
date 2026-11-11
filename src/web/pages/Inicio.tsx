@@ -19,7 +19,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(() => { try { return window.matchMedia('(min-width: 1100px)').matches; } catch { return false; } });
   // Jalar hacia abajo (o el botón) sincroniza el EVA y recarga tu día.
   const sync = useCallback(async () => {
     setSyncing(true);
@@ -86,9 +86,13 @@ export function Inicio({ go }: { go: (p: string) => void }) {
 
       <Panel d={d} now1={now1} next={next} syncing={syncing} busy={busy} go={go} onOpen={setEditing} onNew={() => setCreating(true)} onSync={sync} onSummary={sendSummary} />
 
+      <div className="home-grid">
+      <div className="home-main">
       <QueToca d={d} go={go} onOpen={setEditing} onToggle={toggle} />
       <TodayTimeline d={d} go={go} />
       {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
+      </div>
+      <div className="home-side">
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 
@@ -180,6 +184,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         <AchievementsCard />
       </section>
       </>}
+      </div>
+      </div>
 
       {creating && <TaskModal task={{}} courses={d.courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); reload(); }} />}
       {editing && <TaskSheet task={editing} courses={d.courses} onClose={() => setEditing(null)} onChanged={() => { setEditing(null); reload(); }} />}
@@ -363,7 +369,8 @@ function QueToca({ d, go, onOpen, onToggle }: { d: Dashboard; go: (p: string) =>
   const now = Date.now() / 1000;
   const key = (sec: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date(sec * 1000));
   const hoy = key(now);
-  const late = d.tasks.filter((t) => t.due_at !== null && t.due_at < now);
+  const late = (d.overdueList && d.overdueList.length ? d.overdueList : d.tasks.filter((t) => t.due_at !== null && t.due_at < now));
+  const lateCount = Math.max(d.counts.overdue, late.length);
   const today = d.tasks.filter((t) => t.due_at !== null && t.due_at >= now && key(t.due_at) === hoy);
   const week = d.tasks.filter((t) => t.due_at !== null && t.due_at >= now && key(t.due_at) !== hoy && t.due_at < now + 7 * 86400);
   const block = (title: string, tone: string, items: Task[], more?: number) => items.length === 0 ? null : (
@@ -376,13 +383,13 @@ function QueToca({ d, go, onOpen, onToggle }: { d: Dashboard; go: (p: string) =>
     <div className="card que-toca">
       <div className="card-head"><h3>Qué me toca</h3><button className="link-btn spacer" onClick={() => go('tareas')}>Ver todo<Icon name="chevron" size={16} /></button></div>
       <div className="qt-counts">
-        <button className={late.length ? 'red' : ''} onClick={() => go('tareas')}><b className="num">{late.length}</b><span>Atrasadas</span></button>
+        <button className={lateCount ? 'red' : ''} onClick={() => go('tareas')}><b className="num">{lateCount}</b><span>Atrasadas</span></button>
         <button onClick={() => go('tareas')}><b className="num">{today.length}</b><span>Hoy</span></button>
         <button onClick={() => go('tareas')}><b className="num">{week.length}</b><span>Esta semana</span></button>
       </div>
-      {late.length + today.length + week.length === 0 ? <p className="muted small">Nada pendiente por ahora. ¡Estás al día!</p> : (
+      {lateCount + today.length + week.length === 0 ? <p className="muted small">Nada pendiente por ahora. ¡Estás al día!</p> : (
         <>
-          {block('Atrasadas · hazlas primero', 'red', late, late.length)}
+          {block('Atrasadas · hazlas primero', 'red', late, lateCount)}
           {block('Para hoy', 'blue', today)}
           {block('Esta semana', 'gray', week)}
         </>

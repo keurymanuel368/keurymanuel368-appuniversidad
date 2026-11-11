@@ -1,7 +1,7 @@
 // Estudio → Clases: escuchar la clase en vivo (PC), ver las preguntas que te hacen con su respuesta lista,
 // y después tener la clase explicada, clasificada por materia, con tarjetas y preguntas de examen.
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { agoLabel, api } from './api';
+import { agoLabel, api, type Course } from './api';
 import { Empty, Skeleton, haptic, toast, useLoad } from './components';
 import { Icon } from './icons';
 import { askNow, clearFinished, dismissAlert, explainNow, getLive, retryFailed, runProcess, startLive, stopLive, subscribeLive, type Explain, type Qa } from './clasesLive';
@@ -42,14 +42,25 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
     catch (e) { toast((e as Error).message, 'err'); }
   }
   const now = useLoad(() => api<{ title: string; course: string }>('/clases/now').catch(() => ({ title: '', course: '' })));
-  const [title, setTitle] = useState('');
+  const courses = useLoad(() => api<Course[]>('/courses'));
+  const [sel, setSel] = useState('');
+  const [custom, setCustom] = useState('');
   const [busy, setBusy] = useState(false);
   const live = useLive();
-  useEffect(() => { if (now.data?.title && !title) setTitle(now.data.title); }, [now.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const key = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  // La materia que toca ahora según tu horario queda elegida sola.
+  useEffect(() => {
+    if (sel || !courses.data || !now.data?.title) return;
+    const k = key(now.data.title);
+    const hit = courses.data.find((c) => key(c.name) === k || key(c.name).includes(k) || k.includes(key(c.name)));
+    if (hit) setSel(hit.name);
+  }, [courses.data, now.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function start() {
+    const name = sel === '__otra' ? custom.trim() : sel;
+    if (!name) { toast('Elige la asignatura de la clase', 'err'); return; }
     setBusy(true); haptic(10);
-    try { await startLive(title.trim() || 'Clase', title.trim() || now.data?.course || ''); }
+    try { await startLive(name, name); }
     catch (e) { const m = (e as Error).message; if (!/denied|Permission|cancel/i.test(m)) toast(m, 'err'); }
     setBusy(false);
   }
@@ -64,8 +75,14 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
           <h2>Que Rumbo escuche tu clase</h2>
           <p>Entra a tu reunión de Meet o Teams y, aquí, pulsa Empezar. Elige la pestaña de la reunión y marca <b>«Compartir audio de la pestaña»</b>. Rumbo transcribe cada 30 segundos y no guarda el audio.</p>
         </div>
-        <label className="cl-field"><span>Nombre de la clase</span>
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej.: Lógica Computacional" /></label>
+        <label className="cl-field"><span>Asignatura</span>
+          <select className="input cl-select" value={sel} onChange={(e) => setSel(e.target.value)}>
+            <option value="">Elige la asignatura…</option>
+            {(courses.data || []).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            <option value="__otra">Otra clase…</option>
+          </select>
+          {sel === '__otra' && <input className="input" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Nombre de la clase" />}
+        </label>
         <button className="btn primary cl-go" onClick={start} disabled={busy}><Icon name="spark" size={19} />{busy ? 'Abriendo…' : 'Empezar a escuchar'}</button>
         <small className="cl-note">Solo funciona en Chrome desde una PC. Pide permiso al profesor antes de transcribir la clase.</small>
         {live.err && <small className="cl-err">{live.err}</small>}
@@ -97,12 +114,18 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
 }
 
 // ---------- En vivo ----------
-function ExplainCard({ e }: { e: Explain }) {
+async function saveExplain(e: Explain, course: string) {
+  try { await api('/notes', { method: 'POST', body: { course: course || '', title: e.titulo, body: [e.texto, e.ejemplo ? `\nEjemplo: ${e.ejemplo}` : ''].join('\n').replace(/\*\*/g, '') } }); toast('Guardado en tu cuaderno ✅'); }
+  catch (er) { toast((er as Error).message, 'err'); }
+}
+
+function ExplainCard({ e, course }: { e: Explain; course?: string }) {
   return (
     <article className="cl-ex">
       <header><b>{e.titulo}</b><small className="num">{mmss(e.at)}</small></header>
       <p><Rich t={e.texto} /></p>
       {e.ejemplo && <div className="cl-ex-ej"><small>Ejemplo</small><p><Rich t={e.ejemplo} /></p></div>}
+      {course !== undefined && <button className="link-btn cl-ex-save" onClick={() => void saveExplain(e, course)}>Guardar en el cuaderno</button>}
     </article>
   );
 }
@@ -173,7 +196,7 @@ function LivePanel() {
             <div className="cl-exs-head"><h3>Explicación en vivo</h3>
               <button className="btn line cl-sm" onClick={() => { haptic(8); explainNow(); }} disabled={s.explaining}>{s.explaining ? 'Explicando…' : 'Explícame lo último'}</button></div>
             {s.explaining && <div className="cl-thinking" role="status"><span /><span /><span /><b>Preparando la explicación…</b></div>}
-            {s.explains.length ? s.explains.map((e) => <ExplainCard key={e.id} e={e} />)
+            {s.explains.length ? s.explains.map((e) => <ExplainCard key={e.id} e={e} course={s.course} />)
               : !s.explaining && <p className="muted small">Cada minuto más o menos, Rumbo te explica lo que se acaba de decir: de qué se habla, en palabras sencillas y con un ejemplo.</p>}
           </section>
         </aside>
@@ -218,13 +241,13 @@ function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
   }
   async function saveCards() {
     if (!c?.notes) return;
-    try { await api('/cards', { method: 'POST', body: { course: c.course || c.title, cards: c.notes.tarjetas } }); toast(`${c.notes.tarjetas.length} tarjetas guardadas en Estudio → Tarjetas ✅`); }
+    try { await api('/cards', { method: 'POST', body: { course: c.course || c.title, cards: c.notes.tarjetas } }); toast(`${c.notes.tarjetas.length} fichas guardadas en tu cuaderno ✅`); }
     catch (e) { toast((e as Error).message, 'err'); }
   }
   async function saveNote() {
     if (!c?.notes) return;
     const body = [c.notes.resumen, '', ...c.notes.explicacion.flatMap((e) => [`## ${e.titulo}`, e.texto, '']), 'Conceptos clave', ...c.notes.conceptos.map((x) => `- ${x.termino}: ${x.definicion}`)].join('\n').replace(/\*\*/g, '');
-    try { await api('/notes', { method: 'POST', body: { course: c.course || c.title, title: `${c.title} · ${dateLabel(c.started_at)}`, body } }); toast('Guardado en Apuntes ✅'); }
+    try { await api('/notes', { method: 'POST', body: { course: c.course || c.title, title: `${c.title} · ${dateLabel(c.started_at)}`, body } }); toast('Guardado en tu cuaderno ✅'); }
     catch (e) { toast((e as Error).message, 'err'); }
   }
   async function remove() {
@@ -254,7 +277,7 @@ function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
         <Sec title="Resumen"><div className="card"><p className="cl-p"><Rich t={n.resumen} /></p>{n.temas.length > 0 && <div className="cl-tags">{n.temas.map((t, i) => <span key={i} className="pill blue">{t}</span>)}</div>}</div></Sec>
         <div className="cl-actions">
           <button className="btn primary" onClick={saveCards}>Guardar {n.tarjetas.length} tarjetas</button>
-          <button className="btn line" onClick={saveNote}>Guardar en Apuntes</button>
+          <button className="btn line" onClick={saveNote}>Guardar en el cuaderno</button>
         </div>
 
         <Sec title="Explicación detallada">
@@ -278,7 +301,7 @@ function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
           </div></Sec>}
       </>}
 
-      {(c.live || []).length > 0 && <Sec title="Explicaciones durante la clase" count={(c.live || []).length}><div className="cl-older">{[...(c.live || [])].reverse().map((e) => <ExplainCard key={e.id} e={e} />)}</div></Sec>}
+      {(c.live || []).length > 0 && <Sec title="Explicaciones durante la clase" count={(c.live || []).length}><div className="cl-older">{[...(c.live || [])].reverse().map((e) => <ExplainCard key={e.id} e={e} course={c.course || c.title} />)}</div></Sec>}
 
       {c.qa.length > 0 && <Sec title="Preguntas que te hicieron" count={c.qa.length}><div className="cl-older">{c.qa.map((q) => <Answer key={q.id} qa={q} onClose={() => {}} />)}</div></Sec>}
 

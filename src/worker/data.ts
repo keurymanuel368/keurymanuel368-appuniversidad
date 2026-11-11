@@ -228,7 +228,8 @@ export async function dashboard(env: Env) {
   const now = nowSec();
   const endOfToday = (() => { const d = localDate(env); return localToUnix(env, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 23, 59); })();
   const pending = await listTasks(env, { status: 'pending', from: now - 3 * 86400, limit: 100 });
-  const overdue = pending.filter((t) => t.due_at !== null && t.due_at < now);
+  // Atrasadas: todas las vencidas sin entregar (la lista de abajo solo trae lo reciente).
+  const overdue = (await listTasks(env, { status: 'pending', limit: 300 })).filter((t) => t.due_at !== null && t.due_at < now).sort((a, b) => b.due_at! - a.due_at!);
   const today = pending.filter((t) => t.due_at !== null && t.due_at >= now && t.due_at <= endOfToday);
   const week = pending.filter((t) => t.due_at !== null && t.due_at > endOfToday && t.due_at <= now + 7 * 86400);
   const courses = await courseSummaries(env);
@@ -300,6 +301,7 @@ export async function dashboard(env: Env) {
     counts: { pending: pending.filter((t) => t.due_at === null || t.due_at >= now).length, today: today.length, week: week.length, overdue: overdue.length },
     average: overallAverage(courses),
     tasks: pending.filter((t) => t.due_at === null || t.due_at >= now - 3 * 86400).slice(0, 12),
+    overdueList: overdue.slice(0, 6),
     courses,
     pay,
     lastSync: Number(s.eva_last_sync || 0) || null,

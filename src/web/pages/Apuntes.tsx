@@ -4,6 +4,7 @@ import { api, type Course } from '../api';
 import { SemanaEficiente } from './SemanaEficiente';
 import { TrabajosHechos } from '../TrabajoIA';
 import { Clases } from '../Clases';
+import { Cuadernos } from '../Cuadernos';
 import { Empty, Modal, PageHead, Segmented, Skeleton, confetti, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 
@@ -207,8 +208,8 @@ export function Apuntes() {
   return (
     <>
       <PageHead eyebrow="Tus materias" title="Estudio" />
-      <Segmented label="Estudio" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'clases', label: 'Clases' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Apuntes' }, { id: 'tarjetas', label: 'Tarjetas' }]} />
-      {tab === 'semana' ? <SemanaEficiente /> : tab === 'clases' ? <Clases /> : tab === 'trabajos' ? <TrabajosHechos /> : tab === 'apuntes' ? <Notes names={names} /> : <Cards names={names} />}
+      <Segmented label="Estudio" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'clases', label: 'Clases' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Cuadernos' }, { id: 'tarjetas', label: 'Tarjetas' }]} />
+      {tab === 'semana' ? <SemanaEficiente /> : tab === 'clases' ? <Clases /> : tab === 'trabajos' ? <TrabajosHechos /> : tab === 'apuntes' ? <Cuadernos names={names} Editor={NoteEditor} List={Notes} onReview={() => setTab('tarjetas')} /> : <Cards names={names} />}
     </>
   );
 }

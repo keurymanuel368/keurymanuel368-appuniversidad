@@ -39,6 +39,25 @@ export function StudyModal({ task, onClose, initial = 'plan' }: { task: Task; on
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
   const r = data[mode];
+  /** Guarda lo que armó la IA en el cuaderno de la materia (la hoja queda con su fecha). */
+  async function saveBook() {
+    if (!r) return;
+    const course = task.course_name || '';
+    haptic(10);
+    try {
+      if (r.mode === 'tarjetas') {
+        await api('/cards', { method: 'POST', body: { course, cards: r.cards.map((c) => ({ front: c.q, back: c.a })) } });
+        toast(`${r.cards.length} fichas guardadas en tu cuaderno ✅`);
+        return;
+      }
+      let title = '', body = '';
+      if (r.mode === 'explica') { title = r.title || task.title; body = [r.text, '', ...r.keys.map((k) => `- ${k}`)].join('\n'); }
+      else if (r.mode === 'plan') { title = `Plan: ${task.title}`; body = [...r.steps.flatMap((s, i) => [`## ${i + 1}. ${s.title} (${s.minutes} min)`, s.detail, '']), r.tip ? `Tip: ${r.tip}` : ''].join('\n'); }
+      else { title = `Borrador: ${task.title}`; body = [r.aporte, '', '## Ideas para responder', ...r.respuestas.map((x) => `- ${x}`)].join('\n'); }
+      await api('/notes', { method: 'POST', body: { course, title, body } });
+      toast('Guardado en tu cuaderno ✅');
+    } catch (e) { toast((e as Error).message, 'err'); }
+  }
   return (
     <Modal title={`Estudiar: ${task.title}`} onClose={onClose}>
       <Segmented label="Tipo de ayuda" value={mode} onChange={(m) => { window.speechSynthesis?.cancel(); setMode(m); }}
@@ -63,6 +82,9 @@ export function StudyModal({ task, onClose, initial = 'plan' }: { task: Task; on
         {r?.mode === 'explica' && <Explain r={r} />}
         {r?.mode === 'foro' && <ForumDraft r={r} />}
       </div>
+      {r && (
+        <button className="btn primary block" onClick={() => void saveBook()}><Icon name="book" size={18} />Guardar en mi cuaderno</button>
+      )}
       {r && (
         <button className="btn line block" onClick={() => { haptic(6); void load(mode, true); }} disabled={busy}>
           <Icon name="refresh" size={18} />{busy ? 'Generando…' : 'Generar otra versión'}

@@ -7,7 +7,7 @@ export type Qa = { id: string; at: number; dirigida: 'tu' | 'clase'; pregunta: s
 export type Explain = { id: string; at: number; titulo: string; texto: string; ejemplo?: string };
 export type LiveState = {
   phase: 'idle' | 'live' | 'ending';
-  id: number | null; title: string; startedAt: number;
+  id: number | null; title: string; course: string; startedAt: number;
   sent: number; silent: number; failed: number; queued: number;
   lines: { at: number; text: string }[]; alerts: Qa[];
   err: string; notice: string; progress: { done: number; total: number } | null; finishedId: number | null;
@@ -18,7 +18,7 @@ export type LiveState = {
 // Cuándo cortar un trozo (milisegundos): al menos 2 s y una pausa de 0,45 s; o a partir de 5 s con una pausa corta; o a los 9 s sí o sí.
 const MIN_MS = 2000, SOFT_MS = 5000, HARD_MS = 9000, PAUSE_MS = 450, SHORT_PAUSE_MS = 200, DEAD_MS = 12000, TICK = 100, LEVEL = 4;
 
-const blank = (): LiveState => ({ phase: 'idle', id: null, title: '', startedAt: 0, sent: 0, silent: 0, failed: 0, queued: 0, lines: [], alerts: [], err: '', notice: '', progress: null, finishedId: null, asking: false, thinking: false, speaking: false, explains: [], explaining: false, caption: '' });
+const blank = (): LiveState => ({ phase: 'idle', id: null, title: '', course: '', startedAt: 0, sent: 0, silent: 0, failed: 0, queued: 0, lines: [], alerts: [], err: '', notice: '', progress: null, finishedId: null, asking: false, thinking: false, speaking: false, explains: [], explaining: false, caption: '' });
 let st: LiveState = blank();
 const subs = new Set<() => void>();
 export const getLive = () => st;
@@ -205,7 +205,7 @@ export async function startLive(title: string, course: string) {
   try { id = (await api<{ id: number }>('/clases', { method: 'POST', body: { title, course } })).id; }
   catch (e) { d.getTracks().forEach((t) => t.stop()); throw e; }
   display = d; audio = new MediaStream(tracks); queue = []; dead = []; detecting = false; detectAgain = false; explaining = false; explainAgain = false; sinceExplain = 0; lastCue = 0;
-  st = { ...blank(), phase: 'live', id, title, startedAt: Date.now() };
+  st = { ...blank(), phase: 'live', id, title, course, startedAt: Date.now() };
   subs.forEach((f) => f());
   ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(audio); const an = ctx.createAnalyser(); an.fftSize = 1024;

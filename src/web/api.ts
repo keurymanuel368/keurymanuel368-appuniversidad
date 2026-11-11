@@ -35,6 +35,7 @@ export type PayWindow = { state: 'open' | 'closed'; period: string; opensAt: num
 export type Dashboard = {
   today: string; name: string; termProgress: number | null;
   counts: { pending: number; today: number; week: number; overdue: number };
+  overdueList?: Task[];
   average: number | null; tasks: Task[]; graded: Task[]; weekProgress: { total: number; done: number };
   news: { id: number; title: string; kind: string; created_at: number; read: number; course_name: string | null }[]; unreadNews: number; courses: Course[]; pay: PayWindow;
   lastSync: number | null; lastSyncError: string; summaryHour: number;
