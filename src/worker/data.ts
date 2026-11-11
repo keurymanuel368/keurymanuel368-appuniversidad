@@ -23,7 +23,7 @@ export type CourseSummary = {
   weighted?: number;
   /** 1 cuando todas las actividades que cuentan ya tienen nota: el promedio es el final de la asignatura. */
   complete?: number;
-  eva_total?: number | null; eva_total_max?: number | null;
+  eva_total?: number | null; eva_total_max?: number | null; progress?: number | null;
 };
 
 type GradeRow = { id: number; moodle_item_id: number | null; grade: number | null; grade_max: number; weight: number | null };
@@ -84,7 +84,7 @@ export async function listTasks(env: Env, opts: { status?: string; from?: number
 export async function courseSummaries(env: Env): Promise<CourseSummary[]> {
   // Cada actividad cuenta una vez (los foros traen dos renglones de nota: vale el que tiene nota).
   const { results } = await env.DB.prepare(`
-    SELECT c.id, c.code, c.name, c.short_name, c.color, c.facilitator, c.facilitator_eva, c.eva_total, c.eva_total_max,
+    SELECT c.id, c.code, c.name, c.short_name, c.color, c.facilitator, c.facilitator_eva, c.eva_total, c.eva_total_max, c.progress,
       (SELECT COUNT(*) FROM tasks t WHERE t.course_id = c.id AND t.status = 'pending') AS pending_tasks
     FROM courses c WHERE c.user_id = ? AND c.active = 1 ORDER BY c.name`).bind(env.UID).all<CourseSummary>();
   const rows = await bestGrades(env);

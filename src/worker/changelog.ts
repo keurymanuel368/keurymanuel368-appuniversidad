@@ -10,6 +10,22 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 61,
+    date: '2026-11-11',
+    title: '📝 Trabajos con IA y semana eficiente',
+    items: [
+      'Nuevo «Hacer con IA» en cada tarea (y en Semana): arma el trabajo con tu portada, tus datos y tu estilo, y te avisa al terminar. Lo descargas en Word.',
+      'Rumbo revisa el EVA cada 10 minutos: lo que entregaste allá se marca solo como hecho.',
+      'Cada asignatura muestra su porcentaje de avance, igual que en el EVA.',
+      'Estudio → Semana: tu semana eficiente, con pendientes por día y prioridad (Atrasada, Alta, Media, Baja).',
+      'Inicio tiene «Qué me toca»: atrasadas, hoy y esta semana, separadas y con contador.',
+      'El calendario del mes ahora muestra tus clases junto a las entregas.',
+      'Inicio más simple: arriba solo lo que toca; lo demás, bajo «Ver más».',
+      'Cada vez que Rumbo se actualiza, borra su caché sola.',
+      'La racha cuenta los días que entregas y solo se corta si se te pasa una entrega.',
+    ],
+  },
+  {
     version: 59,
     date: '2026-10-27',
     title: '📱 Más pulido en el móvil',

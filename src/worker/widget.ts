@@ -50,14 +50,27 @@ const FRASES = [
 ];
 
 /** Racha: días seguidos (hasta hoy o ayer) en los que entregaste o completaste algo. */
+/**
+ * Racha = días seguidos cumpliendo. Suma un día en el que entregaste algo de verdad; un día sin entregas pero
+ * sin nada que vencía no la rompe; un día en que se te pasó una entrega (vencida sin hacer) la corta.
+ */
 export async function streak(env: Env): Promise<number> {
-  const { results } = await env.DB.prepare(`SELECT COALESCE(submitted_at, updated_at) AS t FROM tasks WHERE user_id = ? AND status = 'done' AND COALESCE(submitted_at, updated_at) > ?`)
-    .bind(env.UID, nowSec() - 120 * 86400).all<{ t: number }>();
-  const days = new Set(results.map((r) => dayKey(localDate(env, r.t))));
+  const since = nowSec() - 120 * 86400;
+  const { results: dn } = await env.DB.prepare(`SELECT submitted_at AS t FROM tasks WHERE user_id = ? AND status = 'done' AND submitted_at > ?`)
+    .bind(env.UID, since).all<{ t: number }>();
+  const { results: ms } = await env.DB.prepare(`SELECT due_at AS t FROM tasks WHERE user_id = ? AND due_at > ? AND due_at < ? AND source = 'eva'
+      AND (status = 'pending' OR (status = 'done' AND notes = 'Plazo cerrado en el EVA')) AND COALESCE(ignored, 0) = 0`)
+    .bind(env.UID, since, nowSec()).all<{ t: number }>().catch(() => ({ results: [] as { t: number }[] }));
+  const delivered = new Set(dn.map((r) => dayKey(localDate(env, r.t))));
+  const missed = new Set(ms.map((r) => dayKey(localDate(env, r.t))));
   let n = 0;
   let d = localDate(env);
-  if (!days.has(dayKey(d))) d = new Date(d.getTime() - 86400_000); // hoy todavía cuenta
-  while (days.has(dayKey(d))) { n++; d = new Date(d.getTime() - 86400_000); }
+  for (let i = 0; i < 120; i++) {
+    const k = dayKey(d);
+    if (delivered.has(k)) n++;
+    else if (missed.has(k) && i > 0) break; // hoy todavía no cuenta como fallado
+    d = new Date(d.getTime() - 86400_000);
+  }
   return n;
 }
 

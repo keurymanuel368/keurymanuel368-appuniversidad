@@ -27,8 +27,8 @@
   // Pantallas en vivo: un Durable Object por usuario mantiene los WebSockets (src/worker/live.ts). Plan gratis (SQLite).
   "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "RumboLive" }] },
   "migrations": [{ "tag": "v1-live", "new_sqlite_classes": ["RumboLive"] }],
-  // Un solo cron cada 30 minutos: sincroniza el EVA, envía el resumen diario y los recordatorios.
-  "triggers": { "crons": ["*/30 * * * *"] },
+  // Un solo cron cada 10 minutos: sincroniza el EVA, envía el resumen diario y los recordatorios.
+  "triggers": { "crons": ["*/10 * * * *"] },
   "vars": {
     "TZ_OFFSET_HOURS": "-4",
     "MOODLE_URL": "https://eva.uapa.edu.do",

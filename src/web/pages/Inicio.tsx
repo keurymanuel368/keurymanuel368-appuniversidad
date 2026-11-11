@@ -19,6 +19,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [more, setMore] = useState(false);
   // Jalar hacia abajo (o el botón) sincroniza el EVA y recarga tu día.
   const sync = useCallback(async () => {
     setSyncing(true);
@@ -85,25 +86,18 @@ export function Inicio({ go }: { go: (p: string) => void }) {
 
       <Panel d={d} now1={now1} next={next} syncing={syncing} busy={busy} go={go} onOpen={setEditing} onNew={() => setCreating(true)} onSync={sync} onSummary={sendSummary} />
 
+      <QueToca d={d} go={go} onOpen={setEditing} onToggle={toggle} />
       <TodayTimeline d={d} go={go} />
       {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
-      <TermJourney />
 
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 
+      <button className="more-toggle" onClick={() => { haptic(5); setMore((m) => !m); }} aria-expanded={more}>{more ? 'Ver menos' : 'Ver más: asignaturas, avisos y notas'}<Icon name="chevron" size={16} style={{ transform: more ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button>
+
+      {more && <>
+      <TermJourney />
       <section className="grid2">
         <div className="col">
-          <div className="card">
-            <div className="card-head">
-              <h3>Próximas entregas</h3>
-              {d.lastSync && <span className="pill blue hide-mobile"><Icon name="sync" size={12} style={{ strokeWidth: 2.4 }} />EVA</span>}
-              <button className="link-btn spacer" onClick={() => go('tareas')}>Ver todas<Icon name="chevron" size={16} /></button>
-            </div>
-            {d.tasks.length === 0
-              ? <Empty icon="check" title="Todo al día" text="No tienes tareas pendientes. Agrega una con el botón + o sincroniza el EVA." />
-              : <div className="list">{d.tasks.slice(0, 6).map((t) => <TaskRow key={t.id} t={t} onToggle={toggle} onOpen={setEditing} />)}</div>}
-          </div>
-
           {d.courses.length > 0 && (
             <div className="section">
               <div className="section-head"><h3>Asignaturas</h3><button className="link-btn" onClick={() => go('asignaturas')}>Notas<Icon name="chevron" size={16} /></button></div>
@@ -185,6 +179,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         <GoalsCard goals={d.goals || []} ids={d.goalIds || []} onChanged={reload} />
         <AchievementsCard />
       </section>
+      </>}
 
       {creating && <TaskModal task={{}} courses={d.courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); reload(); }} />}
       {editing && <TaskSheet task={editing} courses={d.courses} onClose={() => setEditing(null)} onChanged={() => { setEditing(null); reload(); }} />}
@@ -359,5 +354,39 @@ function FirstSteps({ d, go, initial }: { d: Dashboard; go: (p: string) => void;
       <button className="btn primary lg block" onClick={() => go('conectar')}><Icon name="plug" size={19} />Empezar ahora</button>
       <p className="small muted center">Mientras tanto puedes agregar tareas a mano con el botón + o hablar con el asistente.</p>
     </>
+  );
+}
+
+
+/** «Qué me toca»: lo atrasado, lo de hoy y lo de esta semana, separado y con contadores. */
+function QueToca({ d, go, onOpen, onToggle }: { d: Dashboard; go: (p: string) => void; onOpen: (t: Task) => void; onToggle: (t: Task) => void }) {
+  const now = Date.now() / 1000;
+  const key = (sec: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date(sec * 1000));
+  const hoy = key(now);
+  const late = d.tasks.filter((t) => t.due_at !== null && t.due_at < now);
+  const today = d.tasks.filter((t) => t.due_at !== null && t.due_at >= now && key(t.due_at) === hoy);
+  const week = d.tasks.filter((t) => t.due_at !== null && t.due_at >= now && key(t.due_at) !== hoy && t.due_at < now + 7 * 86400);
+  const block = (title: string, tone: string, items: Task[], more?: number) => items.length === 0 ? null : (
+    <div className={`qt-block ${tone}`}>
+      <div className="qt-head"><b>{title}</b><span className={`pill ${tone === 'red' ? 'red' : 'blue'} num`}>{more ?? items.length}</span></div>
+      <div className="list">{items.slice(0, 3).map((t) => <TaskRow key={t.id} t={t} onToggle={onToggle} onOpen={onOpen} />)}</div>
+    </div>
+  );
+  return (
+    <div className="card que-toca">
+      <div className="card-head"><h3>Qué me toca</h3><button className="link-btn spacer" onClick={() => go('tareas')}>Ver todo<Icon name="chevron" size={16} /></button></div>
+      <div className="qt-counts">
+        <button className={late.length ? 'red' : ''} onClick={() => go('tareas')}><b className="num">{late.length}</b><span>Atrasadas</span></button>
+        <button onClick={() => go('tareas')}><b className="num">{today.length}</b><span>Hoy</span></button>
+        <button onClick={() => go('tareas')}><b className="num">{week.length}</b><span>Esta semana</span></button>
+      </div>
+      {late.length + today.length + week.length === 0 ? <p className="muted small">Nada pendiente por ahora. ¡Estás al día!</p> : (
+        <>
+          {block('Atrasadas · hazlas primero', 'red', late, late.length)}
+          {block('Para hoy', 'blue', today)}
+          {block('Esta semana', 'gray', week)}
+        </>
+      )}
+    </div>
   );
 }

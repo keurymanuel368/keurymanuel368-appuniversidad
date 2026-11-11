@@ -31,6 +31,7 @@ import { setIgnored } from './ignore';
 import { tokenFromValue, webLoginToken } from './evalogin';
 import { registerExtras } from './extras';
 import { registerHorario } from './horario';
+import { registerTrabajo } from './trabajo';
 import { registerKit } from './kit';
 import { synthesize, ttsStatus } from './tts';
 import { CALENDAR, TERMS } from './uapa-calendar';
@@ -479,6 +480,7 @@ app.use('/api/*', async (c, next) => {
 
 // Foros, entregas, historial del promedio, comentarios, récord y comprobantes (src/worker/extras.ts)
 registerExtras(app);
+registerTrabajo(app);
 registerHorario(app);
 registerKit(app);
 app.get('/api/uapa/calendar', (c) => c.json({ terms: TERMS, events: CALENDAR }));

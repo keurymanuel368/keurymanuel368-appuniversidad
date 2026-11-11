@@ -33,7 +33,7 @@ export async function runScheduled(env: Env): Promise<string[]> {
   for (const ue of envs) {
     if (!ue.MOODLE_TOKEN) continue;
     const s = await getSettings(ue);
-    const late = nowSec() - Number(s.eva_last_sync || 0) - Math.max(1, Number(s.eva_sync_hours || 2)) * 3600;
+    const late = nowSec() - Number(s.eva_last_sync || 0) - 10 * 60; // revisión rápida cada 10 min
     if (late >= -300 && late + 301 > worst) { worst = late + 301; syncUid = ue.UID; }
   }
   let backupError: string | undefined;
@@ -67,7 +67,10 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   // 1) Sincronizar el EVA cada N horas
   if (syncNow && env.MOODLE_TOKEN) {
     try {
-      const r = await syncEva(env);
+      // Completa cada N horas (avisos, foros, historial); entre medias, revisión rápida de entregas, fechas y notas.
+      const fullDue = nowSec() - Number(s.eva_full_sync || 0) >= Math.max(1, Number(s.eva_sync_hours || 2)) * 3600 - 300;
+      const r = await syncEva(env, { light: !fullDue });
+      if (fullDue) await setSetting(env, 'eva_full_sync', String(nowSec()));
       log.push(`EVA: ${r.tasksNew} nuevas, ${r.tasksUpdated} actualizadas`);
       if (r.newGrades.length) log.push(`Notas nuevas: ${r.newGrades.length}`);
       // Avisos nuevos: los del foro de avisos siempre; los del sistema solo si hablan de pagos o eventos.

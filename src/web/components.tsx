@@ -6,6 +6,7 @@ const ForumSheet = lazy(() => import('./EvaActions').then((m) => ({ default: m.F
 const SubmitPanel = lazy(() => import('./EvaActions').then((m) => ({ default: m.SubmitPanel })));
 import { createPortal } from 'react-dom';
 import { api, cap, type Course, type Task, unixToLocalInput, localInputToUnix, overdueLabel, urgency, whenLabel } from './api';
+import { WorkButton } from './TrabajoIA';
 import { Icon } from './icons';
 import { Mascot } from './Mascot';
 
@@ -563,6 +564,7 @@ export function TaskSheet({ task: initial, courses, onClose, onChanged }: { task
           <div className="ts-help">
             <button className="btn study-btn" onClick={() => { haptic(10); setStudyMode('plan'); setStudying(true); }}><Icon name="spark" size={19} /><span className="tb-txt"><b>Estudiar con IA</b><small>plan · práctica · explicación</small></span></button>
             <button className="btn focus-btn" onClick={() => { haptic(10); setFocus(true); }}><Icon name="clock" size={19} /><span className="tb-txt"><b>Modo enfoque</b><small>{task.focus_minutes ? `llevas ${task.focus_minutes} min` : 'temporizador para concentrarte'}</small></span></button>
+            <WorkButton taskId={task.id} title={task.title} />
           </div>
         )}
         {studying && <Suspense fallback={null}><StudyModal task={task} initial={studyMode} onClose={() => setStudying(false)} /></Suspense>}

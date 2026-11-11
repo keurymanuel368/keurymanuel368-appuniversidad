@@ -12,7 +12,7 @@ import { noCuenta } from '../shared/promedio';
 
 const COLORS = ['#1F5FE0', '#12A5C9', '#7A5AF0', '#F08A1C', '#0F9F6E', '#D6457A', '#8A6D3B', '#3E4C6B'];
 
-type MoodleCourse = { id: number; shortname: string; fullname: string; displayname?: string; startdate?: number; enddate?: number; visible?: number };
+type MoodleCourse = { id: number; shortname: string; fullname: string; displayname?: string; startdate?: number; enddate?: number; visible?: number; progress?: number | null };
 type MoodleEvent = { id: number; name: string; activityname?: string; timesort: number; url?: string; course?: { id: number; fullname: string }; modulename?: string; instance?: number };
 type GradeItem = { id: number; itemname: string | null; itemtype: string; itemmodule?: string | null; iteminstance?: number | null; graderaw: number | null; grademax: number; gradedatesubmitted?: number | null; feedback?: string | null; weightraw?: number | null };
 /** Una actividad evaluable del curso (tarea, cuestionario o foro). */
@@ -310,7 +310,8 @@ async function syncForumGrades(env: Env, me: number, courseMap: Map<number, { id
   await setSetting(env, 'forum_scan_log', `${new Date(now * 1000).toISOString()} ${log.join(' | ') || 'nada que revisar'}`);
 }
 
-export async function syncEva(env: Env): Promise<SyncResult> {
+export async function syncEva(env: Env, opts: { light?: boolean } = {}): Promise<SyncResult> {
+  const light = !!opts.light; // ligera (cada 10 min): solo calendario y notas de las asignaturas actuales
   const result: SyncResult = { forumGrades: 0, courses: 0, pastCourses: 0, delivered: 0, tasksNew: 0, tasksUpdated: 0, tasksClosed: 0, facilitators: 0, activities: 0, newGrades: [], newNews: [], warnings: [], changes: [] };
   wsState.set(env, { calls: 0, memo: new Map() });
   try {
@@ -347,8 +348,8 @@ export async function syncEva(env: Env): Promise<SyncResult> {
         AND NOT EXISTS (SELECT 1 FROM courses WHERE user_id = ? AND moodle_id = ?)`).bind(c.id, env.UID, c.displayname || c.fullname, code, env.UID, c.id).run();
       const row = await env.DB.prepare(`INSERT INTO courses (user_id, moodle_id, code, name, short_name, color, active, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, moodle_id) DO UPDATE SET name = excluded.name, short_name = excluded.short_name, code = COALESCE(courses.code, excluded.code), active = excluded.active, updated_at = excluded.updated_at
-        RETURNING id, color`).bind(env.UID, c.id, code, c.displayname || c.fullname, c.shortname, color, active, now).first<{ id: number; color: string }>();
+        ON CONFLICT(user_id, moodle_id) DO UPDATE SET progress = COALESCE(?, courses.progress), name = excluded.name, short_name = excluded.short_name, code = COALESCE(courses.code, excluded.code), active = excluded.active, updated_at = excluded.updated_at
+        RETURNING id, color`).bind(env.UID, c.id, code, c.displayname || c.fullname, c.shortname, color, active, now, typeof c.progress === 'number' ? Math.round(c.progress) : null).first<{ id: number; color: string }>();
       if (row) { used.add(row.color); courseMap.set(c.id, { id: row.id, name: c.displayname || c.fullname, current: !!active }); }
     }
     result.pastCourses = all.length - current.length;
@@ -359,18 +360,19 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     result.courses = current.length;
 
     // 2) Facilitadores (no detiene la sincronización si el EVA no los publica)
-    try { await syncFacilitators(env, current.map((c) => c.id), result); }
-    catch (e) { result.warnings.push('Facilitadores: ' + (e as Error).message); }
-
-    // 2b) Avisos y novedades del EVA
-    await syncNews(env, site.userid, courseMap, result);
+    if (!light) {
+      try { await syncFacilitators(env, current.map((c) => c.id), result); }
+      catch (e) { result.warnings.push('Facilitadores: ' + (e as Error).message); }
+      // 2b) Avisos y novedades del EVA
+      await syncNews(env, site.userid, courseMap, result);
+    }
 
     // 3) Calificaciones por asignatura. También dicen qué entregaste: una actividad con nota o con
     //    fecha de envío ya está entregada.
     const delivered = new Set<string>();
     // Cloudflare gratis permite ~50 llamadas externas por ejecución: las asignaturas pasadas se consultan
     // de a poco (las que nunca se han revisado primero) y el resto en las siguientes sincronizaciones.
-    const pastQuota = Math.max(0, 30 - current.length);
+    const pastQuota = light ? 0 : Math.max(0, 30 - current.length);
     const pastChecked = await env.DB.prepare(`SELECT c.moodle_id AS m, MAX(g.updated_at) AS t FROM courses c LEFT JOIN grades g ON g.course_id = c.id WHERE c.user_id = ? AND c.active = 0 AND c.moodle_id IS NOT NULL GROUP BY c.moodle_id`).bind(env.UID).all<{ m: number; t: number | null }>();
     const lastCheck = new Map(pastChecked.results.map((r) => [r.m, r.t ?? 0]));
     const pastToCheck = new Set([...courseMap].filter(([, c]) => !c.current).map(([m]) => m)
@@ -413,8 +415,10 @@ export async function syncEva(env: Env): Promise<SyncResult> {
 
     // 3b) Foros: la nota que el facilitador puso en el foro aunque el EVA no la publique.
     const participation: Participation = new Map();
-    try { await syncForumGrades(env, site.userid, courseMap, delivered, result, participation); }
-    catch (e) { result.warnings.push('Notas de foros: ' + (e as Error).message); }
+    if (!light) {
+      try { await syncForumGrades(env, site.userid, courseMap, delivered, result, participation); }
+      catch (e) { result.warnings.push('Notas de foros: ' + (e as Error).message); }
+    }
 
     // 4) Entregas pendientes: el calendario de Moodle solo muestra lo que todavía requiere acción.
     const LIMIT = 50;
@@ -447,7 +451,7 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     }
 
     // 5) Todas las actividades del curso: agrega las que ya entregaste y cierra las pendientes que ya no lo están.
-    const acts = await fetchActivities(env, [...courseMap.keys()], result);
+    const acts = light ? [] : await fetchActivities(env, [...courseMap.keys()], result);
     result.activities = acts.length;
     const base = env.MOODLE_URL.replace(/\/$/, '');
     for (const a of acts) {
@@ -501,10 +505,10 @@ export async function syncEva(env: Env): Promise<SyncResult> {
     }
 
     // Lo que no se corrige (rúbrica de actitudes y valores, espacio fuera de fecha) sale de pendientes.
-    try { await applyAutoIgnore(env); } catch (e) { result.warnings.push('Actividades que no cuentan: ' + (e as Error).message); }
+    if (!light) try { await applyAutoIgnore(env); } catch (e) { result.warnings.push('Actividades que no cuentan: ' + (e as Error).message); }
 
     // Pensum automático: lo de este trimestre queda "en curso"; lo de trimestres pasados con 70 o más, "aprobada".
-    try { await syncPensumFromCourses(env); } catch (e) { result.warnings.push('Pensum: ' + (e as Error).message); }
+    if (!light) try { await syncPensumFromCourses(env); } catch (e) { result.warnings.push('Pensum: ' + (e as Error).message); }
 
     // Tareas del calendario sin actividad conocida: si desaparecieron antes de vencer, se entregaron.
     if (complete) {

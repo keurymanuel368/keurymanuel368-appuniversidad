@@ -46,6 +46,7 @@ export function Asignaturas() {
                 <span className="name">{c.name}</span>
                 <div className="progress"><div style={{ width: `${c.total ? (c.graded / c.total) * 100 : 0}%` }} /></div>
                 <span className="meta num">{c.graded}/{c.total} calificadas{c.pending_tasks ? ` · ${c.pending_tasks} pend.` : ''}</span>
+                {c.progress != null && <span className="course-prog"><span className="muted small">Avance EVA <b className="num">{c.progress}%</b></span><i style={{ ['--p' as string]: `${c.progress}%`, ['--c' as string]: c.color }} /></span>}
               </button>
             ))}
           </div>
@@ -188,6 +189,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
             <span className="code num">{course.code || course.short_name}</span>
             <h2>{course.name}</h2>
             <span className="muted small">{graded.length} de {countable} actividades calificadas{off.length ? ` · ${off.length} no cuenta${off.length === 1 ? '' : 'n'}` : ''}</span>
+            {course.progress != null && <span className="course-prog" aria-label={`Avance en el EVA ${course.progress}%`}><span className="muted small">Avance del curso en el EVA · <b className="num">{course.progress}%</b></span><i style={{ ['--p' as string]: `${course.progress}%` }} /></span>}
             {course.eva_total != null && course.eva_total_max ? (() => {
               const evaPct = (course.eva_total / course.eva_total_max) * 100;
               const off = course.average !== null && Math.abs(evaPct - course.average) > 2;

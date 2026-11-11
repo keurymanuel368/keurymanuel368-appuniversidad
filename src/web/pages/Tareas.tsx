@@ -168,7 +168,17 @@ function IgnoredTasks({ onChanged }: { onChanged: () => void }) {
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 /** Calendario del mes: un punto de color por entrega (color de la asignatura). Toca un día para ver qué vence. */
+type Clase = { id: number; title: string; day: number; start_min: number; end_min: number; room: string | null; start_date: string | null; end_date: string | null };
+const hhmm = (m: number) => { const h = Math.floor(m / 60); return `${((h + 11) % 12) + 1}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'a. m.' : 'p. m.'}`; };
+
 function MonthView({ tasks, onOpen, onToggle }: { tasks: Task[]; onOpen: (t: Task) => void; onToggle: (t: Task) => void }) {
+  const horario = useLoad(() => api<{ classes: Clase[] }>('/horario').catch(() => ({ classes: [] as Clase[] })));
+  const clases = horario.data?.classes || [];
+  // Clases de un día (YYYY-MM-DD): mismas del Horario, según el día de la semana y las fechas del trimestre.
+  const classesOn = (k: string) => {
+    const dow = (new Date(k + 'T12:00:00Z').getUTCDay() + 6) % 7;
+    return clases.filter((c) => c.day === dow && (!c.start_date || k >= c.start_date) && (!c.end_date || k <= c.end_date)).sort((a, b) => a.start_min - b.start_min);
+  };
   const today = dayKey(Date.now() / 1000);
   const [ym, setYm] = useState(() => { const [y, m] = today.split('-').map(Number); return { y, m }; });
   const [sel, setSel] = useState<string>(today);
@@ -195,20 +205,24 @@ function MonthView({ tasks, onOpen, onToggle }: { tasks: Task[]; onOpen: (t: Tas
             if (!k) return <span key={i} />;
             const list = byDay.get(k) || [];
             const late = list.some((t) => t.status !== 'done' && t.due_at! < now);
+            const nClases = classesOn(k).length;
             return (
               <button key={k} className={`mg-day ${k === today ? 'today' : ''} ${k === sel ? 'on' : ''} ${late ? 'late' : ''}`} onClick={() => { haptic(4); setSel(k); }}
-                aria-label={`${Number(k.slice(8))} de ${MONTHS[ym.m - 1]}: ${list.length ? list.length + ' entrega' + (list.length > 1 ? 's' : '') : 'nada'}`} aria-pressed={k === sel}>
+                aria-label={`${Number(k.slice(8))} de ${MONTHS[ym.m - 1]}: ${list.length ? list.length + ' entrega' + (list.length > 1 ? 's' : '') : 'sin entregas'}${nClases ? `, ${nClases} clase${nClases > 1 ? 's' : ''}` : ''}`} aria-pressed={k === sel}>
                 <span className="num">{Number(k.slice(8))}</span>
-                <span className="mg-dots">{list.slice(0, 3).map((t) => <i key={t.id} className={t.status === 'done' ? 'done' : ''} style={{ background: t.course_color || 'var(--blue)' }} />)}</span>
+                <span className="mg-dots">{nClases > 0 && <i className="cls" />}{list.slice(0, 3).map((t) => <i key={t.id} className={t.status === 'done' ? 'done' : ''} style={{ background: t.course_color || 'var(--blue)' }} />)}</span>
               </button>
             );
           })}
         </div>
       </div>
       <div className="section">
-        <div className="section-head"><h3>{sel === today ? 'Hoy' : dayTitle(sel)}</h3>{items.length > 0 && <span className="pill blue num">{items.length}</span>}</div>
+        <div className="section-head"><h3>{sel === today ? 'Hoy' : dayTitle(sel)}</h3>{items.length > 0 && <span className="pill blue num">{items.length} entrega{items.length > 1 ? 's' : ''}</span>}</div>
+        {classesOn(sel).length > 0 && <div className="card list day-classes">{classesOn(sel).map((c) => (
+          <div key={c.id} className="row"><span className="set-ic blue"><Icon name="calendar" size={18} /></span><div><b>{c.title}</b><span className="muted small">Clase · {hhmm(c.start_min)} – {hhmm(c.end_min)}{c.room ? ` · ${c.room}` : ''}</span></div></div>
+        ))}</div>}
         {items.length ? <div className="card list">{items.map((t) => <TaskRow key={t.id} t={t} onToggle={onToggle} onOpen={onOpen} />)}</div>
-          : <div className="card"><Empty icon="calendar" title="Nada vence ese día" text="Toca otro día del mes." /></div>}
+          : classesOn(sel).length ? null : <div className="card"><Empty icon="calendar" title="Nada ese día" text="Sin clases ni entregas. Toca otro día del mes." /></div>}
       </div>
     </div>
   );

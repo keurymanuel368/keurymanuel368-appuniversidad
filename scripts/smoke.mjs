@@ -10,7 +10,9 @@ const PASS = 'smoke-' + randomBytes(6).toString('hex');
 const SECRET = randomBytes(24).toString('hex');
 
 console.log('🧪 Prueba de humo: aplicando migraciones locales…');
-execSync('npx wrangler d1 migrations apply rumbo-db --local', { stdio: 'ignore', shell: true });
+// wrangler a veces termina la migración pero no cierra el proceso: se le da un tiempo y se sigue.
+try { execSync('npx wrangler d1 migrations apply rumbo-db --local', { stdio: 'ignore', shell: true, timeout: 60000, killSignal: 'SIGKILL' }); }
+catch (e) { if (e.code !== 'ETIMEDOUT') throw e; }
 
 const dev = spawn('npx', ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--var', `APP_PASSWORD:${PASS}`, '--var', `SESSION_SECRET:${SECRET}`, '--var', 'MOODLE_TOKEN:'],
   { shell: true, stdio: ['ignore', 'pipe', 'pipe'] });

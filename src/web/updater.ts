@@ -24,13 +24,27 @@ async function check() {
   if (pending) apply();
 }
 
+/** Borra toda la caché guardada (archivos y datos): la app vuelve a bajar todo limpio. */
+async function clearCaches() {
+  try { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } catch { /* sin Cache Storage */ }
+}
+
 function apply() {
   if (!quiet()) { setTimeout(apply, 15000); return; }
   try { sessionStorage.setItem('rumbo-updated', String(APP_VERSION)); } catch { /* sin almacenamiento */ }
-  navigator.serviceWorker?.getRegistration().then((reg) => reg?.update()).catch(() => {}).finally(() => location.reload());
+  void clearCaches()
+    .then(() => navigator.serviceWorker?.getRegistration())
+    .then((reg) => reg?.update())
+    .catch(() => {})
+    .finally(() => location.reload());
 }
 
 export function startUpdater() {
+  // Si esta versión es distinta a la anterior que abriste, se limpia la caché sola.
+  try {
+    const last = localStorage.getItem('rumbo-ver');
+    if (last !== String(APP_VERSION)) { localStorage.setItem('rumbo-ver', String(APP_VERSION)); if (last) void clearCaches(); }
+  } catch { /* sin almacenamiento */ }
   try {
     if (sessionStorage.getItem('rumbo-updated')) {
       sessionStorage.removeItem('rumbo-updated');

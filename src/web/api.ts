@@ -28,7 +28,7 @@ export type Task = {
   moodle_key?: string | null; forum_posts?: number | null; forum_replies?: number | null; forum_needed?: number | null; attachments?: string | null;
   course_id: number | null; course_name: string | null; course_short: string | null; course_color: string | null;
 };
-export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number; weighted?: number; eva_total?: number | null; eva_total_max?: number | null;
+export type Course = { id: number; code: string | null; name: string; short_name: string | null; color: string; facilitator: string | null; facilitator_eva?: string | null; graded: number; total: number; average: number | null; pending_tasks: number; weighted?: number; eva_total?: number | null; eva_total_max?: number | null; progress?: number | null;
   /** Créditos según el pensum (3 si no aparece) y 1 cuando ya tiene todas las notas (promedio final). */
   credits?: number; complete?: number };
 export type PayWindow = { state: 'open' | 'closed'; period: string; opensAt: number; closesAt: number; daysToOpen: number; daysToClose: number; paid: boolean; amount: string; openDay: number; closeDay: number };
