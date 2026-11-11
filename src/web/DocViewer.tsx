@@ -113,9 +113,11 @@ export function DocViewer({ work, profile, title, onClose, onRedo }: { work: Wor
       <header className="dv-bar">
         <button className="icon-round" onClick={onClose} aria-label="Cerrar"><Icon name="x" size={18} /></button>
         <b className="dv-title">{work.titulo || title}</b>
-        <button className="btn line dv-sm" onClick={copy}>Copiar</button>
-        <button className="btn line dv-sm" onClick={onRedo}>Rehacer</button>
-        <button className="btn primary dv-sm" onClick={word} disabled={busy}><Icon name="download" size={16} />{busy ? 'Preparando…' : 'Descargar Word'}</button>
+        <div className="dv-actions">
+          <button className="btn line dv-sm" onClick={copy}>Copiar</button>
+          <button className="btn line dv-sm" onClick={onRedo}>Rehacer</button>
+          <button className="btn primary dv-sm" onClick={word} disabled={busy}><Icon name="download" size={16} />{busy ? 'Preparando…' : 'Descargar Word'}</button>
+        </div>
       </header>
       <div className="dv-scroll" ref={wrap}>
         <p className="dv-hint">Borrador: léelo, ajústalo con tus palabras y verifica las referencias antes de entregar.</p>

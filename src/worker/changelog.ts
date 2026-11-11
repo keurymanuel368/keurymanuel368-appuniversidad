@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 68,
+    date: '2026-11-11',
+    title: '📄 Menú del visor ajustado',
+    items: ['Los botones Copiar, Rehacer y Descargar Word del visor ya caben en el celular.'],
+  },
+  {
     version: 67,
     date: '2026-11-11',
     title: '📄 Tus trabajos, como en Word',

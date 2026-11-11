@@ -2347,3 +2347,12 @@ h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
 .dv-tbl th { background: #14214a; color: #fff; text-align: left; padding: 6px 8px; }
 .dv-tbl td { border: 1px solid #b8c4dc; padding: 6px 8px; }
 .dv-tbl tr:nth-child(even) td { background: #f3f6fc; }
+
+.dv-bar { flex-wrap: wrap; }
+.dv-title { flex: 1 1 120px; }
+.dv-actions { display: flex; gap: 8px; flex: none; }
+.dv-actions .btn { white-space: nowrap; }
+@media (max-width: 640px) {
+  .dv-actions { flex: 0 0 100%; order: 3; }
+  .dv-actions .btn { flex: 1; justify-content: center; }
+}
