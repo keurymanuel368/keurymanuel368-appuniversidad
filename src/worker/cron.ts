@@ -6,6 +6,7 @@ import { ensureTgWebhook, tgEsc, tgHoy, tgSemana, tgWithApp } from './telegram';
 import { notifyLive } from './live';
 import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
+import { processPendingClasses } from './clases';
 import { flushWhatsApp, sendToMe } from './notify';
 import { archivePastCourses, classAlerts } from './horario';
 import { calendarAlerts } from './uapa-calendar';
@@ -60,6 +61,9 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   const now = nowSec();
   const local = localDate(env);
   const today = ymd(local);
+
+  // Clases en vivo que quedaron abiertas o sin explicar: se terminan solas
+  try { log.push(...(await processPendingClasses(env))); } catch (e) { log.push('Clases: ' + (e as Error).message); }
 
   // Asignaturas de trimestres anteriores → historial
   try { const n = await archivePastCourses(env); if (n) log.push(`Historial: ${n} asignaturas archivadas`); } catch (e) { log.push('Historial: ' + (e as Error).message); }

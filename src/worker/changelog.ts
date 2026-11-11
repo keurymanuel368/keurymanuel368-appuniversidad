@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 70,
+    date: '2026-11-11',
+    title: '🎧 Clase en vivo',
+    items: [
+      'Estudio → Clases: Rumbo escucha tu clase de Meet o Teams (en la PC), la transcribe cada 30 segundos y no guarda el audio.',
+      'Si te preguntan algo, te muestra la pregunta con la respuesta lista para decir (y te llega al celular).',
+      'Al terminar: resumen, explicación detallada, conceptos, tarjetas y preguntas de examen, clasificado por materia.',
+    ],
+  },
+  {
     version: 69,
     date: '2026-11-11',
     title: '📝 Trabajos sin secciones repetidas',
