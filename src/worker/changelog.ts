@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 64,
+    date: '2026-11-11',
+    title: '📝 Más trabajos con IA al día',
+    items: ['Tienes hasta 25 trabajos con IA por día, y los intentos que fallan ya no cuentan.'],
+  },
+  {
     version: 63,
     date: '2026-11-11',
     title: '📝 Trabajos con IA: tú eliges la extensión',

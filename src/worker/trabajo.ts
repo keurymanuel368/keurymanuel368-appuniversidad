@@ -164,12 +164,15 @@ Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes real
       { title: '📝 Tu trabajo está listo', tag: `work-${taskId}`, url: `/#tareas/${taskId}`, pushBody: titulo.slice(0, 120), type: 'avisos' });
   } catch (e) {
     const msg = (e as Error).message.slice(0, 300);
+    // Un intento que falla no gasta el cupo del día.
+    try { const n = Number(await getSetting(env, 'work_count', '0')); if (n > 0) await setSetting(env, 'work_count', String(n - 1)); } catch { /* sin contador */ }
     await env.DB.prepare(`UPDATE ai_works SET status = 'error', error = ?, updated_at = ? WHERE task_id = ? AND user_id = ?`).bind(msg, nowSec(), taskId, env.UID).run();
     await sendToMe(env, blocks('⚠️ *No se pudo hacer el trabajo*', msg), { title: '⚠️ No se pudo hacer el trabajo', tag: `work-${taskId}`, url: `/#tareas/${taskId}`, pushBody: msg.slice(0, 120), type: 'avisos' }).catch(() => {});
   }
 }
 
-const WORK_DAILY_LIMIT = 6;
+/** Tope diario: el dueño de Rumbo tiene más margen; los compañeros comparten los motores gratis. */
+const workLimit = (env: Env) => (env.ROLE === 'admin' ? 25 : 6);
 
 export function registerTrabajo(app: App) {
   app.get('/api/tasks/:id/work', async (c) => {
@@ -194,7 +197,7 @@ export function registerTrabajo(app: App) {
     // Tope diario para no gastar los motores gratis compartidos.
     const today = new Date(Date.now() - 4 * 3600_000).toISOString().slice(0, 10);
     const used = (await getSetting(c.env, 'work_day', '')) === today ? Number(await getSetting(c.env, 'work_count', '0')) : 0;
-    if (used >= WORK_DAILY_LIMIT) return c.json({ error: `Llegaste al tope de hoy (${WORK_DAILY_LIMIT} trabajos con IA). Mañana puedes seguir.` }, 429);
+    if (used >= workLimit(c.env)) return c.json({ error: `Llegaste al tope de hoy (${workLimit(c.env)} trabajos con IA). Se reinicia a las 12 a. m.` }, 429);
     await setSetting(c.env, 'work_day', today);
     await setSetting(c.env, 'work_count', String(used + 1));
     const now = nowSec();
