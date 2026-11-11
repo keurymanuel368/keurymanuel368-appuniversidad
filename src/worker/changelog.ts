@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 65,
+    date: '2026-11-11',
+    title: '📥 Botones de tu trabajo siempre al día',
+    items: ['Al terminar un trabajo con IA, «Ver mi trabajo» y «Descargar Word» aparecen enseguida (ya no se quedaba mostrando el estado viejo).'],
+  },
+  {
     version: 64,
     date: '2026-11-11',
     title: '📝 Más trabajos con IA al día',

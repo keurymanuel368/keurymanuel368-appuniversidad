@@ -32,7 +32,7 @@ export function useWork(taskId: number) {
   const [info, setInfo] = useState<Info>({ status: 'none' });
   const timer = useRef<number>(0);
   const load = useCallback(async () => {
-    try { const r = await api<Info>(`/tasks/${taskId}/work`); setInfo(r); return r; } catch { return null; }
+    try { const r = await api<Info>(`/tasks/${taskId}/work?_=${Date.now()}`); setInfo(r); return r; } catch { return null; }
   }, [taskId]);
   useEffect(() => { void load(); return () => window.clearTimeout(timer.current); }, [load]);
   useEffect(() => {
