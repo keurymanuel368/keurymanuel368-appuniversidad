@@ -175,6 +175,24 @@ Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes real
 const workLimit = (env: Env) => (env.ROLE === 'admin' ? 25 : 6);
 
 export function registerTrabajo(app: App) {
+  /** Todos los trabajos hechos con IA (sin el contenido completo), del más reciente al más viejo. */
+  app.get('/api/works', async (c) => {
+    const { results } = await c.env.DB.prepare(`SELECT w.task_id, w.status, w.updated_at, w.content, t.title AS task_title, t.status AS task_status, co.name AS course_name, co.color AS course_color
+      FROM ai_works w JOIN tasks t ON t.id = w.task_id AND t.user_id = w.user_id LEFT JOIN courses co ON co.id = t.course_id
+      WHERE w.user_id = ? ORDER BY w.updated_at DESC LIMIT 100`).bind(c.env.UID).all<{ task_id: number; status: string; updated_at: number; content: string | null; task_title: string; task_status: string; course_name: string | null; course_color: string | null }>();
+    return c.json(results.map((r) => {
+      let titulo = '', etiqueta = '', palabras = 0;
+      try {
+        const w = (JSON.parse(r.content || 'null') as { work?: Work } | null)?.work;
+        if (w) {
+          titulo = w.titulo; etiqueta = w.etiqueta;
+          palabras = [w.introduccion, w.conclusion, ...w.secciones.flatMap((s) => s.parrafos)].join(' ').split(/\s+/).filter(Boolean).length;
+        }
+      } catch { /* contenido dañado: se muestra sin título */ }
+      return { task_id: r.task_id, status: r.status, updated_at: r.updated_at, task_title: decode(r.task_title), task_status: r.task_status, course_name: r.course_name ? decode(r.course_name) : null, course_color: r.course_color, titulo, etiqueta, palabras };
+    }));
+  });
+
   app.get('/api/tasks/:id/work', async (c) => {
     const id = Number(c.req.param('id'));
     const row = await c.env.DB.prepare('SELECT status, content, error, updated_at FROM ai_works WHERE task_id = ? AND user_id = ?').bind(id, c.env.UID).first<{ status: string; content: string | null; error: string | null; updated_at: number }>();

@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 66,
+    date: '2026-11-11',
+    title: '📚 Todos tus trabajos juntos',
+    items: ['Estudio → Trabajos: la lista de todos los trabajos hechos con IA, para verlos y descargar el Word en un solo lugar.'],
+  },
+  {
     version: 65,
     date: '2026-11-11',
     title: '📥 Botones de tu trabajo siempre al día',

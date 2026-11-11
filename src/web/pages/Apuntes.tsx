@@ -2,6 +2,7 @@ import '../apuntes.css';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Course } from '../api';
 import { SemanaEficiente } from './SemanaEficiente';
+import { TrabajosHechos } from '../TrabajoIA';
 import { Empty, Modal, PageHead, Segmented, Skeleton, confetti, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
 
@@ -199,14 +200,14 @@ function Cards({ names }: { names: string[] }) {
 }
 
 export function Apuntes() {
-  const [tab, setTab] = useState<'semana' | 'apuntes' | 'tarjetas'>('semana');
+  const [tab, setTab] = useState<'semana' | 'trabajos' | 'apuntes' | 'tarjetas'>('semana');
   const courses = useLoad(() => api<Course[]>('/courses'));
   const names = (courses.data || []).map((c) => c.name);
   return (
     <>
       <PageHead eyebrow="Tus materias" title="Estudio" />
-      <Segmented label="Estudio" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'apuntes', label: 'Apuntes' }, { id: 'tarjetas', label: 'Tarjetas' }]} />
-      {tab === 'semana' ? <SemanaEficiente /> : tab === 'apuntes' ? <Notes names={names} /> : <Cards names={names} />}
+      <Segmented label="Estudio" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Apuntes' }, { id: 'tarjetas', label: 'Tarjetas' }]} />
+      {tab === 'semana' ? <SemanaEficiente /> : tab === 'trabajos' ? <TrabajosHechos /> : tab === 'apuntes' ? <Notes names={names} /> : <Cards names={names} />}
     </>
   );
 }

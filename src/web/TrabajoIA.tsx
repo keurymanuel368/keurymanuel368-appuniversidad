@@ -1,7 +1,7 @@
 // «Hacer con IA»: botón en cada tarea (y en Semana eficiente) + vista del trabajo con descarga en Word.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from './api';
-import { Modal, haptic, toast } from './components';
+import { agoLabel, api } from './api';
+import { Empty, Modal, Skeleton, haptic, toast, useLoad } from './components';
 import { Icon } from './icons';
 import type { Profile, Work } from './trabajo';
 
@@ -169,5 +169,54 @@ function WorkSheet({ work, profile, title, onClose, onRedo }: { work: Work; prof
         {work.referencias.length > 0 && <><h3>Referencias</h3>{work.referencias.map((r, i) => <p key={i} className="small ref"><Ref text={r} /></p>)}</>}
       </div>
     </Modal>
+  );
+}
+
+type WorkItem = { task_id: number; status: string; updated_at: number; task_title: string; task_status: string; course_name: string | null; course_color: string | null; titulo: string; etiqueta: string; palabras: number };
+
+/** Pestaña «Trabajos» de Estudio: todos los trabajos hechos con IA, juntos. */
+export function TrabajosHechos() {
+  const list = useLoad(() => api<WorkItem[]>(`/works?_=${Date.now()}`));
+  const [viewing, setViewing] = useState<{ work: Work; profile: Profile; title: string; id: number } | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  async function fetchWork(id: number): Promise<{ work: Work; profile: Profile } | null> {
+    const r = await api<Info>(`/tasks/${id}/work?_=${Date.now()}`);
+    return r.work && r.profile ? { work: r.work, profile: r.profile } : null;
+  }
+  async function view(it: WorkItem) {
+    setBusy(it.task_id); haptic(6);
+    try { const r = await fetchWork(it.task_id); if (r) setViewing({ ...r, title: it.task_title, id: it.task_id }); else toast('Ese trabajo no está listo', 'err'); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(null);
+  }
+  async function word(it: WorkItem) {
+    setBusy(it.task_id); haptic(10);
+    try { const r = await fetchWork(it.task_id); if (r) { await downloadWordFor(r.work, r.profile); toast('Word descargado ✅'); } }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(null);
+  }
+  if (!list.data) return <Skeleton rows={3} />;
+  if (!list.data.length) return <div className="card"><Empty icon="book" title="Aún no hay trabajos" text="Abre una tarea y pulsa «Hacer con IA». Aquí quedarán todos juntos." /></div>;
+  return (
+    <div className="works">
+      {list.data.map((it) => (
+        <div key={it.task_id} className="work-item" style={{ ['--c' as string]: it.course_color || 'var(--blue)' }}>
+          <div className="wi-top">
+            <span className="wi-course"><i />{it.course_name || 'Personal'}</span>
+            <span className={`wi-state ${it.status}`}>{it.status === 'ready' ? 'Listo' : it.status === 'pending' ? 'Haciéndose…' : 'Falló'}</span>
+          </div>
+          <b className="wi-title">{it.titulo || it.task_title}</b>
+          <span className="wi-sub">{it.titulo ? `Tarea: ${it.task_title} · ` : ''}{agoLabel(it.updated_at)}{it.palabras ? ` · ≈ ${it.palabras} palabras` : ''}</span>
+          {it.status === 'ready' && (
+            <div className="wi-actions">
+              <button className="btn line" disabled={busy === it.task_id} onClick={() => void view(it)}>Ver</button>
+              <button className="btn primary" disabled={busy === it.task_id} onClick={() => void word(it)}><Icon name="download" size={17} />{busy === it.task_id ? 'Preparando…' : 'Descargar Word'}</button>
+            </div>
+          )}
+          {it.status === 'error' && <span className="wi-sub">Abre la tarea para reintentar.</span>}
+        </div>
+      ))}
+      {viewing && <WorkSheet work={viewing.work} profile={viewing.profile} title={viewing.title} onClose={() => setViewing(null)} onRedo={() => { const id = viewing.id; setViewing(null); void api(`/tasks/${id}/work`, { method: 'POST', body: { length: savedLargo() } }).then(() => { toast('La IA está rehaciendo el trabajo ✨'); list.reload(); }).catch((e) => toast((e as Error).message, 'err')); }} />}
+    </div>
   );
 }
