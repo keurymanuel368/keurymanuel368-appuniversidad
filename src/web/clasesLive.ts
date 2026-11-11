@@ -4,6 +4,7 @@
 import { api } from './api';
 
 export type Qa = { id: string; at: number; dirigida: 'tu' | 'clase'; pregunta: string; corta: string; completa: string; tip?: string };
+export type Explain = { id: string; at: number; titulo: string; texto: string; ejemplo?: string };
 export type LiveState = {
   phase: 'idle' | 'live' | 'ending';
   id: number | null; title: string; startedAt: number;
@@ -11,12 +12,13 @@ export type LiveState = {
   lines: { at: number; text: string }[]; alerts: Qa[];
   err: string; notice: string; progress: { done: number; total: number } | null; finishedId: number | null;
   asking: boolean; thinking: boolean; speaking: boolean;
+  explains: Explain[]; explaining: boolean; caption: string;
 };
 
-// Cuándo cortar un trozo (milisegundos): al menos 3 s y una pausa de 0,6 s; o a partir de 8 s con una pausa corta; o a los 14 s sí o sí.
-const MIN_MS = 3000, SOFT_MS = 8000, HARD_MS = 14000, PAUSE_MS = 600, SHORT_PAUSE_MS = 250, DEAD_MS = 12000, TICK = 100, LEVEL = 4;
+// Cuándo cortar un trozo (milisegundos): al menos 2 s y una pausa de 0,45 s; o a partir de 5 s con una pausa corta; o a los 9 s sí o sí.
+const MIN_MS = 2000, SOFT_MS = 5000, HARD_MS = 9000, PAUSE_MS = 450, SHORT_PAUSE_MS = 200, DEAD_MS = 12000, TICK = 100, LEVEL = 4;
 
-const blank = (): LiveState => ({ phase: 'idle', id: null, title: '', startedAt: 0, sent: 0, silent: 0, failed: 0, queued: 0, lines: [], alerts: [], err: '', notice: '', progress: null, finishedId: null, asking: false, thinking: false, speaking: false });
+const blank = (): LiveState => ({ phase: 'idle', id: null, title: '', startedAt: 0, sent: 0, silent: 0, failed: 0, queued: 0, lines: [], alerts: [], err: '', notice: '', progress: null, finishedId: null, asking: false, thinking: false, speaking: false, explains: [], explaining: false, caption: '' });
 let st: LiveState = blank();
 const subs = new Set<() => void>();
 export const getLive = () => st;
@@ -37,6 +39,9 @@ let working = false;
 let wake: { release: () => Promise<void> } | null = null;
 let mime = 'audio/webm';
 let detecting = false, detectAgain = false, detectForce = false;
+let explaining = false, explainAgain = false, explainForce = false, sinceExplain = 0, lastCue = 0;
+let recog: { stop: () => void } | null = null, capOn = false;
+const CUE = /[?¿]|\b(keury|keuri|queury|kiury|kery|keiry|quiri|keyri|kiuri|manuel|dur[aá]n|alguien|qui[eé]n|pueden|puede|podr[ií]a|cu[aá]l|c[oó]mo|por qu[eé]|qu[eé] opina|qu[eé] piensa|participa|responde)\b/i;
 
 const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
 
@@ -119,6 +124,8 @@ async function pump() {
         if (r.text) patch.lines = [...st.lines, { at: it.offset, text: r.text }].slice(-80);
         set(patch);
         if (r.cue || it.force) void runDetect(it.force); // la respuesta se pide aparte: la transcripción ya salió
+        sinceExplain += r.text.length;
+        if (sinceExplain >= 420) { sinceExplain = 0; void runExplain(false); }
       } else { dead.push(queue.shift()!); set({ failed: dead.length }); }
       set({ queued: queue.length });
     }
@@ -126,12 +133,12 @@ async function pump() {
 }
 
 /** Pide la pregunta detectada y su respuesta. Una a la vez; si llega otra mientras tanto, se repite al terminar. */
-async function runDetect(force: boolean) {
+async function runDetect(force: boolean, hint = '') {
   if (st.phase === 'idle') return;
   if (detecting) { detectAgain = true; detectForce = detectForce || force; return; }
   detecting = true; set({ thinking: true });
   try {
-    const r = await api<{ qa: Qa | null }>(`/clases/${st.id}/detect`, { method: 'POST', body: { force } });
+    const r = await api<{ qa: Qa | null }>(`/clases/${st.id}/detect`, { method: 'POST', body: { force, hint } });
     if (r.qa) { set({ alerts: [r.qa, ...st.alerts] }); if (r.qa.dirigida === 'tu') beep(); }
     else if (force) notice('No encontré una pregunta en lo último que se dijo.');
   } catch (e) { if (force) notice('No se pudo revisar: ' + (e as Error).message); }
@@ -139,6 +146,52 @@ async function runDetect(force: boolean) {
     detecting = false; set({ thinking: false, asking: false });
     if (detectAgain) { detectAgain = false; const f = detectForce; detectForce = false; void runDetect(f); }
   }
+}
+
+/** Pide la explicación de lo último que se dijo. Una a la vez. */
+async function runExplain(force: boolean) {
+  if (st.phase === 'idle') return;
+  if (explaining) { explainAgain = true; explainForce = explainForce || force; return; }
+  explaining = true; set({ explaining: true });
+  try {
+    const r = await api<{ item: Explain | null }>(`/clases/${st.id}/explain`, { method: 'POST', body: { force } });
+    if (r.item) set({ explains: [r.item, ...st.explains] });
+    else if (force) notice('Todavía no hay nada nuevo que explicar. Espera a que el profesor avance.');
+  } catch (e) { if (force) notice('No se pudo explicar: ' + (e as Error).message); }
+  finally {
+    explaining = false; set({ explaining: false });
+    if (explainAgain) { explainAgain = false; const f = explainForce; explainForce = false; void runExplain(f); }
+  }
+}
+export function explainNow() { void runExplain(true); }
+
+/** Subtítulos al instante con el reconocimiento de voz de Chrome (solo para ver; el texto guardado es el de Whisper). */
+function startCaptions(track: MediaStreamTrack) {
+  type Rec = { lang: string; continuous: boolean; interimResults: boolean; start: (t?: MediaStreamTrack) => void; stop: () => void; onresult: ((e: any) => void) | null; onend: (() => void) | null; onerror: ((e: any) => void) | null };
+  const w = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
+  const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+  if (!SR) return;
+  const rec = new SR();
+  rec.lang = 'es-DO'; rec.continuous = true; rec.interimResults = true;
+  let finals = '';
+  rec.onresult = (e: any) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) {
+        const t = String(r[0].transcript).trim();
+        finals = (finals + ' ' + t).slice(-260);
+        // Pregunta detectada en el subtítulo: se pide la respuesta YA, sin esperar a Whisper (máximo una vez cada 8 s).
+        if (CUE.test(t) && Date.now() - lastCue > 8000 && st.phase === 'live') { lastCue = Date.now(); void runDetect(false, finals.slice(-400)); }
+      } else interim += r[0].transcript;
+    }
+    set({ caption: (finals + ' ' + interim).trim().slice(-240) });
+  };
+  rec.onerror = (e: any) => { if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') capOn = false; };
+  rec.onend = () => { if (capOn && st.phase === 'live') { try { rec.start(track); } catch { /* ya iniciado */ } } };
+  capOn = true;
+  try { rec.start(track); } catch { try { rec.start(); } catch { capOn = false; return; } }
+  recog = rec;
 }
 
 export async function startLive(title: string, course: string) {
@@ -151,7 +204,7 @@ export async function startLive(title: string, course: string) {
   let id: number;
   try { id = (await api<{ id: number }>('/clases', { method: 'POST', body: { title, course } })).id; }
   catch (e) { d.getTracks().forEach((t) => t.stop()); throw e; }
-  display = d; audio = new MediaStream(tracks); queue = []; dead = []; detecting = false; detectAgain = false;
+  display = d; audio = new MediaStream(tracks); queue = []; dead = []; detecting = false; detectAgain = false; explaining = false; explainAgain = false; sinceExplain = 0; lastCue = 0;
   st = { ...blank(), phase: 'live', id, title, startedAt: Date.now() };
   subs.forEach((f) => f());
   ctx = new AudioContext();
@@ -163,6 +216,7 @@ export async function startLive(title: string, course: string) {
   tracks[0].addEventListener('ended', () => { void stopLive(); });
   d.getVideoTracks()[0]?.addEventListener('ended', () => { void stopLive(); });
   window.addEventListener('beforeunload', warn);
+  startCaptions(tracks[0]);
   try { const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }; wake = (await nav.wakeLock?.request('screen')) || null; } catch { /* sin wake lock */ }
 }
 
@@ -184,6 +238,7 @@ export async function stopLive() {
   set({ phase: 'ending', err: '', speaking: false });
   window.clearInterval(meterTimer);
   window.removeEventListener('beforeunload', warn);
+  capOn = false; try { recog?.stop(); } catch { /* ya detenido */ } recog = null;
   const last = current; current = null;
   if (last && last.rec.state !== 'inactive') { last.force = true; last.heard = true; last.rec.stop(); }
   display?.getTracks().forEach((t) => t.stop()); audio?.getTracks().forEach((t) => t.stop());

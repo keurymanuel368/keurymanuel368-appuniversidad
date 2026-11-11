@@ -426,7 +426,7 @@ app.get('/api/live', (c) => {
 
 // Después de cualquier cambio (POST, PATCH, DELETE) se avisa a tus otras pantallas para que recarguen.
 // x-rumbo-device dice qué pantalla hizo el cambio (esa no necesita recargar).
-const LIVE_SKIP = /^\/api\/(live|tts|transcribe|push|login|logout|me$|telegram\/setup|assistant\/(voice|transcribe)|clases\/\d+\/(chunk|detect|process))/;
+const LIVE_SKIP = /^\/api\/(live|tts|transcribe|push|login|logout|me$|telegram\/setup|assistant\/(voice|transcribe)|clases\/\d+\/(chunk|detect|explain|process))/;
 app.use('/api/*', async (c, next) => {
   await next();
   const m = c.req.method;

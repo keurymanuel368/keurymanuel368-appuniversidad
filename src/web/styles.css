@@ -2453,3 +2453,49 @@ h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
 .cl-del-btn { flex: none; min-width: 46px; border: 0; border-radius: 16px; background: var(--card, #fff); color: #b42318; font: inherit; font-size: 12.5px; font-weight: 800; display: grid; place-items: center; padding: 0 10px; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.06); }
 .cl-del-btn.armed { background: #b42318; color: #fff; }
 .cl-del.armed { font-weight: 800; }
+
+/* Clase en vivo: subtítulos y explicación */
+.cl-caption { background: linear-gradient(135deg, #101a3d, #1f3a73); color: #fff; border-radius: 22px; padding: 16px 18px; min-height: 96px; display: flex; flex-direction: column; gap: 6px; }
+.cl-caption small { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #8fb4ff; }
+.cl-caption p { font-size: 22px; line-height: 1.35; font-weight: 600; font-family: var(--display); }
+.cl-exs { display: flex; flex-direction: column; gap: 10px; }
+.cl-exs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cl-ex { background: var(--card, #fff); border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; border-left: 5px solid #ee7f22; box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 22px -16px rgba(16,24,40,.25); animation: cl-in .35s ease; }
+.cl-ex header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cl-ex header b { font-family: var(--display); font-size: 15.5px; color: var(--blue-dark); }
+.cl-ex header small { color: var(--muted); }
+.cl-ex p { font-size: 14.5px; line-height: 1.55; }
+.cl-ex-ej { background: #fff7ed; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.cl-ex-ej small { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #b54708; }
+.cl-ex-ej p { font-size: 14px; }
+.cl-main, .cl-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cl-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+
+/* ===== Versión de PC: aprovechar el ancho ===== */
+@media (min-width: 1000px) {
+  .cl-wide { max-width: 1240px; }
+  .cl-cols { grid-template-columns: minmax(0, 1.15fr) minmax(360px, 1fr); gap: 22px; align-items: start; }
+  .cl-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; padding-right: 4px; }
+  .cl-feed.live { max-height: calc(100vh - 330px); min-height: 260px; }
+  .cl-caption p { font-size: 28px; }
+  .cl-live-top { flex-wrap: nowrap; }
+  .cl-live-top .cl-stats { margin-left: auto; margin-right: 8px; }
+  .cl-detail { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 18px 26px; align-items: start; }
+  .cl-detail > * { grid-column: 1; }
+  .cl-detail .cl-head { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .cl-detail .cl-head h2 { font-size: 30px; }
+  .cl-detail .cl-sec:nth-of-type(n+3) { grid-column: 2; }
+  .cl-detail .cl-actions { grid-column: 2; grid-row: 2; }
+  .cl-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
+  .cl-start { display: grid; grid-template-columns: minmax(0, 1fr) 320px 240px; align-items: end; gap: 14px 24px; padding: 26px 30px; }
+  .cl-start > div { grid-column: 1; grid-row: 1 / 3; align-self: start; }
+  .cl-start .cl-field { grid-column: 2; grid-row: 1; } .cl-start .cl-go { grid-column: 3; grid-row: 1; }
+  .cl-start .cl-note, .cl-start .cl-err { grid-column: 2 / -1; grid-row: 2; align-self: start; }
+  .works { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+  .se { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; align-items: start; max-width: 1240px; }
+  .se-hero, .se-days { grid-column: 1 / -1; }
+  .se-hero { padding: 28px 32px; } .se-hero h2 { font-size: 34px; }
+  .se-days { gap: 12px; } .se-day { padding: 14px 0; border-radius: 22px; } .se-day b { font-size: 22px; }
+  .se-card .se-row { padding: 16px 18px; }
+}
+@media (min-width: 1400px) { .se { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1320px; } .se-sec:first-of-type { grid-column: auto; } }

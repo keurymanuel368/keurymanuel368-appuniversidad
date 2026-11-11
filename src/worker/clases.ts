@@ -21,7 +21,9 @@ export type ClassNotes = {
   tarjetas: { front: string; back: string }[];
   examen: { pregunta: string; respuesta: string }[];
 };
-type Row = { id: number; title: string; course: string | null; started_at: number; updated_at: number; ended_at: number | null; status: string; transcript: string; chunks: number; qa: string | null; work: string | null; notes: string | null; error: string | null };
+export type LiveItem = { id: string; at: number; titulo: string; texto: string; ejemplo?: string };
+type LiveNotes = { upto: number; items: LiveItem[] };
+type Row = { live: string | null; id: number; title: string; course: string | null; started_at: number; updated_at: number; ended_at: number | null; status: string; transcript: string; chunks: number; qa: string | null; work: string | null; notes: string | null; error: string | null };
 
 // ---------- Utilidades puras (con pruebas) ----------
 /** Whisper inventa frases cuando solo hay silencio o música: se descartan. */
@@ -67,11 +69,11 @@ export function normalizeNotes(a: Record<string, unknown> | null, b: Record<stri
 }
 
 // ---------- Preguntas en vivo ----------
-async function detect(env: Env, s: Row, force: boolean): Promise<Qa | null> {
-  if (!force && !hasCue(s.transcript.slice(-500))) return null;
+async function detect(env: Env, s: Row, force: boolean, hint = ''): Promise<Qa | null> {
+  if (!force && !hasCue(`${s.transcript.slice(-500)} ${hint}`)) return null;
   const qa: Qa[] = s.qa ? JSON.parse(s.qa) : [];
   const prev = qa.slice(-4).map((q) => q.pregunta).join(' | ') || 'ninguna';
-  const win = s.transcript.slice(-3000);
+  const win = s.transcript.slice(-3000) + (hint ? `\n[SUBTÍTULO EN VIVO, lo más reciente, aún sin confirmar]: ${hint}` : '');
   const raw = await llmComplete(env, [
     { role: 'system', content: `Eres el copiloto en vivo de Keury Durán, estudiante de Ingeniería de Software de la UAPA, durante la clase «${s.title}». Recibes la transcripción reciente (sin separar hablantes; Whisper puede escribir mal los nombres: «Keury» puede salir como Queury, Kiuri, Keuri o Manuel).
 Decide si en lo ÚLTIMO (los últimos 60 a 90 segundos, lo que está al final) el profesor o alguien:
@@ -189,7 +191,7 @@ export function registerClases(app: App) {
     const s = await get(c.env, Number(c.req.param('id')));
     if (!s) return c.json({ error: 'Clase no encontrada' }, 404);
     return c.json({ id: s.id, title: s.title, course: s.course, started_at: s.started_at, ended_at: s.ended_at, status: s.status, chunks: s.chunks, transcript: s.transcript,
-      qa: s.qa ? JSON.parse(s.qa) : [], notes: s.notes ? JSON.parse(s.notes) : null, error: s.error, work: s.work ? JSON.parse(s.work) : null });
+      qa: s.qa ? JSON.parse(s.qa) : [], live: s.live ? (JSON.parse(s.live) as LiveNotes).items : [], notes: s.notes ? JSON.parse(s.notes) : null, error: s.error, work: s.work ? JSON.parse(s.work) : null });
   });
 
   /** Un trozo de audio (≈30 s): se transcribe, se agrega al texto y se revisa si hubo una pregunta. El audio no se guarda. */
@@ -229,15 +231,47 @@ export function registerClases(app: App) {
     const id = Number(c.req.param('id'));
     const s = await get(c.env, id);
     if (!s) return c.json({ error: 'Clase no encontrada' }, 404);
-    const b = await c.req.json<{ force?: boolean }>().catch(() => ({} as { force?: boolean }));
+    const b = await c.req.json<{ force?: boolean; hint?: string }>().catch(() => ({} as { force?: boolean; hint?: string }));
     let qa: Qa | null = null;
-    try { qa = await detect(c.env, s, !!b.force); } catch (e) { console.log('Clase: detección falló: ' + (e as Error).message); }
+    try { qa = await detect(c.env, s, !!b.force, str(b.hint, 400)); } catch (e) { console.log('Clase: detección falló: ' + (e as Error).message); }
     // Segunda pantalla: si te preguntaron a ti, también llega al celular con la respuesta corta.
     if (qa && qa.dirigida === 'tu') {
       c.executionCtx.waitUntil(sendToMe(c.env, blocks('❓ *Te preguntaron*', qa.pregunta, `💬 ${qa.corta}`),
         { title: '❓ Te preguntaron', tag: `clase-q-${qa.id}`, url: '/#apuntes', pushBody: `${qa.pregunta.slice(0, 90)} → ${qa.corta.slice(0, 120)}`, type: 'avisos' }).catch(() => {}));
     }
     return c.json({ qa });
+  });
+
+  /** Explica lo último que se dijo (tema, explicación sencilla y ejemplo). Se pide solo cada ~1 minuto de clase o con el botón. */
+  app.post('/api/clases/:id/explain', async (c) => {
+    const id = Number(c.req.param('id'));
+    const s = await get(c.env, id);
+    if (!s) return c.json({ error: 'Clase no encontrada' }, 404);
+    const b = await c.req.json<{ force?: boolean }>().catch(() => ({} as { force?: boolean }));
+    const live: LiveNotes = s.live ? JSON.parse(s.live) : { upto: 0, items: [] };
+    const plain = (t: string) => t.replace(/\[[\d:]+\]\s*/g, '');
+    let fresh = s.transcript.slice(live.upto);
+    if (!b.force && plain(fresh).length < 380) return c.json({ item: null });
+    if (b.force && plain(fresh).length < 500) fresh = s.transcript.slice(-1800);
+    if (plain(fresh).trim().length < 80) return c.json({ item: null, empty: true });
+    const before = s.transcript.slice(Math.max(0, live.upto - 1200), live.upto);
+    try {
+      const raw = await llmComplete(c.env, [
+        { role: 'system', content: `Eres el tutor en vivo de Keury Durán, estudiante de Ingeniería de Software de la UAPA, durante la clase «${s.title}». Recibes lo ÚLTIMO que se dijo en clase (transcripción automática: puede tener errores de palabras, corrígelos con el contexto). Explícale como si no hubiera entendido nada: 1) de qué se está hablando, 2) una explicación clara y sencilla (máximo 110 palabras, con **negritas** en los términos clave), 3) un ejemplo corto y concreto. Si es solo charla sin contenido académico (saludos, asistencia, logística), responde {"titulo":"","texto":""}.
+Responde SOLO con JSON: {"titulo":"tema en pocas palabras","texto":"la explicación","ejemplo":"ejemplo corto"}` },
+        { role: 'user', content: `${before ? `LO ANTERIOR (contexto):\n${before}\n\n` : ''}LO ÚLTIMO QUE SE DIJO:\n${fresh.slice(-4500)}` },
+      ], { maxTokens: 650, temperature: 0.3 });
+      const j = parseJson(raw);
+      const titulo = str(j?.titulo, 100), texto = str(j?.texto, 1200);
+      live.upto = s.transcript.length;
+      let item: LiveItem | null = null;
+      if (j && titulo && texto) {
+        item = { id: `${id}-e${live.items.length + 1}`, at: Math.max(0, nowSec() - s.started_at), titulo, texto, ejemplo: str(j.ejemplo, 500) || undefined };
+        live.items = [...live.items, item].slice(-60);
+      }
+      await c.env.DB.prepare('UPDATE class_sessions SET live = ? WHERE id = ? AND user_id = ?').bind(JSON.stringify(live), id, c.env.UID).run();
+      return c.json({ item });
+    } catch (e) { return c.json({ item: null, error: (e as Error).message }, 502); }
   });
 
   app.post('/api/clases/:id/end', async (c) => {

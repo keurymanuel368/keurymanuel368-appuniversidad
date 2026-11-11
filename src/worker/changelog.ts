@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 73,
+    date: '2026-11-11',
+    title: '🎧 Explicación en vivo y versión de PC',
+    items: [
+      'Clase en vivo: subtítulos al instante y «Explicación en vivo»: cada minuto Rumbo te explica lo que se acaba de decir, con un ejemplo.',
+      'Las preguntas se detectan al momento con el subtítulo, sin esperar la transcripción exacta.',
+      'Versión de PC rediseñada: Clases, Semana y Trabajos aprovechan todo el ancho de la pantalla.',
+    ],
+  },
+  {
     version: 72,
     date: '2026-11-11',
     title: '🗑️ Eliminar clases y sin recargas',

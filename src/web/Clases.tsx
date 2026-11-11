@@ -4,14 +4,14 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { agoLabel, api } from './api';
 import { Empty, Skeleton, haptic, toast, useLoad } from './components';
 import { Icon } from './icons';
-import { askNow, clearFinished, dismissAlert, getLive, retryFailed, runProcess, startLive, stopLive, subscribeLive, type Qa } from './clasesLive';
+import { askNow, clearFinished, dismissAlert, explainNow, getLive, retryFailed, runProcess, startLive, stopLive, subscribeLive, type Explain, type Qa } from './clasesLive';
 
 type Item = { id: number; title: string; course: string | null; started_at: number; ended_at: number | null; status: string; chunks: number; words: number; questions: number };
 type Notes = {
   resumen: string; temas: string[]; explicacion: { titulo: string; texto: string }[]; conceptos: { termino: string; definicion: string }[];
   pendientes: string[]; tarjetas: { front: string; back: string }[]; examen: { pregunta: string; respuesta: string }[];
 };
-type Detail = { id: number; title: string; course: string | null; started_at: number; ended_at: number | null; status: string; chunks: number; transcript: string; qa: Qa[]; notes: Notes | null; error: string | null };
+type Detail = { live?: Explain[]; id: number; title: string; course: string | null; started_at: number; ended_at: number | null; status: string; chunks: number; transcript: string; qa: Qa[]; notes: Notes | null; error: string | null };
 
 const useLive = () => useSyncExternalStore(subscribeLive, getLive);
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -97,6 +97,16 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
 }
 
 // ---------- En vivo ----------
+function ExplainCard({ e }: { e: Explain }) {
+  return (
+    <article className="cl-ex">
+      <header><b>{e.titulo}</b><small className="num">{mmss(e.at)}</small></header>
+      <p><Rich t={e.texto} /></p>
+      {e.ejemplo && <div className="cl-ex-ej"><small>Ejemplo</small><p><Rich t={e.ejemplo} /></p></div>}
+    </article>
+  );
+}
+
 function LivePanel() {
   const s = useLive();
   const [, tick] = useState(0);
@@ -117,41 +127,57 @@ function LivePanel() {
   );
 
   return (
-    <div className="cl">
+    <div className="cl cl-wide">
       <section className="cl-live">
         <div className="cl-live-top">
           <span className={`cl-dot ${s.speaking ? 'on' : ''}`} aria-hidden="true" />
           <div><b>{s.title}</b><small className="num">{s.speaking ? 'Escuchando voz' : 'En silencio'} · {mmss(secs)}</small></div>
+          <div className="cl-stats">
+            <span><b className="num">{s.sent}</b> enviados</span><span><b className="num">{s.silent}</b> en silencio</span><span><b className="num">{s.queued}</b> en cola</span>
+            {s.failed > 0 && <button className="cl-retry" onClick={retryFailed}>{s.failed} fallaron · reintentar</button>}
+          </div>
           <button className="btn line cl-sm" onClick={() => { haptic(8); void stopLive(); }}>Terminar clase</button>
-        </div>
-        <div className="cl-stats">
-          <span><b className="num">{s.sent}</b> enviados</span><span><b className="num">{s.silent}</b> en silencio</span>
-          <span><b className="num">{s.queued}</b> en cola</span>
-          {s.failed > 0 && <button className="cl-retry" onClick={retryFailed}>{s.failed} fallaron · reintentar</button>}
         </div>
         {s.err && <small className="cl-warn">Reintentando: {s.err}</small>}
       </section>
 
-      {main ? <Answer qa={main} big onClose={() => dismissAlert(main.id)} /> : s.thinking ? (
-        <div className="cl-thinking" role="status"><span /><span /><span /><b>Pensando la respuesta…</b></div>
-      ) : (
-        <div className="cl-quiet"><Icon name="check" size={18} /><span>{s.notice || 'Todo tranquilo. Si te preguntan algo, aparece aquí con la respuesta lista.'}</span></div>
-      )}
-      {main && s.thinking && <div className="cl-thinking" role="status"><span /><span /><span /><b>Revisando otra pregunta…</b></div>}
-
-      <button className="btn primary cl-ask" onClick={() => { haptic(10); askNow(); }} disabled={s.asking}>
-        <Icon name="spark" size={19} />{s.asking ? 'Revisando lo último…' : '¿Qué me preguntaron?'}
-      </button>
-      {older.length > 0 && <div className="cl-older"><h3>Anteriores</h3>{older.map((q) => <Answer key={q.id} qa={q} onClose={() => dismissAlert(q.id)} />)}</div>}
-
-      <section className="cl-feed-wrap">
-        <h3>Transcripción en vivo</h3>
-        <div className="cl-feed live" ref={feed}>
-          {s.lines.length ? s.lines.map((l, i) => <p key={i} className={i === s.lines.length - 1 ? 'last' : ''}><span className="num">{mmss(l.at)}</span> {l.text}</p>)
-            : <p className="muted">Esperando que alguien hable… el texto aparece unos segundos después de cada frase.</p>}
-          {s.speaking && <p className="cl-typing"><span /><span /><span /></p>}
+      <div className="cl-cols">
+        <div className="cl-main">
+          <section className="cl-caption" aria-live="polite">
+            <small>{s.caption ? 'Subtítulos al instante' : 'Esperando que alguien hable'}</small>
+            <p>{s.caption || 'Cuando alguien hable, aquí aparece el texto al momento.'}</p>
+          </section>
+          <section className="cl-feed-wrap">
+            <h3>Transcripción confirmada</h3>
+            <div className="cl-feed live" ref={feed}>
+              {s.lines.length ? s.lines.map((l, i) => <p key={i} className={i === s.lines.length - 1 ? 'last' : ''}><span className="num">{mmss(l.at)}</span> {l.text}</p>)
+                : <p className="muted">El texto exacto aparece unos segundos después de cada frase.</p>}
+              {s.speaking && <p className="cl-typing"><span /><span /><span /></p>}
+            </div>
+          </section>
         </div>
-      </section>
+
+        <aside className="cl-side">
+          {main ? <Answer qa={main} big onClose={() => dismissAlert(main.id)} /> : s.thinking ? (
+            <div className="cl-thinking" role="status"><span /><span /><span /><b>Pensando la respuesta…</b></div>
+          ) : (
+            <div className="cl-quiet"><Icon name="check" size={18} /><span>{s.notice || 'Todo tranquilo. Si te preguntan algo, aparece aquí con la respuesta lista.'}</span></div>
+          )}
+          {main && s.thinking && <div className="cl-thinking" role="status"><span /><span /><span /><b>Revisando otra pregunta…</b></div>}
+          <button className="btn primary cl-ask" onClick={() => { haptic(10); askNow(); }} disabled={s.asking}>
+            <Icon name="spark" size={19} />{s.asking ? 'Revisando lo último…' : '¿Qué me preguntaron?'}
+          </button>
+          {older.length > 0 && <div className="cl-older"><h3>Anteriores</h3>{older.map((q) => <Answer key={q.id} qa={q} onClose={() => dismissAlert(q.id)} />)}</div>}
+
+          <section className="cl-exs">
+            <div className="cl-exs-head"><h3>Explicación en vivo</h3>
+              <button className="btn line cl-sm" onClick={() => { haptic(8); explainNow(); }} disabled={s.explaining}>{s.explaining ? 'Explicando…' : 'Explícame lo último'}</button></div>
+            {s.explaining && <div className="cl-thinking" role="status"><span /><span /><span /><b>Preparando la explicación…</b></div>}
+            {s.explains.length ? s.explains.map((e) => <ExplainCard key={e.id} e={e} />)
+              : !s.explaining && <p className="muted small">Cada minuto más o menos, Rumbo te explica lo que se acaba de decir: de qué se habla, en palabras sencillas y con un ejemplo.</p>}
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -209,7 +235,7 @@ function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
   const n = c.notes;
   const Sec = ({ title, children, count }: { title: string; children: ReactNode; count?: number }) => <section className="cl-sec"><h3>{title}{count !== undefined && <span className="pill blue num">{count}</span>}</h3>{children}</section>;
   return (
-    <div className="cl">
+    <div className="cl cl-wide cl-detail">
       <div className="cl-head">
         <button className="link-btn" onClick={onBack}>← Clases</button>
         <h2>{c.title}</h2>
@@ -251,6 +277,8 @@ function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
               {reveal.has(i) ? <p><Rich t={q.respuesta} /></p> : <button className="link-btn" onClick={() => setReveal(new Set([...reveal, i]))}>Ver respuesta</button>}</div>))}
           </div></Sec>}
       </>}
+
+      {(c.live || []).length > 0 && <Sec title="Explicaciones durante la clase" count={(c.live || []).length}><div className="cl-older">{[...(c.live || [])].reverse().map((e) => <ExplainCard key={e.id} e={e} />)}</div></Sec>}
 
       {c.qa.length > 0 && <Sec title="Preguntas que te hicieron" count={c.qa.length}><div className="cl-older">{c.qa.map((q) => <Answer key={q.id} qa={q} onClose={() => {}} />)}</div></Sec>}
 
