@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 67,
+    date: '2026-11-11',
+    title: '📄 Tus trabajos, como en Word',
+    items: [
+      'Al abrir un trabajo lo ves como en Word: portada, tus datos y páginas con número.',
+      'Los trabajos nuevos salen mejor formateados: negritas, viñetas, recuadros destacados, tablas y sin ideas repetidas.',
+    ],
+  },
+  {
     version: 66,
     date: '2026-11-11',
     title: '📚 Todos tus trabajos juntos',

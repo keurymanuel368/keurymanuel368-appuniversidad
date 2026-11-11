@@ -4,7 +4,7 @@
 export type Work = {
   etiqueta: string; titulo: string; subtitulo: string; motivo: string[];
   introduccion: string;
-  secciones: { titulo: string; parrafos: string[]; tabla?: { titulo: string; columnas: string[]; filas: string[][] } | null }[];
+  secciones: { titulo: string; parrafos: string[]; lista?: string[]; destacado?: string; tabla?: { titulo: string; columnas: string[]; filas: string[][] } | null }[];
   conclusion: string; referencias: string[];
 };
 export type Profile = { nombre: string; matricula: string; carrera: string; facilitador: string; asignatura: string; codigo: string; institucion: string; fecha: string };
@@ -103,6 +103,11 @@ function zip(files: { name: string; data: Uint8Array }[]): Uint8Array {
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const run = (t: string, o: { b?: boolean; i?: boolean; sz?: number; color?: string } = {}) =>
   `<w:r><w:rPr>${o.b ? '<w:b/>' : ''}${o.i ? '<w:i/>' : ''}${o.color ? `<w:color w:val="${o.color}"/>` : ''}${o.sz ? `<w:sz w:val="${o.sz}"/>` : ''}</w:rPr><w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
+/** Texto con **negritas**. */
+const rich = (t: string, o: { i?: boolean; sz?: number; color?: string } = {}) =>
+  t.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((p) => (/^\*\*[^*]+\*\*$/.test(p) ? run(p.slice(2, -2), { ...o, b: true }) : run(p, o))).join('');
+const bullet = (t: string) => `<w:p><w:pPr><w:spacing w:before="0" w:after="60"/><w:ind w:left="540" w:hanging="270"/><w:jc w:val="both"/></w:pPr>${run('•')}<w:r><w:tab/></w:r>${rich(t)}</w:p>`;
+const callout = (t: string) => `<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/><w:tblBorders><w:left w:val="single" w:sz="36" w:space="0" w:color="EE7F22"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="200" w:type="dxa"/><w:right w:w="140" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tr><w:tc><w:tcPr><w:tcW w:w="9360" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="EEF4FF"/></w:tcPr>${para(rich(t, { i: true, color: '14214A', sz: 23 }), { before: 100, after: 100 })}</w:tc></w:tr></w:tbl>${para('', { after: 100 })}`;
 const para = (inner: string, o: { jc?: string; before?: number; after?: number; style?: string; hanging?: boolean; keep?: boolean } = {}) =>
   `<w:p><w:pPr>${o.style ? `<w:pStyle w:val="${o.style}"/>` : ''}${o.keep ? '<w:keepNext/>' : ''}<w:spacing w:before="${o.before ?? 0}" w:after="${o.after ?? 120}"/>${o.hanging ? '<w:ind w:left="720" w:hanging="720"/>' : ''}${o.jc ? `<w:jc w:val="${o.jc}"/>` : ''}</w:pPr>${inner}</w:p>`;
 const cell = (inner: string, w: number, fill?: string) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>` : ''}</w:tcPr>${inner}</w:tc>`;
@@ -140,15 +145,17 @@ export function buildDocx(w: Work, p: Profile, cover: Uint8Array): Uint8Array {
     dataTable(p),
     `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`,
     para(run('Introducción'), { style: 'Heading1' }),
-    para(run(w.introduccion), { jc: 'both' }),
+    para(rich(w.introduccion), { jc: 'both' }),
     para(run('Desarrollo'), { style: 'Heading1' }),
     ...w.secciones.flatMap((s) => [
       para(run(s.titulo), { style: 'Heading2' }),
-      ...s.parrafos.map((t) => para(run(t), { jc: 'both' })),
+      ...s.parrafos.map((t) => para(rich(t), { jc: 'both' })),
+      ...(s.lista?.length ? [...s.lista.map(bullet), para('', { after: 40 })] : []),
+      ...(s.destacado ? [callout(s.destacado)] : []),
       ...(s.tabla ? [table({ ...s.tabla, titulo: /^tabla\s*\d/i.test(s.tabla.titulo) ? s.tabla.titulo : `Tabla ${++n}. ${s.tabla.titulo.replace(/^tabla\.?\s*/i, '')}` })] : []),
     ]),
     para(run('Conclusión'), { style: 'Heading1' }),
-    para(run(w.conclusion), { jc: 'both' }),
+    para(rich(w.conclusion), { jc: 'both' }),
     ...(w.referencias.length ? [para(run('Referencias'), { style: 'Heading1' }), ...[...w.referencias].sort((a, b) => a.replace(/\*/g, '').localeCompare(b.replace(/\*/g, ''), 'es')).map((r) => para(refRuns(r), { hanging: true }))] : []),
   ].join('');
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
@@ -175,7 +182,8 @@ export async function downloadWord(w: Work, p: Profile, fileBase: string): Promi
 
 /** Texto plano del trabajo, para copiar al portapapeles. */
 export function workText(w: Work): string {
-  return [w.titulo, '', 'Introducción', w.introduccion, '', 'Desarrollo',
-    ...w.secciones.flatMap((s) => [s.titulo, ...s.parrafos, ...(s.tabla ? [s.tabla.titulo, s.tabla.columnas.join(' | '), ...s.tabla.filas.map((r) => r.join(' | '))] : []), '']),
+  const t = [w.titulo, '', 'Introducción', w.introduccion, '', 'Desarrollo',
+    ...w.secciones.flatMap((s) => [s.titulo, ...s.parrafos, ...(s.lista || []).map((x) => `• ${x}`), ...(s.destacado ? [s.destacado] : []), ...(s.tabla ? [s.tabla.titulo, s.tabla.columnas.join(' | '), ...s.tabla.filas.map((r) => r.join(' | '))] : []), '']),
     'Conclusión', w.conclusion, '', 'Referencias', ...w.referencias.map((r) => r.replace(/\*/g, ''))].join('\n');
+  return t.replace(/\*\*/g, '');
 }

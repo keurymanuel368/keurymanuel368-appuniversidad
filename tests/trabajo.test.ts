@@ -7,7 +7,7 @@ const work: Work = {
   etiqueta: 'TRABAJO FINAL · ANÁLISIS', titulo: 'A la deriva', subtitulo: 'Guía de análisis del cuento', motivo: ['p', 'q', '∀'],
   introduccion: 'Introducción de prueba con ñ y acentos & <símbolos>.',
   secciones: [
-    { titulo: '1. Ficha técnica', parrafos: ['Párrafo uno.'], tabla: { titulo: 'Tabla 1. Ficha', columnas: ['Dato', 'Información'], filas: [['Título', 'A la deriva'], ['Autor', 'Horacio Quiroga']] } },
+    { titulo: '1. Ficha técnica', parrafos: ['Párrafo con **término clave** en negrita.'], lista: ['Primera viñeta', 'Segunda viñeta'], destacado: 'Idea central destacada.', tabla: { titulo: 'Tabla 1. Ficha', columnas: ['Dato', 'Información'], filas: [['Título', 'A la deriva'], ['Autor', 'Horacio Quiroga']] } },
     { titulo: '2. Personajes', parrafos: ['Otro párrafo.'], tabla: null },
   ],
   conclusion: 'Conclusión.', referencias: ['ONU. (2015). *Objetivos de Desarrollo Sostenible*. https://www.un.org/sustainabledevelopment/es/','Quiroga, H. (1917). Cuentos.', 'Anthropic. (2026). Claude [Modelo de lenguaje grande]. https://claude.ai'],
@@ -28,6 +28,9 @@ describe('trabajo con IA', () => {
     const text = new TextDecoder().decode(bytes);
     for (const n of ['[Content_Types].xml', 'word/document.xml', 'word/styles.xml', 'word/media/portada.png']) expect(text).toContain(n);
     expect(text).toContain('hyperlink');
+    expect(text).toContain('Primera viñeta');
+    expect(text).toContain('Idea central destacada.');
+    expect(text).not.toContain('**');
     expect(text).toContain('rIdL1');
     if (process.env.WORK_OUT) writeFileSync(process.env.WORK_OUT, bytes);
   });

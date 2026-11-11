@@ -14,7 +14,7 @@ type App = Hono<{ Bindings: Env }>;
 export type Work = {
   etiqueta: string; titulo: string; subtitulo: string; motivo: string[];
   introduccion: string;
-  secciones: { titulo: string; parrafos: string[]; tabla?: { titulo: string; columnas: string[]; filas: string[][] } | null }[];
+  secciones: { titulo: string; parrafos: string[]; lista?: string[]; destacado?: string; tabla?: { titulo: string; columnas: string[]; filas: string[][] } | null }[];
   conclusion: string; referencias: string[];
 };
 export type Profile = { nombre: string; matricula: string; carrera: string; facilitador: string; asignatura: string; codigo: string; institucion: string; fecha: string };
@@ -25,7 +25,8 @@ export const DEFAULT_STYLE = `ESTILO DE LOS TRABAJOS (copia este estilo):
 - Primera persona del singular ("seleccioné", "me impactó", "me permitió"), español formal pero natural, de estudiante dominicano que se expresa bien. Sin florituras ni relleno.
 - Estructura fija: Introducción (UN párrafo: contexto, qué se hizo en el trabajo y qué partes tiene) → Desarrollo (secciones numeradas "1. …", "2. …" que siguen EXACTAMENTE, y en el mismo orden, los puntos de la guía o consigna de la tarea) → Conclusión (UN párrafo en primera persona: qué aprendí y cómo se relaciona con la asignatura) → Referencias.
 - Cuando la consigna pide datos comparables (ficha técnica, personajes, estructura, cronología, comparaciones) usa una tabla con título "Tabla N. …".
-- Extensión corta y precisa: ve al grano; cada sección 1 o 2 párrafos breves. Nada de trabajos enormes.
+- Ve al grano y NO repitas ideas: cada sección aporta algo distinto; no repitas lo dicho en la introducción ni en otras secciones; evita muletillas («es importante destacar», «en conclusión», «cabe mencionar»).
+- Da formato para que se lea bonito: **negritas** en 2 a 4 términos clave por sección, listas con viñetas cuando enumeres, tablas cuando compares y una frase destacada cuando haya una idea central.
 - Referencias en APA 7. Solo obras reales y muy conocidas, o las que cite la propia consigna. NUNCA inventes autores, citas, páginas ni enlaces. Si no estás seguro, no la pongas. Termina siempre con la línea: Anthropic. (2026). Claude [Modelo de lenguaje grande]. https://claude.ai`;
 
 const DEFAULT_PROFILE = { nombre: 'Keury Manuel Durán García', matricula: '100108669', carrera: 'Ingeniería de Software' };
@@ -57,9 +58,11 @@ export function normalizeWork(j: Record<string, unknown> | null): Work | null {
     return {
       titulo: str(o.titulo, 140),
       parrafos: (Array.isArray(o.parrafos) ? o.parrafos : typeof o.parrafos === 'string' ? [o.parrafos] : []).map((p) => str(p, 2500)).filter(Boolean).slice(0, 5),
+      lista: (Array.isArray(o.lista) ? o.lista : []).map((x) => str(x, 320)).filter(Boolean).slice(0, 8),
+      destacado: str(o.destacado, 320) || undefined,
       tabla: cols.length && filas.length ? { titulo: str(t!.titulo, 140) || 'Tabla', columnas: cols, filas: filas.map((r) => cols.map((_, i) => r[i] ?? '')) } : null,
     };
-  }).filter((s) => s.titulo && (s.parrafos.length || s.tabla));
+  }).filter((s) => s.titulo && (s.parrafos.length || s.tabla || s.lista.length));
   const w: Work = {
     etiqueta: str(j.etiqueta, 60).toUpperCase() || 'TRABAJO FINAL',
     titulo: str(j.titulo, 80), subtitulo: str(j.subtitulo, 140),
@@ -102,7 +105,7 @@ async function linkAlive(ref: string): Promise<boolean> {
   } catch { return false; }
 }
 
-const SECTION_SPEC = `Responde SOLO con JSON: {"parrafos":["párrafo","párrafo"],"tabla":null}. Si te piden tabla, "tabla" es {"titulo":"Tabla N. …","columnas":["…"],"filas":[["…"]]} (máximo 5 columnas, filas cortas).`;
+const SECTION_SPEC = `Responde SOLO con JSON: {"parrafos":["párrafo con **términos clave** en negrita"],"lista":["viñeta corta"],"destacado":"una frase clave de la sección","tabla":null}. "lista" y "destacado" son opcionales: úsalos solo si aportan (lista de 3 a 6 viñetas cuando enumeres; destacado = 1 frase de la idea central; si no, [] y null). Si te piden tabla, "tabla" es {"titulo":"Tabla N. …","columnas":["…"],"filas":[["…"]]} (máximo 5 columnas, filas cortas).`;
 
 /** Genera el trabajo en dos etapas (plan → secciones en paralelo) y lo guarda; avisa al terminar. Corre en segundo plano. */
 export async function generateWork(env: Env, taskId: number, largo: Largo = 'medio'): Promise<void> {
@@ -147,13 +150,13 @@ Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes real
       ask(env, `${sys}\n\nResponde SOLO con JSON: {"texto":"..."}`, `${ctx}\n\nEscribe la INTRODUCCIÓN: UN párrafo de unas ${Math.round(total * 0.08)} palabras (contexto, qué hice en el trabajo y qué partes tiene: ${resumenPlan}).`, 1200),
       ask(env, `${sys}\n\nResponde SOLO con JSON: {"texto":"..."}`, `${ctx}\n\nEscribe la CONCLUSIÓN: UN párrafo de unas ${Math.round(total * 0.08)} palabras en primera persona (qué aprendí y cómo se relaciona con ${asignatura}). El trabajo trató: ${resumenPlan}.`, 1200),
       Promise.all(pl.secciones.map((x) => ask(env, `${sys}\n\n${SECTION_SPEC}`,
-        `${ctx}\n\nEscribe SOLO la sección «${x.titulo}» del trabajo (las otras secciones: ${resumenPlan}).\nDebe cubrir: ${x.puntos.join('; ') || 'lo que pide ese punto de la consigna'}.\nExtensión: unas ${per} palabras${per > 250 ? ', en 2 o 3 párrafos' : ', en 1 o 2 párrafos'}.\n${x.tabla ? `Incluye la tabla titulada «${x.tabla}».` : 'No incluyas tabla (tabla = null).'}`, Math.min(4000, per * 3 + 500)))),
+        `${ctx}\n\nEscribe SOLO la sección «${x.titulo}» del trabajo (las otras secciones, que NO debes repetir ni resumir: ${resumenPlan}).\nNo repitas la introducción ni uses frases de relleno. Dale formato: **negritas** en términos clave, viñetas si enumeras y una frase destacada si hay una idea central.\nDebe cubrir: ${x.puntos.join('; ') || 'lo que pide ese punto de la consigna'}.\nExtensión: unas ${per} palabras${per > 250 ? ', en 2 o 3 párrafos' : ', en 1 o 2 párrafos'}.\n${x.tabla ? `Incluye la tabla titulada «${x.tabla}».` : 'No incluyas tabla (tabla = null).'}`, Math.min(4000, per * 3 + 500)))),
       Promise.all(pl.referencias.map(async (r) => ((await linkAlive(r)) ? r : null))),
     ]);
     const work = normalizeWork({
       etiqueta: pl.etiqueta, titulo: pl.titulo, subtitulo: pl.subtitulo, motivo: pl.motivo,
       introduccion: str(intro.texto, 3000),
-      secciones: pl.secciones.map((x, i) => ({ titulo: x.titulo, parrafos: (secs[i] as Record<string, unknown>).parrafos, tabla: (secs[i] as Record<string, unknown>).tabla })),
+      secciones: pl.secciones.map((x, i) => ({ titulo: x.titulo, parrafos: (secs[i] as Record<string, unknown>).parrafos, lista: (secs[i] as Record<string, unknown>).lista, destacado: (secs[i] as Record<string, unknown>).destacado, tabla: (secs[i] as Record<string, unknown>).tabla })),
       conclusion: str(concl.texto, 3000),
       referencias: [...(refsOk.filter(Boolean) as string[]), 'Anthropic. (2026). *Claude* [Modelo de lenguaje grande]. https://claude.ai'],
     });

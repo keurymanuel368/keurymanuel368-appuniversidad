@@ -1,7 +1,8 @@
 // «Hacer con IA»: botón en cada tarea (y en Semana eficiente) + vista del trabajo con descarga en Word.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agoLabel, api } from './api';
-import { Empty, Modal, Skeleton, haptic, toast, useLoad } from './components';
+import { Empty, Skeleton, haptic, toast, useLoad } from './components';
+import { DocViewer } from './DocViewer';
 import { Icon } from './icons';
 import type { Profile, Work } from './trabajo';
 
@@ -15,15 +16,6 @@ function savedLargo(): Largo {
   return 'medio';
 }
 function saveLargo(v: Largo) { try { localStorage.setItem('rumbo-work-len', v); } catch { /* sin almacenamiento */ } }
-
-/** Texto de una referencia con sus enlaces clicables y los títulos en cursiva (*así*). */
-function Ref({ text }: { text: string }) {
-  return <>{text.split(/(\*[^*]+\*|https?:\/\/[^\s)>\]]+)/g).map((p, i) => {
-    if (/^https?:/.test(p)) { const u = p.replace(/[.,;]+$/, ''); return <span key={i}><a href={u} target="_blank" rel="noreferrer">{u}</a>{p.slice(u.length)}</span>; }
-    if (/^\*[^*]+\*$/.test(p)) return <em key={i}>{p.slice(1, -1)}</em>;
-    return <span key={i}>{p}</span>;
-  })}</>;
-}
 
 type Info = { status: 'none' | 'pending' | 'ready' | 'error'; work?: Work; profile?: Profile; error?: string };
 
@@ -125,51 +117,8 @@ export function WorkChip({ taskId, title }: { taskId: number; title: string }) {
   );
 }
 
-function WorkSheet({ work, profile, title, onClose, onRedo }: { work: Work; profile: Profile; title: string; onClose: () => void; onRedo: () => void }) {
-  const [busy, setBusy] = useState(false);
-  async function word() {
-    setBusy(true); haptic(10);
-    try { const m = await import('./trabajo'); await m.downloadWord(work, profile, `${work.titulo}_${profile.nombre.split(' ').slice(0, 2).join('_')}`); toast('Word descargado ✅'); }
-    catch (e) { toast((e as Error).message, 'err'); }
-    setBusy(false);
-  }
-  async function copy() {
-    try { const m = await import('./trabajo'); await navigator.clipboard.writeText(m.workText(work)); toast('Texto copiado'); }
-    catch { toast('No se pudo copiar', 'err'); }
-  }
-  return (
-    <Modal title="Tu trabajo" onClose={onClose}>
-      <div className="work-view">
-        <div className="work-cover">
-          <span className="wc-tag">{work.etiqueta}</span>
-          <h2>{work.titulo}</h2>
-          <p>{work.subtitulo}</p>
-          <small>{title}</small>
-        </div>
-        <div className="work-actions">
-          <button className="btn primary" onClick={word} disabled={busy}><Icon name="book" size={18} />{busy ? 'Preparando…' : 'Descargar Word'}</button>
-          <button className="btn line" onClick={copy}>Copiar texto</button>
-          <button className="btn line" onClick={onRedo}>Rehacer</button>
-        </div>
-        <p className="muted small">Es un borrador: léelo, ajústalo con tus palabras y verifica las referencias antes de entregar.</p>
-        <h3>Introducción</h3><p>{work.introduccion}</p>
-        {work.secciones.map((s, i) => (
-          <div key={i}>
-            <h4>{s.titulo}</h4>
-            {s.parrafos.map((t, j) => <p key={j}>{t}</p>)}
-            {s.tabla && (
-              <div className="work-table"><b>{s.tabla.titulo}</b>
-                <table><thead><tr>{s.tabla.columnas.map((c, k) => <th key={k}>{c}</th>)}</tr></thead>
-                  <tbody>{s.tabla.filas.map((r, k) => <tr key={k}>{r.map((c, l) => <td key={l}>{c}</td>)}</tr>)}</tbody></table>
-              </div>
-            )}
-          </div>
-        ))}
-        <h3>Conclusión</h3><p>{work.conclusion}</p>
-        {work.referencias.length > 0 && <><h3>Referencias</h3>{work.referencias.map((r, i) => <p key={i} className="small ref"><Ref text={r} /></p>)}</>}
-      </div>
-    </Modal>
-  );
+function WorkSheet(props: { work: Work; profile: Profile; title: string; onClose: () => void; onRedo: () => void }) {
+  return <DocViewer {...props} />;
 }
 
 type WorkItem = { task_id: number; status: string; updated_at: number; task_title: string; task_status: string; course_name: string | null; course_color: string | null; titulo: string; etiqueta: string; palabras: number };
