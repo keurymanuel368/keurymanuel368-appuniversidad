@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 72,
+    date: '2026-11-11',
+    title: '🗑️ Eliminar clases y sin recargas',
+    items: ['Ya puedes eliminar clases (con confirmación de dos toques) desde la lista.', 'Arreglado: la app se refrescaba sola mientras grababas una clase.'],
+  },
+  {
     version: 71,
     date: '2026-11-11',
     title: '⚡ Clase en vivo, casi al instante',

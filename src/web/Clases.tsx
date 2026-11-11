@@ -33,7 +33,14 @@ export function Clases() {
 
 // ---------- Pantalla principal: empezar y lista clasificada ----------
 function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
-  const list = useLoad(() => api<Item[]>(`/clases?_=${Date.now()}`));
+  const list = useLoad(() => api<Item[]>('/clases'));
+  const [armed, setArmed] = useState<number | null>(null);
+  useEffect(() => { if (armed === null) return; const t = setTimeout(() => setArmed(null), 3500); return () => clearTimeout(t); }, [armed]);
+  async function del(id: number) {
+    if (armed !== id) { setArmed(id); haptic(6); return; }
+    try { await api(`/clases/${id}`, { method: 'DELETE' }); toast('Clase eliminada'); setArmed(null); list.reload(); }
+    catch (e) { toast((e as Error).message, 'err'); }
+  }
   const now = useLoad(() => api<{ title: string; course: string }>('/clases/now').catch(() => ({ title: '', course: '' })));
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,11 +78,16 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
             <h3>{course} <span className="pill blue num">{items.length}</span></h3>
             <div className="cl-list">
               {items.map((it) => (
-                <button key={it.id} className="cl-item" onClick={() => onOpen(it.id)}>
-                  <b>{it.title}</b>
-                  <span className="cl-sub">{dateLabel(it.started_at)} · ≈ {it.words} palabras{it.questions ? ` · ${it.questions} pregunta${it.questions > 1 ? 's' : ''}` : ''}</span>
-                  <span className={`cl-state ${it.status}`}>{it.status === 'ready' ? 'Explicada' : it.status === 'live' ? 'En vivo' : 'Por explicar'}</span>
-                </button>
+                <div key={it.id} className="cl-row">
+                  <button className="cl-item" onClick={() => onOpen(it.id)}>
+                    <b>{it.title}</b>
+                    <span className="cl-sub">{dateLabel(it.started_at)} · ≈ {it.words} palabras{it.questions ? ` · ${it.questions} pregunta${it.questions > 1 ? 's' : ''}` : ''}</span>
+                    <span className={`cl-state ${it.status}`}>{it.status === 'ready' ? 'Explicada' : it.status === 'live' ? 'En vivo' : 'Por explicar'}</span>
+                  </button>
+                  <button className={`cl-del-btn ${armed === it.id ? 'armed' : ''}`} onClick={() => void del(it.id)} aria-label={armed === it.id ? 'Confirmar: eliminar clase' : 'Eliminar clase'}>
+                    {armed === it.id ? '¿Eliminar?' : <Icon name="trash" size={17} />}
+                  </button>
+                </div>
               ))}
             </div>
           </section>
@@ -164,11 +176,12 @@ function Answer({ qa, big, onClose }: { qa: Qa; big?: boolean; onClose: () => vo
 
 // ---------- Detalle de una clase ----------
 function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
-  const d = useLoad(() => api<Detail>(`/clases/${id}?_=${Date.now()}`), [id]);
+  const d = useLoad(() => api<Detail>(`/clases/${id}`), [id]);
   const [work, setWork] = useState(false);
   const [showText, setShowText] = useState(false);
   const [open, setOpen] = useState<number | null>(0);
   const [reveal, setReveal] = useState<Set<number>>(new Set());
+  const [confirmDel, setConfirmDel] = useState(false);
   const c = d.data;
 
   async function finish() {
@@ -245,7 +258,7 @@ function ClaseDetalle({ id, onBack }: { id: number; onBack: () => void }) {
         <button className="link-btn" onClick={() => setShowText((v) => !v)}>{showText ? 'Ocultar transcripción' : 'Ver transcripción completa'}</button>
         {showText && <><div className="cl-feed full">{c.transcript.split('\n').filter(Boolean).map((l, i) => <p key={i}>{l}</p>)}</div><button className="btn line cl-sm" onClick={() => void copy(c.transcript)}>Copiar transcripción</button></>}
       </section>
-      <button className="link-btn cl-del" onClick={remove}>Eliminar esta clase</button>
+      <button className={`link-btn cl-del ${confirmDel ? 'armed' : ''}`} onClick={() => { if (!confirmDel) { setConfirmDel(true); haptic(6); setTimeout(() => setConfirmDel(false), 3500); } else void remove(); }}>{confirmDel ? '¿Seguro? Toca otra vez para eliminar' : 'Eliminar esta clase'}</button>
     </div>
   );
 }

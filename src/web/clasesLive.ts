@@ -78,7 +78,7 @@ function cut(force = false) {
 }
 
 /** Cada 100 ms mira si se oye voz y decide cuándo cortar. */
-function tick(an: AnalyserNode, buf: Uint8Array) {
+function tick(an: AnalyserNode, buf: Uint8Array<ArrayBuffer>) {
   if (!current || st.phase !== 'live') return;
   an.getByteTimeDomainData(buf);
   let pk = 0; for (const v of buf) pk = Math.max(pk, Math.abs(v - 128));
@@ -157,7 +157,7 @@ export async function startLive(title: string, course: string) {
   ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(audio); const an = ctx.createAnalyser(); an.fftSize = 1024;
   const mute = ctx.createGain(); mute.gain.value = 0; src.connect(an); an.connect(mute); mute.connect(ctx.destination);
-  const buf = new Uint8Array(an.fftSize);
+  const buf = new Uint8Array(new ArrayBuffer(an.fftSize));
   current = newChunk();
   meterTimer = window.setInterval(() => tick(an, buf), TICK);
   tracks[0].addEventListener('ended', () => { void stopLive(); });
