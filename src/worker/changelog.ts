@@ -10,6 +10,12 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 69,
+    date: '2026-11-11',
+    title: '📝 Trabajos sin secciones repetidas',
+    items: ['Arreglado: los trabajos ya no repiten Introducción, Desarrollo, Conclusión ni Referencias. Los que ya tenías se corrigen solos al abrirlos.'],
+  },
+  {
     version: 68,
     date: '2026-11-11',
     title: '📄 Menú del visor ajustado',

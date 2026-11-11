@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
-import { normalizeWork } from '../src/worker/trabajo';
+import { cleanSections, normalizeWork } from '../src/worker/trabajo';
 import { buildDocx, type Profile, type Work } from '../src/web/trabajo';
 
 const work: Work = {
@@ -21,6 +21,11 @@ describe('trabajo con IA', () => {
     expect(w?.secciones[0].tabla?.filas[0]).toHaveLength(2);
     expect(normalizeWork({ titulo: 'x' })).toBeNull();
     expect(normalizeWork(null)).toBeNull();
+  });
+  it('quita secciones duplicadas y renumera', () => {
+    const out = cleanSections([{ titulo: '1. Introducción' }, { titulo: '2. Desarrollo' }, { titulo: '3. Biografía' }, { titulo: '3.1 Infancia' }, { titulo: '4. Personajes' }, { titulo: '5. Conclusión' }, { titulo: '6. Referencias' }]);
+    expect(out.map((s) => s.titulo)).toEqual(['1. Biografía', '1.1 Infancia', '2. Personajes']);
+    expect(cleanSections([{ titulo: 'Conclusión' }]).length).toBe(1); // si solo hubiera esas, no se deja vacío
   });
   it('arma un .docx (zip) con sus partes', () => {
     const bytes = buildDocx(work, profile, new Uint8Array([137, 80, 78, 71]));

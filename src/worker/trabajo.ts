@@ -48,6 +48,23 @@ function parseJson(raw: string): Record<string, unknown> | null {
 }
 const str = (v: unknown, max = 4000) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
+/** Títulos que Rumbo ya agrega solo (no pueden ser secciones del desarrollo). */
+const META = /^\s*(?:\d+(?:\.\d+)*\.?\s*)?(introducci[oó]n|desarrollo|conclusi[oó]n(?:es)?|referencias?(?:\s+bibliogr[aá]ficas?)?|bibliograf[ií]a|portada|[ií]ndice)\s*[:.]?\s*$/i;
+
+/** Quita secciones duplicadas (Introducción, Desarrollo, Conclusión, Referencias…) y renumera las demás desde 1. */
+export function cleanSections<T extends { titulo: string }>(secs: T[]): T[] {
+  const kept = secs.filter((s) => !META.test(s.titulo));
+  if (!kept.length) return secs;
+  const map = new Map<string, number>();
+  let n = 0;
+  return kept.map((s) => {
+    const m = s.titulo.match(/^(\d+)((?:\.\d+)*)\.?\s+(.*)$/);
+    if (!m) return s;
+    if (!map.has(m[1])) map.set(m[1], ++n);
+    return { ...s, titulo: `${map.get(m[1])}${m[2]}${m[2] ? '' : '.'} ${m[3]}` };
+  });
+}
+
 export function normalizeWork(j: Record<string, unknown> | null): Work | null {
   if (!j) return null;
   const secciones = (Array.isArray(j.secciones) ? j.secciones : []).slice(0, 12).map((x) => {
@@ -63,11 +80,12 @@ export function normalizeWork(j: Record<string, unknown> | null): Work | null {
       tabla: cols.length && filas.length ? { titulo: str(t!.titulo, 140) || 'Tabla', columnas: cols, filas: filas.map((r) => cols.map((_, i) => r[i] ?? '')) } : null,
     };
   }).filter((s) => s.titulo && (s.parrafos.length || s.tabla || s.lista.length));
+  const limpias = cleanSections(secciones);
   const w: Work = {
     etiqueta: str(j.etiqueta, 60).toUpperCase() || 'TRABAJO FINAL',
     titulo: str(j.titulo, 80), subtitulo: str(j.subtitulo, 140),
     motivo: (Array.isArray(j.motivo) ? j.motivo : []).map((m) => str(m, 14)).filter(Boolean).slice(0, 16),
-    introduccion: str(j.introduccion, 3000), secciones,
+    introduccion: str(j.introduccion, 3000), secciones: limpias,
     conclusion: str(j.conclusion, 3000),
     referencias: (Array.isArray(j.referencias) ? j.referencias : []).map((r) => str(r, 400)).filter(Boolean).slice(0, 10),
   };
@@ -129,6 +147,7 @@ export async function generateWork(env: Env, taskId: number, largo: Largo = 'med
 {"etiqueta":"TIPO DE TRABAJO · TEMA en mayúsculas, máx 4 palabras","titulo":"título corto de portada (2 a 5 palabras)","subtitulo":"una línea que describe el trabajo","motivo":["12 símbolos o palabras muy cortas del tema para decorar la portada"],
 "secciones":[{"titulo":"1. Nombre","puntos":["qué debe cubrir esta sección"],"tabla":null}],
 "referencias":["Autor. (año). *Título*. Editorial/Sitio. https://enlace-real"]}
+IMPORTANTE: las secciones son SOLO el contenido del Desarrollo, numeradas desde 1. NO crees secciones llamadas Introducción, Desarrollo, Conclusión, Referencias ni Bibliografía: esas partes se agregan solas aparte. Aunque la consigna las mencione, no las pongas como sección.
 ${profundidad} "tabla" es null o el título de una tabla útil (ficha, comparación, cronología) cuando la consigna lo pida.
 Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes reales y conocidas de sitios oficiales o institucionales (ONU, UNESCO, universidades, organismos, bibliotecas), con la dirección de la página que sabes que existe. Si no estás seguro de un enlace, no pongas esa referencia. Los títulos de obras van entre asteriscos *así*.`, ctx, 2200);
     const pl: Plan = {
@@ -150,7 +169,7 @@ Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes real
       ask(env, `${sys}\n\nResponde SOLO con JSON: {"texto":"..."}`, `${ctx}\n\nEscribe la INTRODUCCIÓN: UN párrafo de unas ${Math.round(total * 0.08)} palabras (contexto, qué hice en el trabajo y qué partes tiene: ${resumenPlan}).`, 1200),
       ask(env, `${sys}\n\nResponde SOLO con JSON: {"texto":"..."}`, `${ctx}\n\nEscribe la CONCLUSIÓN: UN párrafo de unas ${Math.round(total * 0.08)} palabras en primera persona (qué aprendí y cómo se relaciona con ${asignatura}). El trabajo trató: ${resumenPlan}.`, 1200),
       Promise.all(pl.secciones.map((x) => ask(env, `${sys}\n\n${SECTION_SPEC}`,
-        `${ctx}\n\nEscribe SOLO la sección «${x.titulo}» del trabajo (las otras secciones, que NO debes repetir ni resumir: ${resumenPlan}).\nNo repitas la introducción ni uses frases de relleno. Dale formato: **negritas** en términos clave, viñetas si enumeras y una frase destacada si hay una idea central.\nDebe cubrir: ${x.puntos.join('; ') || 'lo que pide ese punto de la consigna'}.\nExtensión: unas ${per} palabras${per > 250 ? ', en 2 o 3 párrafos' : ', en 1 o 2 párrafos'}.\n${x.tabla ? `Incluye la tabla titulada «${x.tabla}».` : 'No incluyas tabla (tabla = null).'}`, Math.min(4000, per * 3 + 500)))),
+        `${ctx}\n\nEscribe SOLO la sección «${x.titulo}» del trabajo (las otras secciones, que NO debes repetir ni resumir: ${resumenPlan}).\nEsta sección NO es la introducción ni la conclusión: no escribas títulos ni encabezados dentro del texto, ni una conclusión, ni referencias. No repitas la introducción ni uses frases de relleno. Dale formato: **negritas** en términos clave, viñetas si enumeras y una frase destacada si hay una idea central.\nDebe cubrir: ${x.puntos.join('; ') || 'lo que pide ese punto de la consigna'}.\nExtensión: unas ${per} palabras${per > 250 ? ', en 2 o 3 párrafos' : ', en 1 o 2 párrafos'}.\n${x.tabla ? `Incluye la tabla titulada «${x.tabla}».` : 'No incluyas tabla (tabla = null).'}`, Math.min(4000, per * 3 + 500)))),
       Promise.all(pl.referencias.map(async (r) => ((await linkAlive(r)) ? r : null))),
     ]);
     const work = normalizeWork({
@@ -206,6 +225,7 @@ export function registerTrabajo(app: App) {
       return c.json({ status: 'error', error: 'Tardó demasiado. Inténtalo otra vez.' } satisfies WorkInfo);
     }
     const parsed = row.content ? (JSON.parse(row.content) as { work: Work; profile: Profile }) : null;
+    if (parsed?.work) parsed.work.secciones = cleanSections(parsed.work.secciones);
     return c.json({ status: row.status, work: parsed?.work, profile: parsed?.profile, error: row.error || undefined, updated_at: row.updated_at } as WorkInfo);
   });
 
