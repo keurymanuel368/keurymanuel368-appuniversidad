@@ -88,10 +88,9 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
 function LivePanel() {
   const s = useLive();
   const [, tick] = useState(0);
-  const [showText, setShowText] = useState(false);
   const feed = useRef<HTMLDivElement>(null);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, []);
-  useEffect(() => { feed.current?.scrollTo({ top: feed.current.scrollHeight }); }, [s.lines.length, showText]);
+  useEffect(() => { feed.current?.scrollTo({ top: feed.current.scrollHeight, behavior: 'smooth' }); }, [s.lines.length]);
   const secs = s.startedAt ? (Date.now() - s.startedAt) / 1000 : 0;
   const [main, ...older] = s.alerts;
 
@@ -109,8 +108,8 @@ function LivePanel() {
     <div className="cl">
       <section className="cl-live">
         <div className="cl-live-top">
-          <span className="cl-dot" aria-hidden="true" />
-          <div><b>{s.title}</b><small className="num">Escuchando · {mmss(secs)}</small></div>
+          <span className={`cl-dot ${s.speaking ? 'on' : ''}`} aria-hidden="true" />
+          <div><b>{s.title}</b><small className="num">{s.speaking ? 'Escuchando voz' : 'En silencio'} · {mmss(secs)}</small></div>
           <button className="btn line cl-sm" onClick={() => { haptic(8); void stopLive(); }}>Terminar clase</button>
         </div>
         <div className="cl-stats">
@@ -118,21 +117,28 @@ function LivePanel() {
           <span><b className="num">{s.queued}</b> en cola</span>
           {s.failed > 0 && <button className="cl-retry" onClick={retryFailed}>{s.failed} fallaron · reintentar</button>}
         </div>
-        {s.err && <small className="cl-err">Reintentando: {s.err}</small>}
+        {s.err && <small className="cl-warn">Reintentando: {s.err}</small>}
       </section>
+
+      {main ? <Answer qa={main} big onClose={() => dismissAlert(main.id)} /> : s.thinking ? (
+        <div className="cl-thinking" role="status"><span /><span /><span /><b>Pensando la respuesta…</b></div>
+      ) : (
+        <div className="cl-quiet"><Icon name="check" size={18} /><span>{s.notice || 'Todo tranquilo. Si te preguntan algo, aparece aquí con la respuesta lista.'}</span></div>
+      )}
+      {main && s.thinking && <div className="cl-thinking" role="status"><span /><span /><span /><b>Revisando otra pregunta…</b></div>}
 
       <button className="btn primary cl-ask" onClick={() => { haptic(10); askNow(); }} disabled={s.asking}>
         <Icon name="spark" size={19} />{s.asking ? 'Revisando lo último…' : '¿Qué me preguntaron?'}
       </button>
-
-      {main ? <Answer qa={main} big onClose={() => dismissAlert(main.id)} /> : (
-        <div className="cl-quiet"><Icon name="check" size={18} /><span>Todo tranquilo. Si te preguntan algo, aparece aquí con la respuesta lista.</span></div>
-      )}
       {older.length > 0 && <div className="cl-older"><h3>Anteriores</h3>{older.map((q) => <Answer key={q.id} qa={q} onClose={() => dismissAlert(q.id)} />)}</div>}
 
       <section className="cl-feed-wrap">
-        <button className="link-btn" onClick={() => setShowText((v) => !v)}>{showText ? 'Ocultar transcripción' : 'Ver transcripción en vivo'}</button>
-        {showText && <div className="cl-feed" ref={feed}>{s.lines.length ? s.lines.map((l, i) => <p key={i}><span className="num">{mmss(l.at)}</span> {l.text}</p>) : <p className="muted">Esperando el primer trozo de 30 segundos…</p>}</div>}
+        <h3>Transcripción en vivo</h3>
+        <div className="cl-feed live" ref={feed}>
+          {s.lines.length ? s.lines.map((l, i) => <p key={i} className={i === s.lines.length - 1 ? 'last' : ''}><span className="num">{mmss(l.at)}</span> {l.text}</p>)
+            : <p className="muted">Esperando que alguien hable… el texto aparece unos segundos después de cada frase.</p>}
+          {s.speaking && <p className="cl-typing"><span /><span /><span /></p>}
+        </div>
       </section>
     </div>
   );

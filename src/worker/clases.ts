@@ -67,25 +67,25 @@ export function normalizeNotes(a: Record<string, unknown> | null, b: Record<stri
 }
 
 // ---------- Preguntas en vivo ----------
-async function detect(env: Env, s: Row, newText: string, force: boolean): Promise<Qa | null> {
-  if (!force && !hasCue(newText)) return null;
+async function detect(env: Env, s: Row, force: boolean): Promise<Qa | null> {
+  if (!force && !hasCue(s.transcript.slice(-500))) return null;
   const qa: Qa[] = s.qa ? JSON.parse(s.qa) : [];
   const prev = qa.slice(-4).map((q) => q.pregunta).join(' | ') || 'ninguna';
-  const win = s.transcript.slice(-5500);
+  const win = s.transcript.slice(-3000);
   const raw = await llmComplete(env, [
     { role: 'system', content: `Eres el copiloto en vivo de Keury Durán, estudiante de Ingeniería de Software de la UAPA, durante la clase «${s.title}». Recibes la transcripción reciente (sin separar hablantes; Whisper puede escribir mal los nombres: «Keury» puede salir como Queury, Kiuri, Keuri o Manuel).
-Decide si en lo ÚLTIMO (los 2 o 3 últimos minutos) el profesor o alguien:
+Decide si en lo ÚLTIMO (los últimos 60 a 90 segundos, lo que está al final) el profesor o alguien:
 - le hizo una pregunta a Keury, lo nombró para participar o le pidió opinar → dirigida="tu"
 - hizo una pregunta abierta a toda la clase que Keury podría contestar → dirigida="clase"
-- no hay ninguna pregunta nueva sin contestar → dirigida="no"
-No cuentes preguntas viejas que ya se respondieron ni las ya detectadas.
+- no hay ninguna pregunta reciente → dirigida="no"
+Devuelve la pregunta aunque alguien ya la haya respondido en el audio (el estudiante quiere ver la respuesta correcta). Solo ignora las que ya aparecen en la lista de ya detectadas.
 Si hay pregunta, redacta lo que Keury puede decir en voz alta:
 - "corta": 1 o 2 frases, directa, natural, en español dominicano formal hablado, lista para decir tal cual. Empieza con la respuesta, sin rodeos.
 - "completa": 4 a 6 frases por si piden que amplíe, con un ejemplo si ayuda.
 Usa lo dicho en la clase y conocimiento correcto. NO inventes datos concretos (fechas, cifras, nombres) que no se dijeron. Si la pregunta depende de algo que no se alcanzó a escuchar, da una respuesta prudente y sugiere pedir que la repitan ("¿Me puede repetir la pregunta, profesor?") en "tip".
 Responde SOLO con JSON: {"dirigida":"tu|clase|no","pregunta":"la pregunta limpia","corta":"…","completa":"…","tip":"opcional"}` },
     { role: 'user', content: `Clase: ${s.title}${s.course ? ` (${s.course})` : ''}\nPreguntas ya detectadas (no las repitas): ${prev}\n${force ? 'El estudiante pulsó «¿Qué me preguntaron?»: busca la pregunta más reciente aunque sea indirecta.\n' : ''}\nTRANSCRIPCIÓN RECIENTE (lo último está al final):\n${win}` },
-  ], { maxTokens: 800, temperature: 0.3 });
+  ], { maxTokens: 600, temperature: 0.2 });
   const j = parseJson(raw);
   const dir = str(j?.dirigida, 10);
   const pregunta = str(j?.pregunta, 400), corta = str(j?.corta, 700);
@@ -204,7 +204,8 @@ export function registerClases(app: App) {
     const mime = (c.req.header('content-type') || 'audio/webm').split(';')[0];
     const offset = Math.max(0, Number(c.req.header('x-offset') || 0) || 0);
     const force = c.req.header('x-force') === '1';
-    const prompt = `Clase universitaria de ${s.title} en la UAPA, República Dominicana. Habla el profesor y los estudiantes, entre ellos Keury Durán. Términos de computación y matemáticas.`;
+    const tail = s.transcript.replace(/\[[\d:]+\]\s*/g, '').trim().slice(-260);
+    const prompt = `Clase de ${s.title} en la UAPA (República Dominicana). Habla el profesor y estudiantes, entre ellos Keury Durán.${tail ? ` Continúa esta conversación: ${tail}` : ''}`;
     let text = '';
     try {
       const g = await groqTranscribe(c.env, buf, mime, prompt).catch(() => null);
@@ -218,19 +219,25 @@ export function registerClases(app: App) {
     } else {
       await c.env.DB.prepare('UPDATE class_sessions SET updated_at = ? WHERE id = ? AND user_id = ?').bind(nowSec(), id, c.env.UID).run();
     }
+    const fresh = await get(c.env, id);
+    const cue = force || (fresh ? hasCue(fresh.transcript.slice(-500)) : false);
+    return c.json({ text: real ? text : '', cue });
+  });
+
+  /** Revisa si hubo una pregunta y arma la respuesta. Va aparte del trozo para que la transcripción salga al instante. */
+  app.post('/api/clases/:id/detect', async (c) => {
+    const id = Number(c.req.param('id'));
+    const s = await get(c.env, id);
+    if (!s) return c.json({ error: 'Clase no encontrada' }, 404);
+    const b = await c.req.json<{ force?: boolean }>().catch(() => ({} as { force?: boolean }));
     let qa: Qa | null = null;
-    if (real || force) {
-      try {
-        const fresh = await get(c.env, id);
-        if (fresh) qa = await detect(c.env, fresh, text, force);
-      } catch (e) { console.log('Clase: detección falló: ' + (e as Error).message); }
-    }
+    try { qa = await detect(c.env, s, !!b.force); } catch (e) { console.log('Clase: detección falló: ' + (e as Error).message); }
     // Segunda pantalla: si te preguntaron a ti, también llega al celular con la respuesta corta.
     if (qa && qa.dirigida === 'tu') {
       c.executionCtx.waitUntil(sendToMe(c.env, blocks('❓ *Te preguntaron*', qa.pregunta, `💬 ${qa.corta}`),
         { title: '❓ Te preguntaron', tag: `clase-q-${qa.id}`, url: '/#apuntes', pushBody: `${qa.pregunta.slice(0, 90)} → ${qa.corta.slice(0, 120)}`, type: 'avisos' }).catch(() => {}));
     }
-    return c.json({ text: real ? text : '', qa });
+    return c.json({ qa });
   });
 
   app.post('/api/clases/:id/end', async (c) => {

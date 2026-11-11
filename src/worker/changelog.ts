@@ -10,6 +10,15 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 71,
+    date: '2026-11-11',
+    title: '⚡ Clase en vivo, casi al instante',
+    items: [
+      'La transcripción sale a los pocos segundos: Rumbo corta el audio en las pausas del habla, no cada 30 segundos.',
+      'Las preguntas ahora siempre traen su respuesta, y mientras se prepara ves «Pensando la respuesta…».',
+    ],
+  },
+  {
     version: 70,
     date: '2026-11-11',
     title: '🎧 Clase en vivo',

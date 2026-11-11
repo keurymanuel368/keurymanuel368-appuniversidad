@@ -2434,3 +2434,16 @@ h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
 .cl-q-i { background: var(--card, #fff); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(16,24,40,.06); }
 .cl-q-i p { color: var(--muted); font-size: 14.5px; }
 .cl-del { align-self: center; color: #b42318; margin-top: 8px; }
+
+.cl-dot { background: #98a2b3; animation: none; }
+.cl-dot.on { background: #f04438; animation: cl-pulse 1.2s infinite; }
+.cl-warn { color: #fec84b; font-size: 12.5px; font-weight: 600; }
+.cl-thinking { display: flex; align-items: center; gap: 6px; padding: 16px; border-radius: 20px; background: var(--card, #fff); box-shadow: 0 0 0 3px rgba(47,123,255,.15); }
+.cl-thinking b { margin-left: 6px; font-family: var(--display); font-size: 15px; }
+.cl-thinking span, .cl-typing span { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); animation: cl-bounce 1s infinite ease-in-out; }
+.cl-thinking span:nth-child(2), .cl-typing span:nth-child(2) { animation-delay: .15s; } .cl-thinking span:nth-child(3), .cl-typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes cl-bounce { 0%, 80%, 100% { transform: scale(.6); opacity: .5; } 40% { transform: scale(1); opacity: 1; } }
+.cl-typing { display: flex; gap: 5px; padding: 4px 0; }
+.cl-feed.live { max-height: 340px; font-size: 15px; }
+.cl-feed.live p.last { font-weight: 700; color: var(--ink); }
+.cl-feed.live p:not(.last) { color: var(--muted); }
