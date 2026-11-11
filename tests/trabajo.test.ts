@@ -10,7 +10,7 @@ const work: Work = {
     { titulo: '1. Ficha técnica', parrafos: ['Párrafo uno.'], tabla: { titulo: 'Tabla 1. Ficha', columnas: ['Dato', 'Información'], filas: [['Título', 'A la deriva'], ['Autor', 'Horacio Quiroga']] } },
     { titulo: '2. Personajes', parrafos: ['Otro párrafo.'], tabla: null },
   ],
-  conclusion: 'Conclusión.', referencias: ['Quiroga, H. (1917). Cuentos.', 'Anthropic. (2026). Claude [Modelo de lenguaje grande]. https://claude.ai'],
+  conclusion: 'Conclusión.', referencias: ['ONU. (2015). *Objetivos de Desarrollo Sostenible*. https://www.un.org/sustainabledevelopment/es/','Quiroga, H. (1917). Cuentos.', 'Anthropic. (2026). Claude [Modelo de lenguaje grande]. https://claude.ai'],
 };
 const profile: Profile = { nombre: 'Keury Manuel Durán García', matricula: '100108669', carrera: 'Ingeniería de Software', facilitador: 'X', asignatura: 'Comunicación Oral y Escrita', codigo: 'CBE109', institucion: 'UNIVERSIDAD ABIERTA PARA ADULTOS', fecha: '11-11-2026' };
 
@@ -27,6 +27,8 @@ describe('trabajo con IA', () => {
     expect(bytes[0]).toBe(0x50); expect(bytes[1]).toBe(0x4b);
     const text = new TextDecoder().decode(bytes);
     for (const n of ['[Content_Types].xml', 'word/document.xml', 'word/styles.xml', 'word/media/portada.png']) expect(text).toContain(n);
+    expect(text).toContain('hyperlink');
+    expect(text).toContain('rIdL1');
     if (process.env.WORK_OUT) writeFileSync(process.env.WORK_OUT, bytes);
   });
 });

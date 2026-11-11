@@ -10,6 +10,24 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 63,
+    date: '2026-11-11',
+    title: '📝 Trabajos con IA: tú eliges la extensión',
+    items: [
+      'Elige la extensión del trabajo: corto, medio, largo o muy largo.',
+      'Las referencias salen en APA con enlace (clicable en el Word); los enlaces que no abren se descartan.',
+      'La IA usa el nombre exacto de la asignatura.',
+    ],
+  },
+  {
+    version: 62,
+    date: '2026-11-11',
+    title: '📥 Descargar tu trabajo en Word',
+    items: [
+      'Cuando el trabajo con IA está listo, la tarea muestra «Ver mi trabajo» y «Descargar Word» a la vista.',
+    ],
+  },
+  {
     version: 61,
     date: '2026-11-11',
     title: '📝 Trabajos con IA y semana eficiente',

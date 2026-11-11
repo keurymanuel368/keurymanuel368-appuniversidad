@@ -71,38 +71,97 @@ export function normalizeWork(j: Record<string, unknown> | null): Work | null {
   return w.titulo && w.introduccion && w.secciones.length && w.conclusion ? w : null;
 }
 
-const SPEC = `Responde SOLO con JSON válido, sin texto fuera del JSON, con esta forma:
-{"etiqueta":"TIPO DE TRABAJO · TEMA en mayúsculas, máx 4 palabras","titulo":"título corto de portada (2 a 5 palabras)","subtitulo":"una línea que describe el trabajo",
-"motivo":["12 símbolos o palabras muy cortas del tema de la asignatura para decorar la portada"],
-"introduccion":"un párrafo","secciones":[{"titulo":"1. Nombre de la sección","parrafos":["párrafo breve"],"tabla":null}],
-"conclusion":"un párrafo","referencias":["referencia APA 7"]}
-La "tabla" es null o {"titulo":"Tabla 1. …","columnas":["…"],"filas":[["…"]]} (máximo 5 columnas).`;
+export type Largo = 'corto' | 'medio' | 'largo' | 'muy_largo';
+/** Palabras aproximadas de todo el trabajo según la extensión elegida. */
+export const LARGOS: Record<Largo, number> = { corto: 600, medio: 1300, largo: 2400, muy_largo: 3800 };
 
-/** Genera el trabajo y lo guarda; avisa al terminar. Se llama en segundo plano (waitUntil). */
-export async function generateWork(env: Env, taskId: number): Promise<void> {
+const decode = (t: string) => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, ' ');
+
+type Plan = { etiqueta: string; titulo: string; subtitulo: string; motivo: string[]; secciones: { titulo: string; puntos: string[]; tabla: string | null }[]; referencias: string[] };
+
+async function ask(env: Env, system: string, user: string, maxTokens: number): Promise<Record<string, unknown>> {
+  for (let i = 0; i < 2; i++) {
+    const raw = await llmComplete(env, [{ role: 'system', content: system }, { role: 'user', content: user }], { maxTokens, temperature: 0.5 });
+    const j = parseJson(raw);
+    if (j) return j;
+  }
+  throw new Error('La IA no devolvió un resultado válido. Inténtalo otra vez.');
+}
+
+/** Comprueba que el enlace de una referencia exista de verdad; las que no abren se descartan (la IA puede inventar enlaces). */
+async function linkAlive(ref: string): Promise<boolean> {
+  const m = ref.match(/https?:\/\/[^\s)>\]]+/);
+  if (!m) return false;
+  const url = m[0].replace(/[.,;]+$/, '');
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Rumbo/1.0)' } });
+    clearTimeout(t);
+    return r.status < 400;
+  } catch { return false; }
+}
+
+const SECTION_SPEC = `Responde SOLO con JSON: {"parrafos":["párrafo","párrafo"],"tabla":null}. Si te piden tabla, "tabla" es {"titulo":"Tabla N. …","columnas":["…"],"filas":[["…"]]} (máximo 5 columnas, filas cortas).`;
+
+/** Genera el trabajo en dos etapas (plan → secciones en paralelo) y lo guarda; avisa al terminar. Corre en segundo plano. */
+export async function generateWork(env: Env, taskId: number, largo: Largo = 'medio'): Promise<void> {
   try {
     const [t] = await listTasks(env, { id: taskId, limit: 1 });
     if (!t) throw new Error('Tarea no encontrada');
     const s = await getSettings(env);
     const style = (s.ai_style || '').trim() || DEFAULT_STYLE;
-    const words = Math.min(2500, Math.max(500, Number(s.work_words || 1100)));
-    const desc = ((t as { description?: string | null }).description || '').slice(0, 5000);
+    const total = LARGOS[largo] || LARGOS.medio;
+    const asignatura = decode(t.course_name || 'Asignatura');
+    const titulo = decode(t.title);
+    const desc = decode((t as { description?: string | null }).description || '').slice(0, 5000);
     const crs = t.course_id ? await env.DB.prepare('SELECT code FROM courses WHERE id = ? AND user_id = ?').bind(t.course_id, env.UID).first<{ code: string | null }>() : null;
-    const profile = await profileFor(env, t.course_name || 'Asignatura', crs?.code ?? null, t.facilitator);
-    const ctx = `Asignatura: ${t.course_name || 'Personal'}\nTarea: ${t.title}\n${desc ? `Consigna / guía del facilitador (síguela punto por punto):\n${desc}` : 'No hay consigna escrita: deduce lo que pide el título.'}\n\nExtensión total aproximada: ${words} palabras (corto y preciso).`;
-    let work: Work | null = null;
-    for (let i = 0; i < 2 && !work; i++) {
-      const raw = await llmComplete(env, [
-        { role: 'system', content: `Eres Keury Manuel, estudiante universitario de Ingeniería de Software en la UAPA, y escribes tus trabajos académicos.\n${style}\n\n${SPEC}` },
-        { role: 'user', content: ctx },
-      ], { maxTokens: 4200, temperature: 0.5 });
-      work = normalizeWork(parseJson(raw));
-    }
-    if (!work) throw new Error('La IA no devolvió un trabajo válido. Inténtalo otra vez.');
+    const profile = await profileFor(env, asignatura, crs?.code ?? null, t.facilitator);
+    const sys = `Eres Keury Manuel, estudiante universitario de Ingeniería de Software en la UAPA, y escribes tus trabajos académicos.\n${style}\nNombre EXACTO de la asignatura: «${asignatura}». Cuando la menciones, escríbela exactamente así (no la abrevies ni la cambies).`;
+    const ctx = `Asignatura: ${asignatura}\nTarea: ${titulo}\n${desc ? `Consigna / guía del facilitador (síguela punto por punto):\n${desc}` : 'No hay consigna escrita: deduce lo que pide el título.'}`;
+    const profundidad = largo === 'corto' ? 'Lo mínimo que pide la consigna, una sección por punto.' : largo === 'medio' ? 'Una sección por cada punto de la consigna.' : 'Una sección por cada punto de la consigna; si algún punto es amplio, divídelo en subsecciones (por ejemplo 2.1 y 2.2).';
+
+    // Etapa 1: plan (portada, secciones y referencias con enlace).
+    const plan = await ask(env, `${sys}\n\nPrimero PLANIFICA el trabajo. Responde SOLO con JSON:
+{"etiqueta":"TIPO DE TRABAJO · TEMA en mayúsculas, máx 4 palabras","titulo":"título corto de portada (2 a 5 palabras)","subtitulo":"una línea que describe el trabajo","motivo":["12 símbolos o palabras muy cortas del tema para decorar la portada"],
+"secciones":[{"titulo":"1. Nombre","puntos":["qué debe cubrir esta sección"],"tabla":null}],
+"referencias":["Autor. (año). *Título*. Editorial/Sitio. https://enlace-real"]}
+${profundidad} "tabla" es null o el título de una tabla útil (ficha, comparación, cronología) cuando la consigna lo pida.
+Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes reales y conocidas de sitios oficiales o institucionales (ONU, UNESCO, universidades, organismos, bibliotecas), con la dirección de la página que sabes que existe. Si no estás seguro de un enlace, no pongas esa referencia. Los títulos de obras van entre asteriscos *así*.`, ctx, 2200);
+    const pl: Plan = {
+      etiqueta: str(plan.etiqueta, 60).toUpperCase() || 'TRABAJO FINAL', titulo: str(plan.titulo, 80) || titulo.slice(0, 40), subtitulo: str(plan.subtitulo, 140),
+      motivo: (Array.isArray(plan.motivo) ? plan.motivo : []).map((m) => str(m, 14)).filter(Boolean).slice(0, 16),
+      secciones: (Array.isArray(plan.secciones) ? plan.secciones : []).slice(0, 12).map((x) => {
+        const o = (x || {}) as Record<string, unknown>;
+        return { titulo: str(o.titulo, 140), puntos: (Array.isArray(o.puntos) ? o.puntos : []).map((p) => str(p, 300)).filter(Boolean).slice(0, 6), tabla: typeof o.tabla === 'string' && o.tabla.trim() ? o.tabla.trim().slice(0, 140) : null };
+      }).filter((x) => x.titulo),
+      referencias: (Array.isArray(plan.referencias) ? plan.referencias : []).map((r) => str(r, 400)).filter(Boolean).slice(0, 8),
+    };
+    if (!pl.secciones.length) throw new Error('La IA no pudo planear las secciones. Inténtalo otra vez.');
+
+    // Etapa 2 (en paralelo): introducción, cada sección, conclusión y verificación de enlaces.
+    const bodyWords = Math.round(total * 0.84);
+    const per = Math.max(60, Math.round(bodyWords / pl.secciones.length));
+    const resumenPlan = pl.secciones.map((x) => x.titulo).join('; ');
+    const [intro, concl, secs, refsOk] = await Promise.all([
+      ask(env, `${sys}\n\nResponde SOLO con JSON: {"texto":"..."}`, `${ctx}\n\nEscribe la INTRODUCCIÓN: UN párrafo de unas ${Math.round(total * 0.08)} palabras (contexto, qué hice en el trabajo y qué partes tiene: ${resumenPlan}).`, 1200),
+      ask(env, `${sys}\n\nResponde SOLO con JSON: {"texto":"..."}`, `${ctx}\n\nEscribe la CONCLUSIÓN: UN párrafo de unas ${Math.round(total * 0.08)} palabras en primera persona (qué aprendí y cómo se relaciona con ${asignatura}). El trabajo trató: ${resumenPlan}.`, 1200),
+      Promise.all(pl.secciones.map((x) => ask(env, `${sys}\n\n${SECTION_SPEC}`,
+        `${ctx}\n\nEscribe SOLO la sección «${x.titulo}» del trabajo (las otras secciones: ${resumenPlan}).\nDebe cubrir: ${x.puntos.join('; ') || 'lo que pide ese punto de la consigna'}.\nExtensión: unas ${per} palabras${per > 250 ? ', en 2 o 3 párrafos' : ', en 1 o 2 párrafos'}.\n${x.tabla ? `Incluye la tabla titulada «${x.tabla}».` : 'No incluyas tabla (tabla = null).'}`, Math.min(4000, per * 3 + 500)))),
+      Promise.all(pl.referencias.map(async (r) => ((await linkAlive(r)) ? r : null))),
+    ]);
+    const work = normalizeWork({
+      etiqueta: pl.etiqueta, titulo: pl.titulo, subtitulo: pl.subtitulo, motivo: pl.motivo,
+      introduccion: str(intro.texto, 3000),
+      secciones: pl.secciones.map((x, i) => ({ titulo: x.titulo, parrafos: (secs[i] as Record<string, unknown>).parrafos, tabla: (secs[i] as Record<string, unknown>).tabla })),
+      conclusion: str(concl.texto, 3000),
+      referencias: [...(refsOk.filter(Boolean) as string[]), 'Anthropic. (2026). *Claude* [Modelo de lenguaje grande]. https://claude.ai'],
+    });
+    if (!work) throw new Error('La IA no devolvió un trabajo completo. Inténtalo otra vez.');
     await env.DB.prepare(`UPDATE ai_works SET status = 'ready', content = ?, error = NULL, updated_at = ? WHERE task_id = ? AND user_id = ?`)
       .bind(JSON.stringify({ work, profile }), nowSec(), taskId, env.UID).run();
-    await sendToMe(env, blocks('📝 *Tu trabajo está listo*', `*${t.title}*`, 'Revísalo, ajústalo y descárgalo en Word desde la tarea.'),
-      { title: '📝 Tu trabajo está listo', tag: `work-${taskId}`, url: `/#tareas/${taskId}`, pushBody: t.title.slice(0, 120), type: 'avisos' });
+    await sendToMe(env, blocks('📝 *Tu trabajo está listo*', `*${titulo}*`, 'Revísalo, ajústalo y descárgalo en Word desde la tarea.'),
+      { title: '📝 Tu trabajo está listo', tag: `work-${taskId}`, url: `/#tareas/${taskId}`, pushBody: titulo.slice(0, 120), type: 'avisos' });
   } catch (e) {
     const msg = (e as Error).message.slice(0, 300);
     await env.DB.prepare(`UPDATE ai_works SET status = 'error', error = ?, updated_at = ? WHERE task_id = ? AND user_id = ?`).bind(msg, nowSec(), taskId, env.UID).run();
@@ -141,7 +200,9 @@ export function registerTrabajo(app: App) {
     const now = nowSec();
     await c.env.DB.prepare(`INSERT INTO ai_works (task_id, user_id, status, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)
       ON CONFLICT(task_id) DO UPDATE SET status = 'pending', error = NULL, updated_at = excluded.updated_at`).bind(id, c.env.UID, now, now).run();
-    c.executionCtx.waitUntil(generateWork(c.env, id));
+    const body = (await c.req.json().catch(() => ({}))) as { length?: string };
+    const largo = (body.length && body.length in LARGOS ? body.length : 'medio') as Largo;
+    c.executionCtx.waitUntil(generateWork(c.env, id, largo));
     return c.json({ status: 'pending' });
   });
 }

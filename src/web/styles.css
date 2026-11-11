@@ -2285,3 +2285,15 @@ h3, .card-head h3, .section-head h3 { letter-spacing: -0.012em; }
 .work-table table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 4px; }
 .work-table th { background: #14214a; color: #fff; text-align: left; padding: 6px 8px; }
 .work-table td { border: 1px solid #d5dcec; padding: 6px 8px; }
+
+.ts-help .work-ready { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ts-help .work-ready .btn { min-height: 0; flex-direction: row; align-items: center; }
+
+.ts-help .work-start { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
+.ts-help .work-start .work-btn { grid-column: auto; }
+.work-len { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.work-len button { border: 1.5px solid #d5dcec; background: var(--card, #fff); border-radius: 14px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 1px; font: inherit; color: var(--ink); cursor: pointer; }
+.work-len button b { font-size: 13px; }
+.work-len button small { font-size: 10.5px; color: var(--muted); }
+.work-len button.on { border-color: var(--blue); background: var(--blue-soft); }
+.work-view .ref a { color: #0563c1; word-break: break-all; }

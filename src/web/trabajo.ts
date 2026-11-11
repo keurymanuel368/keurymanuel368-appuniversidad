@@ -123,6 +123,15 @@ function dataTable(p: Profile): string {
 
 export function buildDocx(w: Work, p: Profile, cover: Uint8Array): Uint8Array {
   const enc = new TextEncoder();
+  const links: string[] = [];
+  /** Referencia APA: títulos en cursiva (*así*) y enlaces clicables. */
+  const refRuns = (t: string) => t.split(/(\*[^*]+\*|https?:\/\/[^\s)>\]]+)/g).filter(Boolean).map((part) => {
+    if (/^https?:/.test(part)) {
+      const u = part.replace(/[.,;]+$/, ''); links.push(u);
+      return `<w:hyperlink r:id="rIdL${links.length}"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">${esc(u)}</w:t></w:r></w:hyperlink>${part.length > u.length ? run(part.slice(u.length)) : ''}`;
+    }
+    return /^\*[^*]+\*$/.test(part) ? run(part.slice(1, -1), { i: true }) : run(part);
+  }).join('');
   const EMU_W = 7772400, EMU_H = 10058400;
   const drawing = `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="${EMU_W}" cy="${EMU_H}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="1" name="Portada"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="portada.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${EMU_W}" cy="${EMU_H}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>`;
   let n = 0;
@@ -140,7 +149,7 @@ export function buildDocx(w: Work, p: Profile, cover: Uint8Array): Uint8Array {
     ]),
     para(run('Conclusión'), { style: 'Heading1' }),
     para(run(w.conclusion), { jc: 'both' }),
-    ...(w.referencias.length ? [para(run('Referencias'), { style: 'Heading1' }), ...[...w.referencias].sort((a, b) => a.localeCompare(b, 'es')).map((r) => para(run(r), { hanging: true }))] : []),
+    ...(w.referencias.length ? [para(run('Referencias'), { style: 'Heading1' }), ...[...w.referencias].sort((a, b) => a.replace(/\*/g, '').localeCompare(b.replace(/\*/g, ''), 'es')).map((r) => para(refRuns(r), { hanging: true }))] : []),
   ].join('');
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="22"/><w:lang w:val="es-DO"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="300" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="320" w:after="120"/><w:pBdr><w:bottom w:val="single" w:sz="12" w:space="2" w:color="EE7F22"/></w:pBdr><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:color w:val="101A3D"/><w:sz w:val="32"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="220" w:after="80"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:color w:val="14214A"/><w:sz w:val="26"/></w:rPr></w:style></w:styles>`;
@@ -149,7 +158,7 @@ export function buildDocx(w: Work, p: Profile, cover: Uint8Array): Uint8Array {
     { name: '_rels/.rels', data: enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`) },
     { name: 'word/document.xml', data: enc.encode(document) },
     { name: 'word/styles.xml', data: enc.encode(styles) },
-    { name: 'word/_rels/document.xml.rels', data: enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/portada.png"/></Relationships>`) },
+    { name: 'word/_rels/document.xml.rels', data: enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/portada.png"/>${links.map((u, i) => `<Relationship Id="rIdL${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${esc(u)}" TargetMode="External"/>`).join('')}</Relationships>`) },
     { name: 'word/media/portada.png', data: cover },
   ];
   return zip(files);
@@ -168,5 +177,5 @@ export async function downloadWord(w: Work, p: Profile, fileBase: string): Promi
 export function workText(w: Work): string {
   return [w.titulo, '', 'Introducción', w.introduccion, '', 'Desarrollo',
     ...w.secciones.flatMap((s) => [s.titulo, ...s.parrafos, ...(s.tabla ? [s.tabla.titulo, s.tabla.columnas.join(' | '), ...s.tabla.filas.map((r) => r.join(' | '))] : []), '']),
-    'Conclusión', w.conclusion, '', 'Referencias', ...w.referencias].join('\n');
+    'Conclusión', w.conclusion, '', 'Referencias', ...w.referencias.map((r) => r.replace(/\*/g, ''))].join('\n');
 }
