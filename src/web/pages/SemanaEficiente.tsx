@@ -71,7 +71,7 @@ export function SemanaEficiente() {
             <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(24px,3vw,34px)', fontWeight: 800, letterSpacing: '-.025em', margin: '2px 0' }}>{pendWeek.length + late.length === 0 ? 'Semana libre ✨' : `${pendWeek.length + late.length} por hacer${late.length ? `, ${late.length} atrasada${late.length > 1 ? 's' : ''} primero` : ''}`}</h2>
             <p style={{ color: '#D8E2FF', fontSize: 15 }}>{late.length ? 'Hazlas primero y la semana queda limpia.' : pendWeek.length ? 'Todo al día. Sigue el orden de abajo.' : 'No tienes nada pendiente.'}{doneWeek ? ` ${doneWeek} ya hecha${doneWeek > 1 ? 's' : ''}.` : ''}</p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><span className="chip">Alta · {nAlta}</span><span className="chip">Media · {nMedia}</span><span className="chip">Baja · {nBaja}</span></div>
+          <div className="hero-chips" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><span className="chip">Alta · {nAlta}</span><span className="chip">Media · {nMedia}</span><span className="chip">Baja · {nBaja}</span></div>
         </div>
       </section>
 

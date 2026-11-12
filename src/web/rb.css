@@ -223,3 +223,40 @@
   .rbx .top h1{font-size:26px}
   .rbx .top .eb{font-size:10.5px}
 }
+
+/* identity.css fuerza position:relative a los hijos de .hero: el adorno no puede ocupar espacio */
+body .rbx .hero > .tick{position:absolute !important;pointer-events:none}
+body .rbx .hero > .hero-row,body .rbx .hero > *:not(.tick){position:relative}
+
+/* ===== Revisión en simulador móvil ===== */
+.rbx .card [role="group"] > button{background:none;border:0;padding:0;font-family:inherit;color:inherit;cursor:pointer}
+.rbx div[style*="overflow-x: auto"],.rbx div[style*="overflowX"]{scrollbar-width:none}
+.rbx div[style*="overflow-x: auto"]::-webkit-scrollbar{display:none}
+@media (max-width:900px){
+  .rbx .top{flex-wrap:nowrap}
+  .rbx .top > div:first-child{flex:1 1 auto;min-width:0}
+  .rbx .top .btn .lbl,.rbx .top .btn.b-pri .lbl{display:none}
+  .rbx .top .btn{padding:12px;border-radius:50%}
+  .rbx .seg{display:flex;flex-wrap:nowrap;width:100%}
+  .rbx .seg button{flex:1 0 auto}
+  .rbx .head{flex-wrap:nowrap;gap:8px}
+  .rbx .head h3{flex:1;min-width:0}
+  .rbx .head > span,.rbx .head > .link,.rbx .head > button{flex:none}
+  .rbx .hero > div[style*="flex-wrap"]{flex-wrap:nowrap !important;gap:12px !important}
+  .rbx .hero > div[style*="flex-wrap"] > div:not(.ringsvg):not(.hero-chips){flex:1 1 0 !important;min-width:0}
+  .rbx .hero .hero-chips{display:none !important}
+  .rbx .hero .num[style*="clamp"]{font-size:44px !important}
+  .rbx .head h3,.rbx .card h3{font-size:16px}
+  .rbx .card[style*="background: linear-gradient"] .hand{font-size:26px !important}
+}
+
+/* El .seg viejo era una cuadrícula con --n: aquí es una píldora flexible */
+body .rbx .seg{display:flex !important;grid-template-columns:none;flex-wrap:nowrap;background:#E3E9F8;border-radius:99px;padding:4px;gap:2px;max-width:100%;width:auto;overflow-x:auto;scrollbar-width:none}
+body .rbx .seg::-webkit-scrollbar{display:none}
+body .rbx .seg button{min-height:0;flex:0 0 auto;white-space:nowrap}
+@media (max-width:900px){
+  body .rbx .seg{width:100%}
+  body .rbx .seg button{flex:1 0 auto;padding:8px 12px;font-size:12.5px}
+  .rbx .top:has(> .seg),.rbx .top:has(.seg){flex-wrap:wrap}
+  .rbx .top > .seg{order:5;flex:1 1 100%}
+}
