@@ -4,7 +4,7 @@ self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c
 // Datos de la API guardados (tareas, notas, avisos…) para verlos sin internet.
 const API_CACHE = 'rumbo-api-v2';
 // Lo que nunca se guarda: cosas en vivo, descargas, voz, IA y sesión.
-const NO_CACHE = /^\/api\/(version|backups|tts|widget|calendar|assistant|ai|login|logout|release|me$|health|tasks\/\d+\/(work|reglas)|clases|works|examenes)/;
+const NO_CACHE = /^\/api\/(version|backups|tts|widget|calendar|assistant|ai|login|logout|release|me$|health|tasks\/\d+\/(work|reglas|revision)|clases|works|examenes)/;
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE && k !== API_CACHE).map((k) => caches.delete(k))))); self.clients.claim(); });
 // Al cerrar sesión la app pide borrar los datos guardados.
 self.addEventListener('message', (e) => {

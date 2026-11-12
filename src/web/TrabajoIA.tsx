@@ -1,7 +1,7 @@
 // «Hacer con IA»: botón en cada tarea (y en Semana eficiente) + vista del trabajo con descarga en Word.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agoLabel, api } from './api';
-import { Empty, Skeleton, haptic, toast, useLoad } from './components';
+import { Empty, Modal, Skeleton, haptic, toast, useLoad } from './components';
 import { DocViewer } from './DocViewer';
 import { Icon } from './icons';
 import type { Profile, Work } from './trabajo';
@@ -126,6 +126,75 @@ function Cumplimiento({ items }: { items: Cumple[] }) {
   );
 }
 
+
+type Revision = { resumen: string; nota: number | null; maximo: number | null; items: { texto: string; ok: boolean; puntos: number | null; max: number | null; nota: string }[]; faltan: string[]; mejoras: string[]; palabras: number; referencias: number; at: number };
+
+/** Texto plano del trabajo hecho con IA, para poder revisarlo igual que uno tuyo. */
+function workText(w: Work): string {
+  return [w.titulo, w.introduccion, ...w.secciones.flatMap((x) => [x.titulo, ...x.parrafos, ...(x.lista || [])]), w.conclusion, 'Referencias', ...w.referencias].join('\n');
+}
+
+/** Revisa tu trabajo (pegado, en Word/PDF o el de la IA) contra las reglas y la rúbrica del EVA. */
+function RevisarTrabajo({ taskId, aiText }: { taskId: number; aiText?: string }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [file, setFile] = useState<{ name: string; b64: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [rev, setRev] = useState<Revision | null>(null);
+  useEffect(() => { if (open && !rev) api<{ revision: Revision | null }>(`/tasks/${taskId}/revision`).then((r) => setRev(r.revision)).catch(() => {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open]);
+  const pick = (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 4_000_000) { toast('El archivo pesa más de 4 MB', 'err'); return; }
+    const fr = new FileReader();
+    fr.onload = () => setFile({ name: f.name, b64: String(fr.result).split(',')[1] || '' });
+    fr.readAsDataURL(f);
+  };
+  const run = async (body: { text?: string; file?: string; name?: string }) => {
+    setBusy(true); haptic(10);
+    try { const r = await api<{ revision: Revision }>(`/tasks/${taskId}/revision`, { method: 'POST', body }); setRev(r.revision); toast('Revisión lista ✅'); }
+    catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  };
+  const pct = rev?.maximo ? Math.round(((rev.nota || 0) / rev.maximo) * 100) : null;
+  const okN = rev ? rev.items.filter((x) => x.ok).length : 0;
+  return (
+    <>
+      <button className="btn line work-review" onClick={() => { haptic(6); setOpen(true); }}><Icon name="check" size={18} />Revisar mi trabajo contra la rúbrica</button>
+      {open && (
+        <Modal title="Revisar contra la rúbrica" onClose={() => setOpen(false)}>
+          <div className="rev">
+            <p className="sm" style={{ color: 'var(--muted)' }}>Pega tu trabajo, sube el Word o el PDF, o revisa el que hizo la IA. Rumbo lo compara con las reglas y la rúbrica del EVA y te dice qué le falta.</p>
+            <textarea className="input" rows={6} value={text} onChange={(e) => { setText(e.target.value); setFile(null); }} placeholder="Pega aquí el texto de tu trabajo…" aria-label="Texto del trabajo" />
+            <div className="rev-row">
+              <label className="btn line" style={{ cursor: 'pointer' }}><Icon name="upload" size={17} />{file ? file.name.slice(0, 22) : 'Subir Word o PDF'}<input type="file" accept=".docx,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} /></label>
+              <button className="btn primary" disabled={busy || (!text.trim() && !file)} onClick={() => void run(file ? { file: file.b64, name: file.name } : { text })}>{busy ? 'Revisando…' : 'Revisar'}</button>
+            </div>
+            {aiText && <button className="link-btn" disabled={busy} onClick={() => void run({ text: aiText })}>O revisar el trabajo que hizo la IA</button>}
+            {rev && (
+              <div className="rev-out">
+                <div className="rev-head">
+                  <b className="num">{pct !== null ? `${rev.nota}/${rev.maximo}` : `${okN}/${rev.items.length}`}</b>
+                  <span>{pct !== null ? `≈ ${pct}% de la nota` : 'reglas cumplidas'}<small>{rev.palabras} palabras · {rev.referencias} referencias</small></span>
+                </div>
+                {rev.resumen && <p className="sm">{rev.resumen}</p>}
+                <ul>
+                  {rev.items.map((x, i) => (
+                    <li key={i} className="rrow"><span className={`chip ${x.ok ? 'c-mint' : 'c-rose'}`} style={{ flex: 'none' }}>{x.ok ? '✓' : '✗'}</span>
+                      <div style={{ flex: 1 }}><b>{x.texto}</b>{x.nota && <small>{x.nota}</small>}</div>
+                      {x.max ? <span className="chip c-blue num" style={{ flex: 'none' }}>{x.puntos ?? 0}/{x.max}</span> : null}</li>
+                  ))}
+                </ul>
+                {rev.faltan.length > 0 && <><h4>Lo que le falta</h4><ul className="rev-list">{rev.faltan.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
+                {rev.mejoras.length > 0 && <><h4>Cómo mejorarlo</h4><ul className="rev-list">{rev.mejoras.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** Botón grande para la ficha de la tarea. Cuando el trabajo está listo, salen «Ver» y «Descargar Word» a la vista. */
 export function WorkButton({ taskId, title }: { taskId: number; title: string }) {
   const { info, start } = useWork(taskId);
@@ -170,6 +239,7 @@ export function WorkButton({ taskId, title }: { taskId: number; title: string })
         </div>
       )}
       {ready && <Cumplimiento items={info.cumplimiento || []} />}
+      {!pending && <RevisarTrabajo taskId={taskId} aiText={ready && info.work ? workText(info.work) : undefined} />}
       {open && info.work && info.profile && <WorkSheet work={info.work} profile={info.profile} title={title} onClose={() => setOpen(false)} onRedo={() => { setOpen(false); void start(largo); }} />}
     </>
   );

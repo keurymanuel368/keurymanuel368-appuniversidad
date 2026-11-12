@@ -82,3 +82,23 @@ describe('reglas del trabajo', () => {
     expect(palabrasObjetivo(base({ palabras: { min: 20000, max: 30000 } }))).toBe(6000);
   });
 });
+
+import { contarReferencias, revisionesFijas } from '../src/worker/reglas';
+
+describe('revisión del trabajo', () => {
+  it('cuenta referencias en la zona de bibliografía', () => {
+    const t = 'Texto con (2020) en medio.\n\nReferencias\nONU. (2015). Agenda 2030. https://un.org\nUNESCO. (2021). Educación. https://unesco.org\nLibro sin año\n';
+    expect(contarReferencias(t)).toBe(2);
+  });
+  it('sin sección de referencias cuenta enlaces y años en todo el texto', () => {
+    expect(contarReferencias('Ver https://a.org\nTambién https://b.org')).toBe(2);
+  });
+  it('comprueba extensión y referencias sin IA', () => {
+    const r = { resumen: '', palabras: { min: 900, max: 1100 }, referencias: { min: 4, estilo: 'APA 7' }, reglas: [], fuentes: [], quitadas: [], propias: [], at: 0 };
+    const ok = revisionesFijas(r, 1000, 5);
+    expect(ok.every((x) => x.ok)).toBe(true);
+    const mal = revisionesFijas(r, 400, 2);
+    expect(mal.map((x) => x.ok)).toEqual([false, false]);
+    expect(mal[0].nota).toContain('400');
+  });
+});

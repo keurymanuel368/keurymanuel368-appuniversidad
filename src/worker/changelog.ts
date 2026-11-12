@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 85,
+    date: '2026-11-12',
+    title: '✅ Revisa tu trabajo contra la rúbrica',
+    items: [
+      'En cada tarea: «Revisar mi trabajo contra la rúbrica». Pega el texto, sube tu Word o PDF, o revisa el que hizo la IA.',
+      'Rumbo lo compara con las reglas y la rúbrica del EVA: qué cumple, qué le falta, la nota estimada por criterio y cambios concretos para mejorarlo.',
+      'Cuenta las palabras y las referencias de verdad para comprobar la extensión pedida.',
+    ],
+  },
+  {
     version: 84,
     date: '2026-11-12',
     title: '📋 Cada trabajo con sus reglas',

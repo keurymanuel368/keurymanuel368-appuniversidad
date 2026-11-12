@@ -259,3 +259,92 @@ export function registerReglas(app: App) {
     return c.json(r);
   });
 }
+
+// ---------- Revisión de tu trabajo contra las reglas y la rúbrica ----------
+export type Revision = {
+  resumen: string;
+  nota: number | null; maximo: number | null;
+  items: { texto: string; ok: boolean; puntos: number | null; max: number | null; nota: string }[];
+  faltan: string[]; mejoras: string[];
+  palabras: number; referencias: number;
+  at: number;
+};
+
+/** Cuántas referencias parece tener el texto (líneas con enlace o con año entre paréntesis, típico de APA). */
+export function contarReferencias(text: string): number {
+  const i = text.search(/\n\s*(referencias|bibliograf[ií]a|fuentes consultadas)[^\n]{0,40}\n/i);
+  const zona = i >= 0 ? text.slice(i) : text;
+  return zona.split('\n').filter((l) => /https?:\/\//i.test(l) || /\((19|20)\d{2}[a-z]?\)/.test(l)).length;
+}
+
+/** Revisiones que no necesitan IA: extensión y cantidad de referencias. */
+export function revisionesFijas(r: Reglas, palabras: number, refs: number): { texto: string; ok: boolean; nota: string }[] {
+  const out: { texto: string; ok: boolean; nota: string }[] = [];
+  const p = r.palabras;
+  if (p && (p.min || p.max)) out.push({ texto: `Extensión pedida: ${p.min ?? ''}${p.min && p.max ? ' a ' : ''}${p.max ?? ''} palabras`, ok: (!p.min || palabras >= p.min * 0.9) && (!p.max || palabras <= p.max * 1.1), nota: `Tu trabajo tiene ${palabras} palabras.` });
+  if (r.referencias?.min) out.push({ texto: `Al menos ${r.referencias.min} referencias${r.referencias.estilo ? ` (${r.referencias.estilo})` : ''}`, ok: refs >= r.referencias.min, nota: `Encontré ${refs} referencia${refs === 1 ? '' : 's'}.` });
+  return out;
+}
+
+export async function reviewWork(env: Env, taskId: number, text: string): Promise<Revision> {
+  const r = await getReglas(env, taskId);
+  const clean = text.replace(/\r/g, '').trim();
+  if (clean.length < 200) throw new Error('El texto es muy corto para revisarlo. Pega o sube el trabajo completo.');
+  const palabras = clean.split(/\s+/).filter(Boolean).length;
+  const refs = contarReferencias(clean);
+  const activas = r.reglas.filter((x) => !r.quitadas.includes(x.id));
+  const lista = [...activas.map((x) => ({ texto: x.texto, max: x.puntos })), ...r.propias.map((t) => ({ texto: t, max: null as number | null }))];
+  let items: { n?: number; ok?: boolean; puntos?: number; nota?: string }[] = [];
+  let resumen = '', faltan: string[] = [], mejoras: string[] = [];
+  if (lista.length) {
+    const raw = await llmComplete(env, [
+      { role: 'system', content: `Eres un profesor universitario que califica con la rúbrica, de forma estricta pero justa. Te doy las reglas/criterios de un trabajo y el trabajo del estudiante. Para CADA regla (en orden) di si se cumple de verdad y, si la regla trae puntos máximos, cuántos puntos merece. Responde SOLO con JSON:
+{"resumen":"2 frases de cómo está el trabajo","items":[{"n":1,"ok":true,"puntos":null,"nota":"por qué, en una frase con ejemplo del texto"}],"faltan":["lo concreto que no está y debería"],"mejoras":["cambio concreto y accionable (máx. 6)"]}
+No inventes: basa todo en el texto. En "mejoras" di exactamente qué agregar o cambiar.` },
+      { role: 'user', content: `REGLAS Y CRITERIOS:\n${lista.map((x, i) => `${i + 1}. ${x.texto}${x.max ? ` (máximo ${x.max} pts)` : ''}`).join('\n')}\n\nTRABAJO DEL ESTUDIANTE (${palabras} palabras):\n${clean.slice(0, 13000)}` },
+    ], { maxTokens: 2000, temperature: 0.1 });
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('No pude revisar el trabajo ahora. Inténtalo otra vez.');
+    const j = JSON.parse(m[0]) as { resumen?: string; items?: typeof items; faltan?: unknown[]; mejoras?: unknown[] };
+    items = j.items || []; resumen = String(j.resumen || '').slice(0, 300);
+    faltan = (j.faltan || []).map((x) => String(x).slice(0, 220)).filter(Boolean).slice(0, 8);
+    mejoras = (j.mejoras || []).map((x) => String(x).slice(0, 260)).filter(Boolean).slice(0, 8);
+  } else resumen = 'No hay reglas escritas para esta tarea: solo revisé extensión y referencias.';
+  const rows = [...revisionesFijas(r, palabras, refs).map((x) => ({ ...x, puntos: null as number | null, max: null as number | null })),
+    ...lista.map((x, i) => {
+      const it = items.find((y) => y.n === i + 1);
+      const max = x.max;
+      const pts = max && it?.puntos !== undefined ? Math.max(0, Math.min(max, Number(it.puntos) || 0)) : null;
+      return { texto: x.texto, ok: it ? !!it.ok : false, puntos: pts, max, nota: String(it?.nota || '').slice(0, 200) };
+    })];
+  const conPuntos = rows.filter((x) => x.max);
+  const maximo = conPuntos.reduce((a, x) => a + (x.max || 0), 0) || null;
+  const nota = maximo ? conPuntos.reduce((a, x) => a + (x.puntos || 0), 0) : null;
+  const rev: Revision = { resumen, nota, maximo, items: rows, faltan, mejoras, palabras, referencias: refs, at: nowSec() };
+  const row = await env.DB.prepare('SELECT rules FROM task_rules WHERE task_id = ? AND user_id = ?').bind(taskId, env.UID).first<{ rules: string }>();
+  const cur = row ? (JSON.parse(row.rules) as Record<string, unknown>) : {};
+  await env.DB.prepare('UPDATE task_rules SET rules = ?, updated_at = ? WHERE task_id = ? AND user_id = ?').bind(JSON.stringify({ ...cur, revision: rev }), nowSec(), taskId, env.UID).run();
+  return rev;
+}
+
+export function registerRevision(app: App) {
+  app.get('/api/tasks/:id/revision', async (c) => {
+    const row = await c.env.DB.prepare('SELECT rules FROM task_rules WHERE task_id = ? AND user_id = ?').bind(Number(c.req.param('id')), c.env.UID).first<{ rules: string }>();
+    try { return c.json({ revision: (JSON.parse(row?.rules || '{}') as { revision?: Revision }).revision ?? null }); } catch { return c.json({ revision: null }); }
+  });
+  /** Revisa tu trabajo: texto pegado, archivo Word/PDF (en base64) o el que hizo la IA. */
+  app.post('/api/tasks/:id/revision', async (c) => {
+    const id = Number(c.req.param('id'));
+    const b = await c.req.json<{ text?: string; file?: string; name?: string }>().catch(() => ({} as { text?: string; file?: string; name?: string }));
+    try {
+      let text = String(b.text || '');
+      if (b.file) {
+        const bin = Uint8Array.from(atob(b.file), (ch) => ch.charCodeAt(0));
+        if (bin.length > 4_000_000) return c.json({ error: 'El archivo pesa más de 4 MB.' }, 400);
+        text = /\.docx$/i.test(b.name || '') ? await docxText(bin) : /\.pdf$/i.test(b.name || '') ? await pdfText(bin) : '';
+        if (text.length < 200) return c.json({ error: 'No pude leer texto en ese archivo. Usa un Word (.docx), un PDF con texto, o pega el contenido.' }, 400);
+      }
+      return c.json({ revision: await reviewWork(c.env, id, text) });
+    } catch (e) { return c.json({ error: (e as Error).message }, 502); }
+  });
+}
