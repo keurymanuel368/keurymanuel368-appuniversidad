@@ -29,7 +29,7 @@ import java.util.List;
  * Todo se pinta en un Bitmap del tamaño exacto del widget, así se ve nítido en cualquier tamaño que le des.
  */
 final class Art {
-    private static final int NAVY = 0xFF0A1B4F, NAVY2 = 0xFF15348F, BLUE = 0xFF2457D6, NEEDLE = 0xFFFF8A1F, RED = 0xFFE5484D;
+    private static final int NAVY = 0xFF0B1140, NAVY2 = 0xFF1B2DA8, BLUE = 0xFF3463FF, NEEDLE = 0xFFFF8A1F, RED = 0xFFE5484D;
     private static final int[] PALETA = {218, 262, 172, 28, 332, 148, 196, 48};
     private static final Typeface BLACK = Typeface.create("sans-serif-black", Typeface.NORMAL);
     private static final Typeface MED = Typeface.create("sans-serif-medium", Typeface.NORMAL);
@@ -79,7 +79,7 @@ final class Art {
 
     /** Esquina inferior izquierda cerrada: la firma de las tarjetas de Rumbo. */
     private void mask(Canvas c, int w, int h) {
-        float r = dp(24), rs = dp(8);
+        float r = dp(28), rs = dp(28);
         Path path = new Path();
         path.addRoundRect(new RectF(0, 0, w, h), new float[]{r, r, r, r, r, r, rs, rs}, Path.Direction.CW);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -90,10 +90,10 @@ final class Art {
 
     private void background(Canvas c, int w, int h, String mood) {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setShader(new LinearGradient(0, 0, w, h, new int[]{NAVY, NAVY2, BLUE}, new float[]{0f, 0.58f, 1f}, Shader.TileMode.CLAMP));
+        p.setShader(new RadialGradient(0, 0, Math.max(w, h) * 1.2f, new int[]{BLUE, NAVY2, NAVY}, new float[]{0f, 0.42f, 1f}, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h, p);
         p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setShader(new RadialGradient(w * 0.96f, -h * 0.05f, Math.max(w, h) * 0.75f, alpha(moodColor(mood), 0.55f), 0x00000000, Shader.TileMode.CLAMP));
+        p.setShader(new RadialGradient(w * 0.96f, -h * 0.05f, Math.max(w, h) * 0.75f, alpha(moodColor(mood), 0.38f), 0x00000000, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h, p);
         p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setShader(new RadialGradient(0, h * 1.05f, Math.max(w, h) * 0.6f, 0x4D38BDF8, 0x00000000, Shader.TileMode.CLAMP));
@@ -120,6 +120,18 @@ final class Art {
 
     /** Anillo de progreso con brújula: el punto naranja marca hasta dónde vas. */
     private void dial(Canvas c, float cx, float cy, float R, float prog, String big, String label, Drawable mascot) {
+        // Bisel de brújula: 60 marcas alrededor del anillo
+        Paint tkp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        tkp.setStrokeCap(Paint.Cap.ROUND);
+        for (int i = 0; i < 60; i++) {
+            boolean big5 = i % 5 == 0;
+            tkp.setStrokeWidth(dp(big5 ? 1.4f : 0.9f));
+            tkp.setColor(big5 ? 0xB3FFFFFF : 0x40FFFFFF);
+            double a = Math.toRadians(i * 6 - 90);
+            float r1 = R, r0 = R - (big5 ? R * 0.1f : R * 0.06f);
+            c.drawLine(cx + (float) (r0 * Math.cos(a)), cy + (float) (r0 * Math.sin(a)), cx + (float) (r1 * Math.cos(a)), cy + (float) (r1 * Math.sin(a)), tkp);
+        }
+        R = R * 0.84f;
         float stroke = Math.max(dp(5), R * 0.15f);
         float rr = R - stroke / 2f;
         Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -129,7 +141,7 @@ final class Art {
         float p = Math.max(0.025f, Math.min(1f, prog));
         Paint arc = new Paint(Paint.ANTI_ALIAS_FLAG);
         arc.setStyle(Paint.Style.STROKE); arc.setStrokeWidth(stroke); arc.setStrokeCap(Paint.Cap.ROUND);
-        SweepGradient sg = new SweepGradient(cx, cy, new int[]{0xFF3B8CFF, 0xFF7FD0FF, 0xFFFFB86B, NEEDLE}, new float[]{0f, 0.55f, 0.9f, 1f});
+        SweepGradient sg = new SweepGradient(cx, cy, new int[]{0xFF4A6DFF, 0xFF8FA8FF, 0xFFFFB86B, NEEDLE}, new float[]{0f, 0.55f, 0.9f, 1f});
         Matrix m = new Matrix(); m.setRotate(-90, cx, cy);
         sg.setLocalMatrix(m);
         arc.setShader(sg);
@@ -310,21 +322,21 @@ final class Art {
         }
         for (int i = 0; i < rs.size(); i++) {
             Row r = rs.get(i);
-            float y = rowsTop + i * rowH;
-            Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
-            bar.setColor(r.color);
-            c.drawRoundRect(new RectF(x0, y + dp(3), x0 + dp(3.5f), y + rowH - dp(7)), dp(2), dp(2), bar);
-            float tx = x0 + dp(10);
-            TextPaint tt = text(Color.WHITE, 13, BLACK);
-            c.drawText(fit(r.title, tt, x1 - tx), tx, y + dp(15), tt);
-            float my = y + dp(28), mx = tx;
-            if (r.tag != null && !r.tag.isEmpty()) {
-                TextPaint gp = text(r.live ? NEEDLE : r.urgent ? 0xFFFF7B80 : 0xFF9CCBFF, 10.5f, BLACK);
-                c.drawText(r.tag, mx, my, gp);
-                mx += gp.measureText(r.tag) + dp(6);
-            }
-            TextPaint mt = text(0xB3FFFFFF, 10.5f, MED);
-            c.drawText(fit(r.meta, mt, x1 - mx), mx, my, mt);
+            float y = rowsTop + i * rowH, ch = rowH - dp(4);
+            Paint cardP = new Paint(Paint.ANTI_ALIAS_FLAG);
+            cardP.setColor(0x1CFFFFFF);
+            c.drawRoundRect(new RectF(x0, y, x1, y + ch), dp(12), dp(12), cardP);
+            Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
+            dot.setColor(r.color);
+            c.drawCircle(x0 + dp(11), y + ch / 2f, dp(4), dot);
+            float tx = x0 + dp(22);
+            float tagW = (r.tag == null || r.tag.isEmpty()) ? 0 : pillWidth(r.tag, 9.5f);
+            float avail = x1 - tx - tagW - dp(16);
+            TextPaint tt = text(Color.WHITE, 12.5f, BLACK);
+            c.drawText(fit(r.title, tt, avail), tx, y + dp(14), tt);
+            TextPaint mt = text(0xB3FFFFFF, 10, MED);
+            c.drawText(fit(r.meta.replaceFirst("^· ", ""), mt, avail), tx, y + dp(26), mt);
+            if (tagW > 0) pill(c, r.tag, x1 - dp(8), y + ch / 2f, r.live ? NEEDLE : r.urgent ? 0x40FF5A6E : 0x29FFFFFF, r.urgent ? 0xFFFFB0B8 : Color.WHITE, 9.5f);
         }
         if (chips) {
             float cy2 = h - pad - dp(8);

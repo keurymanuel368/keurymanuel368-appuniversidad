@@ -56,6 +56,35 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
     if (hit) setSel(hit.name);
   }, [courses.data, now.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [paste, setPaste] = useState('');
+  const [impMsg, setImpMsg] = useState('');
+  const classLabel = () => (sel === '__otra' ? custom.trim() : sel);
+  async function explain(id: number) {
+    setImpMsg('Explicando la clase… puede tardar un minuto.');
+    const r = await runProcess(id);
+    setImpMsg('');
+    if (r === 'ready') { toast('Clase explicada ✅'); onOpen(id); } else toast('No se pudo terminar. Ábrela desde la lista para reintentar.', 'err');
+  }
+  async function importText() {
+    const name = classLabel();
+    if (!name) { toast('Elige arriba la asignatura de la clase', 'err'); return; }
+    setImpMsg('Guardando…');
+    try { const r = await api<{ id: number }>('/clases/import', { method: 'POST', body: { title: name, course: name, text: paste } }); setPaste(''); await explain(r.id); }
+    catch (e) { setImpMsg(''); toast((e as Error).message, 'err'); }
+  }
+  async function importAudio(file: File | undefined) {
+    const name = classLabel();
+    if (!file) return;
+    if (!name) { toast('Elige arriba la asignatura de la clase', 'err'); return; }
+    setImpMsg('Subiendo y transcribiendo el audio… puede tardar unos minutos.');
+    try {
+      const res = await fetch('/api/clases/import-audio', { method: 'POST', headers: { 'Content-Type': file.type || 'audio/mpeg', 'X-Title': encodeURIComponent(name), 'X-Course': encodeURIComponent(name) }, body: file });
+      const j = (await res.json().catch(() => ({}))) as { id?: number; error?: string };
+      if (!res.ok || !j.id) throw new Error(j.error || `Error ${res.status}`);
+      await explain(j.id);
+    } catch (e) { setImpMsg(''); toast((e as Error).message, 'err'); }
+  }
+
   async function start() {
     const name = sel === '__otra' ? custom.trim() : sel;
     if (!name) { toast('Elige la asignatura de la clase', 'err'); return; }
@@ -87,6 +116,19 @@ function Inicio({ onOpen }: { onOpen: (id: number) => void }) {
         <small className="cl-note">Solo funciona en Chrome desde una PC. Pide permiso al profesor antes de transcribir la clase.</small>
         {live.err && <small className="cl-err">{live.err}</small>}
       </section>
+
+      <details className="cl-imp">
+        <summary>¿No pudiste conectarte a la clase? Pega la transcripción o sube el audio</summary>
+        <div className="cl-imp-body">
+          <p className="muted small">Se explica igual que una clase en vivo. Usa la asignatura elegida arriba.</p>
+          <textarea className="input" rows={5} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="Pega aquí la transcripción de la clase (de Meet, Teams o tu grabadora)…" aria-label="Transcripción de la clase" />
+          <div className="cl-imp-actions">
+            <button className="btn primary" onClick={() => void importText()} disabled={!!impMsg || paste.trim().length < 300}>Explicar esta clase</button>
+            <label className={`btn line ${impMsg ? 'disabled' : ''}`}>Subir audio (hasta 24 MB)<input type="file" accept="audio/*,video/mp4" hidden disabled={!!impMsg} onChange={(e) => void importAudio(e.target.files?.[0])} /></label>
+          </div>
+          {impMsg && <small className="cl-warn-dark" role="status">{impMsg}</small>}
+        </div>
+      </details>
 
       {!list.data ? <Skeleton rows={2} /> : !list.data.length
         ? <div className="card"><Empty icon="book" title="Aún no hay clases" text="Cuando termines tu primera clase en vivo, aquí queda explicada y clasificada por materia." /></div>

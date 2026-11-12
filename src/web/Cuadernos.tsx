@@ -4,6 +4,7 @@ import { useMemo, useState, type ComponentType } from 'react';
 import { api, type Course } from './api';
 import { Empty, Segmented, Skeleton, haptic, useLoad } from './components';
 import { Icon } from './icons';
+import { ArmarCuadernos, PreguntaCuadernos } from './EstudioIA';
 
 export type NoteT = { id: number; course: string | null; title: string; body: string; pinned: number; created_at: number; updated_at: number };
 type CardT = { id: number; course: string | null; front: string; back: string };
@@ -109,6 +110,8 @@ export function Cuadernos({ names, Editor, List, onReview }: { names: string[]; 
         <div><h2>Mis cuadernos</h2><p className="muted small">Uno por materia. Lo que apuntas y lo que guardas de la IA queda en su cuaderno, con fecha.</p></div>
         <Segmented label="Vista" value={view} onChange={setView} options={[{ id: 'estanteria', label: 'Cuadernos' }, { id: 'lista', label: 'Lista' }]} />
       </div>
+      {view === 'estanteria' && <PreguntaCuadernos />}
+      {view === 'estanteria' && <ArmarCuadernos onProgress={reload} />}
       {view === 'lista' ? <List names={names} /> : (
         <div className="nb-shelf">
           {books.map((b) => <Portada key={b.name} name={b.name} color={b.color} hojas={b.hojas} fichas={b.fichas} onOpen={() => setOpen(b.name)} />)}

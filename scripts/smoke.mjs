@@ -57,7 +57,7 @@ try {
   if (Array.isArray(courses) && courses.length) await get(`/api/courses/${courses[0].id}/grades`);
   for (const p of ['/api/courses/history', '/api/announcements', '/api/payments', '/api/settings', '/api/pensum', '/api/search?q=foro',
     '/api/grades/history', '/api/feedback-notes', '/api/record', '/api/eva/can', '/api/plan/preview', '/api/achievements',
-    '/api/ignored-tasks', '/api/index-trend', '/api/week-story', '/api/telegram/status', '/api/wa/status']) await get(p);
+    '/api/ignored-tasks', '/api/usage', '/api/estudio/estado', '/api/tts/status', '/api/works', '/api/clases', '/api/index-trend', '/api/week-story', '/api/telegram/status', '/api/wa/status']) await get(p);
   const page = await fetch(`${BASE}/`);
   if (!page.ok || !(await page.text()).includes('<div id="root">')) failures.push('/ → la página principal no cargó');
   else console.log('  ✓ /');

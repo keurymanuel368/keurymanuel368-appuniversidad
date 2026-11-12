@@ -27,6 +27,9 @@ export const CONFIG_KEYS = [
   { k: "NVIDIA_MODEL", g: "Inteligencia artificial", l: "NVIDIA · modelo (opcional)" },
   { k: "CEREBRAS_API_KEY", g: "Inteligencia artificial", l: "Cerebras · clave", secret: true, help: "cloud.cerebras.ai → API Keys" },
   { k: "OPENROUTER_API_KEY", g: "Inteligencia artificial", l: "OpenRouter · clave", secret: true, help: "openrouter.ai → Keys" },
+  { k: "AZURE_SPEECH_KEY", g: "Voz del asistente", l: "Azure Speech · clave", secret: true, help: "Voces dominicanas. portal.azure.com → crear «Speech» con precio F0 (gratis) → Keys and Endpoint." },
+  { k: "AZURE_SPEECH_REGION", g: "Voz del asistente", l: "Azure Speech · región", help: "La región que sale junto a la clave. Ej.: eastus" },
+  { k: "ELEVENLABS_API_KEY", g: "Voz del asistente", l: "ElevenLabs · clave (opcional)", secret: true, help: "elevenlabs.io → API Keys (plan gratis, unas 10 000 letras al mes)" },
   { k: "TELEGRAM_BOT_TOKEN", g: "Telegram", l: "Token del bot", secret: true, tg: true, help: "Se configura en la página de Telegram." },
   { k: "WA_TOKEN", g: "WhatsApp (Meta)", l: "Token de acceso", secret: true },
   { k: "WA_PHONE_NUMBER_ID", g: "WhatsApp (Meta)", l: "ID del número de teléfono" },
@@ -148,6 +151,21 @@ export const TG_NAV = [
 ];
 export const TG_MINI = [[{ text: "🏠 Hoy", callback_data: "c:hoy" }, { text: "📝 Tareas", callback_data: "c:tareas" }, { text: "📊 Notas", callback_data: "c:notas" }]];
 export const TG_RULE = "──────────────";
+const TG_LINE = "━━━━━━━━━━━━━━";
+/** Tarjeta de aviso con el estilo de Rumbo: encabezado, línea fina, cuerpo y pie en cursiva. Todo el contenido ya va escapado. */
+export function tgCard(o: { icon: string; title: string; chip?: string; lines: (string | false | null | undefined)[]; foot?: string }) {
+  const body = o.lines.filter((x): x is string => x !== false && x !== null && x !== undefined);
+  return [`${o.icon} <b>${o.title}</b>${o.chip ? `  <code>${o.chip}</code>` : ""}`, `<code>${TG_LINE}</code>`, ...body, ...(o.foot ? ["", `<i>${o.foot}</i>`] : [])].join("\n");
+}
+/** Texto suelto → tarjeta: la primera línea es el encabezado y el resto el cuerpo. */
+export function tgAuto(text: string) {
+  const html = tgFormat(text.trim());
+  const i = html.indexOf("\n");
+  if (i < 0) return html;
+  const head = html.slice(0, i).trim();
+  const rest = html.slice(i).replace(/^\n+/, "");
+  return `${/<b>/.test(head) ? head : `<b>${head}</b>`}\n<code>${TG_LINE}</code>\n${rest}`;
+}
 export function tgDayDiff(env: any, dueSec: any) {
   const now = localDate(env), due = localDate(env, dueSec);
   return Math.round((Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate()) - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) / 864e5);
@@ -561,7 +579,7 @@ ${doc}` }
 export function tgGradeCard(env: any, g: any, changed: any, cheer: any, courseAvg: any) {
   const pct = g.max ? g.grade / g.max * 100 : null;
   const fmt22 = (n: any) => Math.round(Number(n) * 100) / 100;
-  const lines = [`${tgGradeIcon(pct)} <b>${changed ? "Te cambiaron una nota" : "¡Te calificaron!"}</b>`, "", `<b>${tgEsc(g.item)}</b>`, `📚 <i>${tgEsc(courseLabel(g.course))}</i>`, "", `📊 <b>${fmt22(g.grade)}/${fmt22(g.max)}</b>${changed && g.prev !== void 0 && g.prev !== null ? ` <i>(antes ${fmt22(g.prev)})</i>` : ""}`];
+  const lines = [`${tgGradeIcon(pct)} <b>${changed ? "Te cambiaron una nota" : "¡Te calificaron!"}</b>`, `<code>${TG_LINE}</code>`, `<b>${tgEsc(g.item)}</b>`, `📚 <i>${tgEsc(courseLabel(g.course))}</i>`, "", `📊 <b>${fmt22(g.grade)}/${fmt22(g.max)}</b>${changed && g.prev !== void 0 && g.prev !== null ? ` <i>(antes ${fmt22(g.prev)})</i>` : ""}`];
   if (pct !== null) lines.push(`<code>${tgBar(pct, 12)}</code> ${Math.round(pct)}%`);
   if (courseAvg !== null && courseAvg !== void 0) lines.push(`📈 Promedio de la materia: <b>${courseAvg}</b>`);
   if (g.feedback) lines.push("", `💬 <i>Comentario del facilitador:</i>`, `<blockquote expandable>${tgEsc(g.feedback.slice(0, 900))}</blockquote>`);

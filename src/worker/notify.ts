@@ -6,7 +6,7 @@
 import type { Env } from './env';
 import { getSetting, setSetting } from './db';
 import { sendPushAll } from './push';
-import { sendTelegram, telegramReady, TG_MINI, type TgKb } from './telegram';
+import { sendTelegram, telegramReady, tgAuto, TG_MINI, type TgKb } from './telegram';
 import { localDate, nowSec } from './time';
 
 export type Channel = 'whatsapp' | 'callmebot' | 'push' | 'telegram';
@@ -153,7 +153,7 @@ export async function sendToMe(env: Env, text: string, opts: SendOptions = {}): 
   if (telegramReady(env) && (await getSetting(env, 'tg_chat_id'))) {
     const origin0 = (env.APP_URL || '').replace(/\/$/, '');
     const kb: TgKb = opts.url && /^https:/.test(origin0) ? [[{ text: '🔗 Abrir en Rumbo', url: `${origin0}/${opts.url.replace(/^\//, '')}` }], ...TG_MINI] : TG_MINI;
-    const t = opts.tg ? await sendTelegram(env, opts.tg.html, undefined, { html: true, kb: opts.tg.kb || kb }) : await sendTelegram(env, text, undefined, { kb });
+    const t = opts.tg ? await sendTelegram(env, opts.tg.html, undefined, { html: true, kb: opts.tg.kb || kb }) : await sendTelegram(env, tgAuto(text), undefined, { html: true, kb });
     if (t.ok) channels.push('telegram'); else errors.push('Telegram: ' + t.error);
   }
 

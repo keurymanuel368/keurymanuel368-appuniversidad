@@ -25,6 +25,9 @@ export interface Env {
   GROQ_API_KEY?: string;
   /** Voz natural opcional (plan gratis de ElevenLabs). Se guarda con `wrangler secret put ELEVENLABS_API_KEY`. */
   ELEVENLABS_API_KEY?: string;
+  /** Voces dominicanas de Azure Speech (plan gratis F0). Se guardan en /llaves o con `wrangler secret put`. */
+  AZURE_SPEECH_KEY?: string;
+  AZURE_SPEECH_REGION?: string;
   GROQ_MODEL?: string;
   NVIDIA_API_KEY?: string;
   NVIDIA_MODEL?: string;

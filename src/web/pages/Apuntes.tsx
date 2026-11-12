@@ -202,7 +202,9 @@ function Cards({ names }: { names: string[] }) {
 }
 
 export function Apuntes() {
-  const [tab, setTab] = useState<'semana' | 'clases' | 'trabajos' | 'apuntes' | 'tarjetas'>('semana');
+  type Tab = 'semana' | 'clases' | 'trabajos' | 'apuntes' | 'tarjetas';
+  const [tab, setTab] = useState<Tab>(() => { try { const v = localStorage.getItem('rumbo-estudio-tab'); if (v && ['semana', 'clases', 'trabajos', 'apuntes', 'tarjetas'].includes(v)) return v as Tab; } catch { /* sin almacenamiento */ } return 'semana'; });
+  useEffect(() => { try { localStorage.setItem('rumbo-estudio-tab', tab); } catch { /* sin almacenamiento */ } }, [tab]);
   const courses = useLoad(() => api<Course[]>('/courses'));
   const names = (courses.data || []).map((c) => c.name);
   return (

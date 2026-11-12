@@ -33,11 +33,22 @@ import { registerExtras } from './extras';
 import { registerHorario } from './horario';
 import { registerTrabajo } from './trabajo';
 import { registerClases } from './clases';
+import { registerEstudio } from './estudio';
+import { HTTPException } from 'hono/http-exception';
+import { flushUsage, isQuotaError, meter, rowsTotal, usageToday } from './usage';
 import { registerKit } from './kit';
 import { synthesize, ttsStatus } from './tts';
 import { CALENDAR, TERMS } from './uapa-calendar';
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Errores: si es porque se acabó el cupo diario gratis de la base de datos, se dice claro (en vez de un 500 mudo).
+app.onError((err, c) => {
+  if (err instanceof HTTPException) return err.getResponse();
+  console.error(`Error en ${c.req.method} ${c.req.path}: ${(err as Error).message}`);
+  if (isQuotaError(err)) return c.json({ error: 'Rumbo llegó al límite diario gratis de la base de datos. Se reinicia a las 8:00 p. m. (hora de RD) y tus datos están seguros.', quota: true }, 503);
+  return c.json({ error: 'Error interno. Inténtalo otra vez en un momento.' }, 500);
+});
 
 // ---------- Salud y sesión ----------
 app.get('/api/health', (c) => c.json({ ok: true }));
@@ -426,7 +437,7 @@ app.get('/api/live', (c) => {
 
 // Después de cualquier cambio (POST, PATCH, DELETE) se avisa a tus otras pantallas para que recarguen.
 // x-rumbo-device dice qué pantalla hizo el cambio (esa no necesita recargar).
-const LIVE_SKIP = /^\/api\/(live|tts|transcribe|push|login|logout|me$|telegram\/setup|assistant\/(voice|transcribe)|clases\/\d+\/(chunk|detect|explain|process))/;
+const LIVE_SKIP = /^\/api\/(live|tts|transcribe|push|login|logout|me$|telegram\/setup|assistant\/(voice|transcribe)|clases\/(\d+\/(chunk|detect|explain|process)|import)|estudio\/|cuadernos\/ask)/;
 app.use('/api/*', async (c, next) => {
   await next();
   const m = c.req.method;
@@ -483,6 +494,7 @@ app.use('/api/*', async (c, next) => {
 registerExtras(app);
 registerTrabajo(app);
 registerClases(app);
+registerEstudio(app);
 registerHorario(app);
 registerKit(app);
 app.get('/api/uapa/calendar', (c) => c.json({ terms: TERMS, events: CALENDAR }));
@@ -1106,7 +1118,7 @@ app.delete('/api/pensum/:id', async (c) => {
 });
 
 // Ajustes
-const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'notify_clases', 'el_voice', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
+const EDITABLE = ['goals', 'ics_study', 'notify_plan', 'plan_hour', 'wa_tipos', 'wa_quiet', 'wa_number', 'notify_tareas', 'notify_notas', 'notify_pagos', 'notify_avisos', 'notify_resumen', 'notify_novedades', 'notify_clases', 'el_voice', 'az_voice', 'push_also_wa', 'summary_hour', 'summary_enabled', 'task_reminders', 'pay_open_day', 'pay_close_day', 'pay_remind_days', 'pay_amount', 'term_start', 'term_end', 'student_name', 'eva_sync_hours', 'study_hour', 'study_enabled'];
 
 app.get('/api/settings', async (c) => {
   const s = await getSettings(c.env);
@@ -1375,6 +1387,8 @@ app.post('/api/tts', async (c) => {
   return new Response(r.body, { headers: { 'Content-Type': r.type, 'Cache-Control': 'no-store', 'X-Voice-Engine': r.engine } });
 });
 app.get('/api/tts/status', async (c) => c.json(await ttsStatus(c.env)));
+// Cuánto se lleva gastado hoy de la base de datos gratis (Ajustes).
+app.get('/api/usage', async (c) => c.json(await usageToday(c.env)));
 
 // Memoria de largo plazo del asistente (ver / editar / borrar)
 app.get('/api/assistant/memory', async (c) => c.json({ memory: await getMemory(c.env) }));
@@ -1407,8 +1421,14 @@ export { RumboLive };
 export default {
   // Sin sesión todavía, el Env es «del sistema» (UID 0); el middleware lo cambia por el del usuario.
   // loadTelegramToken completa el Env con las llaves guardadas en /llaves.
-  fetch: async (req: Request, env: Env, ctx: ExecutionContext) => app.fetch(req, await loadTelegramToken({ ...env, UID: 0 }), ctx),
+  // La base de datos va «medida»: se cuentan las filas leídas para avisar y activar el modo ahorro antes de llegar al tope diario.
+  fetch: async (req: Request, env: Env, ctx: ExecutionContext) => {
+    const res = await app.fetch(req, await loadTelegramToken({ ...env, UID: 0, DB: meter(env.DB) }), ctx);
+    ctx.waitUntil(flushUsage(env.DB));
+    return res;
+  },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(loadTelegramToken({ ...env, UID: 0 }).then((e) => runScheduled(e)).then((log) => console.log(log.join(' | '))));
+    const before = rowsTotal();
+    ctx.waitUntil(loadTelegramToken({ ...env, UID: 0, DB: meter(env.DB) }).then((e) => runScheduled(e)).then((log) => console.log(`${log.join(' | ')} | filas leídas en esta vuelta: ${rowsTotal() - before}`)).finally(() => flushUsage(env.DB)));
   },
 } satisfies ExportedHandler<Env>;

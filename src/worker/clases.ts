@@ -40,6 +40,15 @@ export const hasCue = (text: string) => NAME.test(text) || ASK.test(text);
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 export const sameQuestion = (a: string, b: string) => { const x = norm(a).slice(0, 48), y = norm(b).slice(0, 48); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
 
+/** Convierte un texto corrido en líneas de ≈450 caracteres (por oraciones) con marcas de tiempo, como una clase en vivo. */
+export function lineify(text: string): string {
+  const sentences = text.replace(/\r/g, '').split(/(?<=[.!?¿?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  const lines: string[] = []; let cur = '';
+  for (const s of sentences) { if (cur && cur.length + s.length > 450) { lines.push(cur); cur = ''; } cur += (cur ? ' ' : '') + s; }
+  if (cur) lines.push(cur);
+  return lines.map((l, i) => `[${fmtAt(i * 20)}] ${l}`).join('\n') + '\n';
+}
+
 const PART = 9000;
 export function splitParts(t: string): string[] {
   const out: string[] = []; let cur = '';
@@ -272,6 +281,36 @@ Responde SOLO con JSON: {"titulo":"tema en pocas palabras","texto":"la explicaci
       await c.env.DB.prepare('UPDATE class_sessions SET live = ? WHERE id = ? AND user_id = ?').bind(JSON.stringify(live), id, c.env.UID).run();
       return c.json({ item });
     } catch (e) { return c.json({ item: null, error: (e as Error).message }, 502); }
+  });
+
+  /** Clase sin PC: pegas la transcripción (Meet, Teams, una grabadora…) y se explica igual que una clase en vivo. */
+  app.post('/api/clases/import', async (c) => {
+    const b = await c.req.json<{ title?: string; course?: string; text?: string }>().catch(() => ({} as { title?: string; course?: string; text?: string }));
+    const text = String(b.text || '').trim().slice(0, 300_000);
+    if (text.length < 300) return c.json({ error: 'Pega más texto: la transcripción de la clase (al menos unos párrafos).' }, 400);
+    const now = nowSec(), title = str(b.title, 120) || 'Clase';
+    const transcript = lineify(text);
+    const r = await c.env.DB.prepare(`INSERT INTO class_sessions (user_id, title, course, started_at, updated_at, ended_at, status, transcript, chunks) VALUES (?, ?, ?, ?, ?, ?, 'processing', ?, ?)`)
+      .bind(c.env.UID, title, str(b.course, 120) || title, now, now, now, transcript, transcript.split('\n').length).run();
+    return c.json({ id: r.meta.last_row_id });
+  });
+
+  /** Clase sin PC: subes la grabación (hasta 24 MB) y se transcribe y explica. */
+  app.post('/api/clases/import-audio', async (c) => {
+    const buf = new Uint8Array(await c.req.arrayBuffer());
+    if (buf.length < 2000) return c.json({ error: 'El audio está vacío.' }, 400);
+    if (buf.length > 24_000_000) return c.json({ error: 'El audio pesa más de 24 MB. Pega la transcripción o comprime el audio.' }, 413);
+    const mime = (c.req.header('content-type') || 'audio/mpeg').split(';')[0];
+    const title = decodeURIComponent(c.req.header('x-title') || 'Clase').slice(0, 120) || 'Clase';
+    const course = decodeURIComponent(c.req.header('x-course') || title).slice(0, 120);
+    let text: string | null = null;
+    try { text = await groqTranscribe(c.env, buf, mime, `Clase universitaria de ${title} en la UAPA (República Dominicana).`); } catch { text = null; }
+    if (!text || text.length < 100) return c.json({ error: 'No pude transcribir ese audio (muy largo, muy bajo o el motor de voz no respondió). Prueba con la transcripción en texto.' }, 502);
+    const now = nowSec();
+    const transcript = lineify(text);
+    const r = await c.env.DB.prepare(`INSERT INTO class_sessions (user_id, title, course, started_at, updated_at, ended_at, status, transcript, chunks) VALUES (?, ?, ?, ?, ?, ?, 'processing', ?, ?)`)
+      .bind(c.env.UID, title, course, now, now, now, transcript, transcript.split('\n').length).run();
+    return c.json({ id: r.meta.last_row_id });
   });
 
   app.post('/api/clases/:id/end', async (c) => {

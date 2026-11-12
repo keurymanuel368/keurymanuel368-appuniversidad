@@ -55,11 +55,12 @@ export type PayWindow = {
   daysToOpen: number; daysToClose: number; paid: boolean; amount: string; openDay: number; closeDay: number;
 };
 
-export async function listTasks(env: Env, opts: { status?: string; from?: number; to?: number; limit?: number; id?: number } = {}): Promise<Task[]> {
+export async function listTasks(env: Env, opts: { status?: string; from?: number; to?: number; limit?: number; id?: number; ids?: number[] } = {}): Promise<Task[]> {
   const where: string[] = ['t.user_id = ?'];
   const binds: unknown[] = [env.UID];
   if (opts.status) { where.push('t.status = ?'); binds.push(opts.status); }
   if (opts.id !== undefined) { where.push('t.id = ?'); binds.push(opts.id); }
+  if (opts.ids) { if (!opts.ids.length) return []; where.push(`t.id IN (${opts.ids.map(() => '?').join(',')})`); binds.push(...opts.ids); }
   // Las actividades quitadas (no se corrigen) no salen en ninguna lista; abriéndola por id sí, para poder devolverla.
   if (!opts.status && opts.id === undefined) where.push("t.status != 'ignored'");
   // Las tareas de asignaturas de trimestres anteriores (historial) no salen en las listas del día a día.
@@ -229,7 +230,9 @@ export async function dashboard(env: Env) {
   const endOfToday = (() => { const d = localDate(env); return localToUnix(env, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 23, 59); })();
   const pending = await listTasks(env, { status: 'pending', from: now - 3 * 86400, limit: 100 });
   // Atrasadas: todas las vencidas sin entregar (la lista de abajo solo trae lo reciente).
-  const overdue = (await listTasks(env, { status: 'pending', limit: 300 })).filter((t) => t.due_at !== null && t.due_at < now).sort((a, b) => b.due_at! - a.due_at!);
+  // Lista corta de atrasadas (las más recientes) y el total con una sola cuenta, sin traer cientos de tareas.
+  const overdue = (await listTasks(env, { status: 'pending', from: now - 60 * 86400, to: now, limit: 40 })).filter((t) => t.due_at !== null && t.due_at < now).sort((a, b) => b.due_at! - a.due_at!);
+  const overdueTotal = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks t LEFT JOIN courses c ON c.id = t.course_id WHERE t.user_id = ? AND t.status = 'pending' AND t.due_at IS NOT NULL AND t.due_at < ? AND (c.id IS NULL OR c.active = 1)`).bind(env.UID, now).first<{ n: number }>())?.n ?? overdue.length;
   const today = pending.filter((t) => t.due_at !== null && t.due_at >= now && t.due_at <= endOfToday);
   const week = pending.filter((t) => t.due_at !== null && t.due_at > endOfToday && t.due_at <= now + 7 * 86400);
   const courses = await courseSummaries(env);
@@ -237,7 +240,7 @@ export async function dashboard(env: Env) {
   // Últimas notas de tus entregas (las más recientes primero).
   const { results: recentGrades } = await env.DB.prepare(`SELECT t.id FROM tasks t JOIN grades g ON g.user_id = t.user_id AND g.moodle_key = t.moodle_key
     WHERE t.user_id = ? AND g.grade IS NOT NULL GROUP BY t.id ORDER BY MAX(g.updated_at) DESC, t.due_at DESC LIMIT 5`).bind(env.UID).all<{ id: number }>();
-  const graded = recentGrades.length ? (await listTasks(env, { limit: 400 })).filter((t) => recentGrades.some((r) => r.id === t.id))
+  const graded = recentGrades.length ? (await listTasks(env, { ids: recentGrades.map((r) => r.id), limit: 10 }))
     .sort((a, b) => recentGrades.findIndex((r) => r.id === a.id) - recentGrades.findIndex((r) => r.id === b.id)) : [];
   // Progreso de la semana (lunes a domingo): cuántas entregas con fecha esta semana ya están listas.
   const ld = localDate(env);
@@ -298,7 +301,7 @@ export async function dashboard(env: Env) {
     today: fechaLarga(localDate(env)),
     name: s.student_name || '',
     termProgress: await termProgress(env, s),
-    counts: { pending: pending.filter((t) => t.due_at === null || t.due_at >= now).length, today: today.length, week: week.length, overdue: overdue.length },
+    counts: { pending: pending.filter((t) => t.due_at === null || t.due_at >= now).length, today: today.length, week: week.length, overdue: overdueTotal },
     average: overallAverage(courses),
     tasks: pending.filter((t) => t.due_at === null || t.due_at >= now - 3 * 86400).slice(0, 12),
     overdueList: overdue.slice(0, 6),

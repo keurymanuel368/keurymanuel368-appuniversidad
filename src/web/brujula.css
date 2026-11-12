@@ -1,0 +1,125 @@
+/* ==========================================================================
+   Rumbo · Brújula — rediseño completo (se carga al final y manda sobre las capas anteriores)
+   Riel oscuro con la brújula al centro (Rumbo IA), cobalto + naranja UAPA, tarjetas suaves.
+   ========================================================================== */
+:root:not([data-mode="dark"]) {
+  --bg: #ECF0FB; --surface: #FFFFFF; --surface-2: #F5F8FF; --ink: #0B1230; --ink-2: #2A3358; --muted: #59638A; --faint: #59638A;
+  --line: #E1E7F5; --line-2: #EAEFFA;
+  --blue: #2350FF; --blue-2: #4A6DFF; --blue-3: #6B8CFF; --blue-dark: #1A3FD1; --blue-soft: #E4EBFF; --blue-tint: #EFF3FF;
+  --orange: #FF7A1A; --orange-soft: #FFEBD9; --orange-ink: #B04A00;
+  --green: #0A8F68; --green-soft: #DCF6EA; --red: #D92D58; --red-soft: #FFE3EA;
+  --grad: linear-gradient(135deg, #2350FF 0%, #1B3FD0 55%, #142C9E 100%);
+  --grad-deep: radial-gradient(130% 150% at 0% 0%, #3463FF 0%, #1B2DA8 42%, #0B1140 100%);
+  --sh-2: 0 1px 2px rgba(11, 18, 48, .05), 0 18px 40px -26px rgba(11, 18, 48, .35);
+  --sh-blue: 0 12px 26px -10px rgba(35, 80, 255, .9);
+}
+:root:not([data-mode="dark"]) body { background: var(--bg); }
+.card { border-radius: 26px; }
+.card, .hz-glance { border-color: transparent; }
+.btn { border-radius: 99px; font-weight: 700; }
+.btn.primary, .btn.grad { background: var(--blue); box-shadow: 0 12px 24px -12px rgba(35, 80, 255, .9); }
+.topbar h1 { font-family: var(--display); font-weight: 800; letter-spacing: -.03em; -webkit-text-fill-color: currentColor; background: none; }
+.topbar .eyebrow, .eyebrow { text-transform: uppercase; letter-spacing: .1em; font-size: 12px; font-weight: 700; color: var(--blue); }
+.hero { background: var(--grad-deep); border-radius: 30px; }
+.progress > i, .progress > span { background: linear-gradient(90deg, #2350FF, #6B8CFF); }
+
+/* Que nada se monte: los textos se encogen y se cortan, nunca empujan al vecino */
+.card *, .row *, .task * { min-width: 0; }
+.card h3, .card b, .card p { overflow-wrap: anywhere; }
+h1, h2, h3 { text-wrap: balance; }
+
+/* ---------- Riel de la PC (oscuro, brújula al centro) ---------- */
+@media (min-width: 901px) {
+  .sidebar {
+    width: 100px; padding: 18px 0 14px; gap: 10px; align-items: center; background: linear-gradient(180deg, #0C1233, #070C24);
+    backdrop-filter: none; border-right: 0; overflow-y: auto; scrollbar-width: none;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .brand { padding: 0; }
+  .brand-txt { display: none; }
+  .brand-mark { width: 48px; height: 48px; border-radius: 16px; background: linear-gradient(135deg, #2350FF, #7B5CFF); }
+  .rail-new { width: 38px; height: 38px; border-radius: 13px; border: 0; background: rgba(255, 255, 255, .1); color: #fff; display: grid; place-items: center; cursor: pointer; transition: transform .45s var(--spring), background .2s; flex: none; }
+  .rail-new:hover { background: var(--orange); transform: scale(1.08) rotate(90deg); }
+  .nav { width: 100%; align-items: center; gap: 4px; flex: 1; justify-content: center; }
+  .nav button { flex-direction: column; justify-content: center; gap: 3px; width: 76px; padding: 9px 0 7px; border-radius: 18px; color: #A5B0E2; font-size: 11px; font-weight: 700; text-align: center; position: relative; transition: background .3s, color .2s, transform .45s var(--spring); }
+  .nav button .nv-ic { position: relative; display: grid; place-items: center; }
+  .nav button .nv-lb { line-height: 1; }
+  .nav button .nav-count { position: absolute; top: -6px; right: -12px; margin: 0; background: var(--orange); color: #fff; border-radius: 99px; font-size: 10px; padding: 1px 5px; }
+  .nav button:hover { background: rgba(255, 255, 255, .07); color: #fff; transform: translateX(2px); }
+  .nav button.active { background: var(--blue); color: #fff; box-shadow: 0 12px 26px -10px rgba(35, 80, 255, .95); }
+  .nav button.rail-orb { width: 84px; padding: 10px 0 8px; margin: 8px 0; gap: 7px; background: none; color: #fff; }
+  .nav button.rail-orb:hover { background: none; transform: none; }
+  .rail-orb .orb { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+    background: radial-gradient(circle at 30% 22%, #8FA8FF, #2350FF 55%, #1A2CA6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 0 0 6px rgba(35, 80, 255, .18), 0 0 0 13px rgba(35, 80, 255, .09), 0 18px 34px -10px rgba(35, 80, 255, .95);
+    transition: transform .55s var(--spring); }
+  .rail-orb:hover .orb { transform: scale(1.08) rotate(18deg); }
+  .rail-orb.on .orb { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 0 0 6px rgba(255, 122, 26, .35), 0 0 0 13px rgba(255, 122, 26, .14), 0 18px 34px -10px rgba(35, 80, 255, .95); }
+  .rail-orb .orb-lb { font-size: 11px; font-weight: 800; }
+  .main { padding: 30px 40px 56px; }
+}
+
+/* ---------- Barra inferior del móvil: vidrio y brújula elevada al centro ---------- */
+@media (max-width: 900px) {
+  .tabbar { height: 74px; border-radius: 38px; }
+  .fab { width: 68px; height: 68px; border-radius: 50%; transform: translateY(-24px);
+    background: radial-gradient(circle at 30% 22%, #8FA8FF, #2350FF 55%, #1A2CA6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 18px 34px -10px rgba(35, 80, 255, .95), 0 0 0 6px var(--bg); }
+  .fab:active { transform: translateY(-24px) scale(.92); }
+  .fab.on { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 18px 34px -10px rgba(35, 80, 255, .95), 0 0 0 6px var(--bg), 0 0 0 9px rgba(255, 122, 26, .5) !important; }
+  .fab svg { animation: brujSway 5s ease-in-out infinite; }
+  .tab-glider::before { background: var(--blue-soft); }
+}
+@keyframes brujSway { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(10deg); } }
+@media (prefers-reduced-motion: reduce) { .fab svg { animation: none; } }
+
+/* ==========================================================================
+   Piezas compartidas con el estilo del lienzo (todas las páginas)
+   ========================================================================== */
+:root:not([data-mode="dark"]) .card { background: #fff; box-shadow: 0 1px 2px rgba(11, 18, 48, .05), 0 18px 40px -26px rgba(11, 18, 48, .35); }
+.section-head h3 { color: var(--muted); font-size: 12px; letter-spacing: .1em; }
+.pill { border-radius: 99px; font-weight: 700; }
+.pill.blue { background: var(--blue-soft); color: #1A3FD1; }
+.pill.orange { background: var(--orange-soft); color: #B04A00; }
+.pill.green { background: var(--green-soft); color: var(--green); }
+.pill.red { background: var(--red-soft); color: var(--red); }
+
+/* Números y estadísticas: fichas de color suave con cifra grande */
+.stat { border-radius: 24px; }
+.stat .value { font-family: var(--display); font-size: 34px; font-weight: 800; letter-spacing: -.04em; }
+.stat .label { font-weight: 700; }
+.stat-ic, .set-ic { border-radius: 14px; }
+
+/* Títulos de pantalla y barra superior */
+.topbar h1 { font-size: 34px; line-height: 1.05; }
+.topbar .eyebrow { color: var(--blue); }
+
+/* Campos y botones */
+.input, select.input, textarea.input { border-radius: 16px; }
+.input:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(35, 80, 255, .14); }
+.btn.white { color: #1A3FD1; }
+.btn.ghost, .btn.soft { border-radius: 99px; }
+.icon-btn, .icon-round { border-radius: 50%; }
+
+/* Barras de progreso: más gruesas, con la punta naranja de la brújula */
+.progress { height: 8px; border-radius: 99px; }
+
+/* Casillas de tareas: redondeadas como en el diseño */
+.check { border-radius: 14px; }
+
+/* Entrada de pantalla: sube y se aclara, y las tarjetas entran en cascada */
+@keyframes brujIn { from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+.page { animation: brujIn .55s var(--ease) both; }
+.page > * { animation: brujIn .6s var(--ease) both; }
+.page > *:nth-child(2) { animation-delay: .05s; } .page > *:nth-child(3) { animation-delay: .1s; }
+.page > *:nth-child(4) { animation-delay: .15s; } .page > *:nth-child(5) { animation-delay: .2s; }
+.page > *:nth-child(n+6) { animation-delay: .25s; }
+@media (prefers-reduced-motion: reduce) { .page, .page > * { animation: none; } }
+
+/* Botones con resorte al tocar */
+.btn:active, .stat:not(.static):active, .nav button:active { transform: scale(.96); }
+.btn { transition: transform .45s var(--spring), box-shadow .25s, background .2s; }
+
+/* Hoja y ventanas: esquinas grandes y vidrio */
+.modal { border-radius: 30px; }
+.toast { border-radius: 99px; }

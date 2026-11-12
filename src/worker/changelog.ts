@@ -10,6 +10,55 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 80,
+    date: '2026-11-11',
+    title: '🧭 Rumbo estrena diseño: la brújula',
+    items: [
+      'Menú nuevo: en la PC, un riel oscuro con la brújula al centro; en el teléfono, la brújula elevada en la barra. Es el botón de Rumbo IA.',
+      'Colores y tarjetas renovados en toda la app (cobalto, naranja UAPA y esquinas suaves).',
+      'Avisos de Telegram más bonitos: tarjeta con encabezado, línea fina y botones.',
+    ],
+  },
+  {
+    version: 79,
+    date: '2026-11-11',
+    title: '📓 Cuadernos de estudio hechos por la IA',
+    items: [
+      'Rumbo recorre tu EVA y escribe, tema por tema, hojas largas de estudio para cada materia (resumen, conceptos, explicación, ejemplos, errores comunes, práctica) con sus fichas.',
+      'Pregúntale a tus cuadernos: respondo con tus hojas y tus clases, diciendo de dónde salió.',
+      'Clases sin PC: pega la transcripción o sube el audio y se explica igual que en vivo.',
+      'Repaso diario de fichas y, antes de cada clase, qué viste la última vez.',
+    ],
+  },
+  {
+    version: 78,
+    date: '2026-11-11',
+    title: '🔄 Sincronización más inteligente',
+    items: ['Rumbo revisa el EVA cada 10 minutos de 7 a. m. a 10 p. m. y cada hora de noche: igual de rápido cuando lo usas, mucho menos gasto.'],
+  },
+  {
+    version: 77,
+    date: '2026-11-11',
+    title: '🛡️ Protección de la base de datos',
+    items: [
+      'Rumbo ahora mide cuánta base de datos gratis gasta cada día (Ajustes) y activa un modo ahorro antes de llegar al tope.',
+      'Si algún día se acabara, verás un mensaje claro en vez de un error.',
+      'Nueva voz «El Faraón» (ElevenLabs) entre las voces del asistente.',
+    ],
+  },
+  {
+    version: 76,
+    date: '2026-11-11',
+    title: '🔊 Voz del asistente más natural',
+    items: ['El asistente puede hablar con voces dominicanas de Azure (con tope mensual gratis). Cuando se acaba, vuelve solo a la voz gratis.'],
+  },
+  {
+    version: 75,
+    date: '2026-11-11',
+    title: '⚡ Rumbo más liviano',
+    items: ['Rumbo gasta mucho menos de la base de datos gratis: las pantallas ya no se recargan sin parar y cargan más rápido.'],
+  },
+  {
     version: 74,
     date: '2026-11-11',
     title: '📓 Cuadernos y Rumbo en PC',

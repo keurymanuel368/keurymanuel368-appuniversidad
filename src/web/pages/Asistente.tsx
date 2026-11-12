@@ -319,7 +319,7 @@ function VoicePill({ url, secs }: { url?: string; secs: number }) {
   );
 }
 
-type TtsStatus = { elevenlabs: { connected: boolean; used: number; cap: number; voice: string; voices: { id: string; name: string; hint: string }[] }; melo: { used: number; cap: number } };
+type TtsStatus = { azure?: { connected: boolean; used: number; cap: number; voice: string; voices: { id: string; name: string; hint: string }[] }; elevenlabs: { connected: boolean; used: number; cap: number; voice: string; voices: { id: string; name: string; hint: string }[] }; melo: { used: number; cap: number } };
 
 function VoiceSheet({ voice, onPick, onClose }: { voice: string; onPick: (v: string) => void; onClose: () => void }) {
   const [playing, setPlaying] = useState('');
@@ -334,6 +334,12 @@ function VoiceSheet({ voice, onPick, onClose }: { voice: string; onPick: (v: str
     setTimeout(() => preview('rumbo'), 250);
   }
   const el = st.data?.elevenlabs;
+  const az = st.data?.azure;
+  async function pickAz(id: string) {
+    await api('/settings', { method: 'PUT', body: { az_voice: id } }).catch(() => {});
+    st.reload();
+    setTimeout(() => preview('rumbo'), 250);
+  }
   return (
     <Modal title="Voz del asistente" onClose={() => { stopSpeaking(); onClose(); }}>
       <div className="voice-list">
@@ -344,6 +350,20 @@ function VoiceSheet({ voice, onPick, onClose }: { voice: string; onPick: (v: str
             {voice === v.id && <span className="pill blue">Elegida</span>}
           </button>
         ))}
+      </div>
+      <div className="vs-engine">
+        <div className="vs-head"><b>Azure · voces dominicanas</b><span className={`pill ${az?.connected ? 'green' : 'gray'}`}>{az?.connected ? 'Conectada' : 'Sin conectar'}</span></div>
+        {az?.connected ? (
+          <>
+            <div className="vs-bar"><i style={{ width: `${Math.min(100, (az.used / az.cap) * 100)}%` }} /></div>
+            <small>{az.used.toLocaleString('es-DO')} de {az.cap.toLocaleString('es-DO')} letras este mes (plan gratis). Al agotarse, Rumbo sigue con la voz gratis.</small>
+            <div className="vs-voices">
+              {az.voices.map((v) => <button key={v.id} className={az.voice === v.id ? 'on' : ''} onClick={() => pickAz(v.id)}><b>{v.name}</b><small>{v.hint}</small></button>)}
+            </div>
+          </>
+        ) : (
+          <small>La voz con acento dominicano más natural, gratis hasta 500 000 letras al mes: crea una cuenta en azure.microsoft.com, agrega el recurso «Speech» con precio <b>F0 (gratis)</b>, y pega la clave y la región tú mismo en <a href="/llaves">Llaves</a> (grupo «Voz del asistente»).</small>
+        )}
       </div>
       <div className="vs-engine">
         <div className="vs-head"><b>ElevenLabs</b><span className={`pill ${el?.connected ? 'green' : 'gray'}`}>{el?.connected ? 'Conectada' : 'Sin conectar'}</span></div>

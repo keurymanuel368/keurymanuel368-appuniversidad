@@ -2,11 +2,13 @@
 import type { Env } from './env';
 import { activeUsers, forUser, getSettings, markSent, setSetting, unmarkSent, wasSent } from './db';
 import { indexTrend, payWindow, periodLabel, staleCourses, summaryAlert, summaryShort } from './data';
-import { ensureTgWebhook, tgEsc, tgHoy, tgSemana, tgWithApp } from './telegram';
+import { ensureTgWebhook, tgCard, tgEsc, tgHoy, tgSemana, tgWithApp } from './telegram';
 import { notifyLive } from './live';
 import { blocks, courseLabel, money, timeLeft } from './wa';
 import { syncEva } from './moodle';
 import { processPendingClasses } from './clases';
+import { usageToday } from './usage';
+import { processNextTopic } from './estudio';
 import { flushWhatsApp, sendToMe } from './notify';
 import { archivePastCourses, classAlerts } from './horario';
 import { calendarAlerts } from './uapa-calendar';
@@ -31,10 +33,16 @@ export async function runScheduled(env: Env): Promise<string[]> {
   const envs = await Promise.all(users.map((u) => forUser(env, u.id, u.role)));
   // A quién le toca el EVA: con token y más atrasado respecto a su intervalo.
   let syncUid = 0, worst = 0;
+  // Modo ahorro: si ya se gastó casi todo el cupo diario de la base de datos, no se sincroniza el EVA hasta mañana.
+  const usage = await usageToday(env);
+  if (usage.saver) log.push(`Modo ahorro: ${Math.round(usage.read / 1000)} mil de ${usage.limit / 1e6} millones de lecturas hoy, sin sincronizar el EVA`);
   for (const ue of envs) {
-    if (!ue.MOODLE_TOKEN) continue;
+    if (!ue.MOODLE_TOKEN || usage.saver) continue;
     const s = await getSettings(ue);
-    const late = nowSec() - Number(s.eva_last_sync || 0) - 10 * 60; // revisión rápida cada 10 min
+    // Revisión rápida del EVA: cada 10 min de día (7 a. m. a 10 p. m.) y cada hora de noche, cuando casi nadie entrega nada.
+    const hr = localDate(ue).getUTCHours();
+    const every = hr >= 7 && hr < 22 ? 10 : 60;
+    const late = nowSec() - Number(s.eva_last_sync || 0) - every * 60;
     if (late >= -300 && late + 301 > worst) { worst = late + 301; syncUid = ue.UID; }
   }
   let backupError: string | undefined;
@@ -65,8 +73,12 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   // Clases en vivo que quedaron abiertas o sin explicar: se terminan solas
   try { log.push(...(await processPendingClasses(env))); } catch (e) { log.push('Clases: ' + (e as Error).message); }
 
+  // Cuadernos de estudio: si quedan temas por escribir, se escribe uno por vuelta (aunque cierres la pestaña)
+  try { log.push(...(await processNextTopic(env))); } catch (e) { log.push('Cuadernos: ' + (e as Error).message); }
+
   // Asignaturas de trimestres anteriores → historial
-  try { const n = await archivePastCourses(env); if (n) log.push(`Historial: ${n} asignaturas archivadas`); } catch (e) { log.push('Historial: ' + (e as Error).message); }
+  const hourly = new Date().getUTCMinutes() < 10; // lo que no urge se revisa solo en la primera vuelta de cada hora
+  if (hourly) try { const n = await archivePastCourses(env); if (n) log.push(`Historial: ${n} asignaturas archivadas`); } catch (e) { log.push('Historial: ' + (e as Error).message); }
 
   // 1) Sincronizar el EVA cada N horas
   if (syncNow && env.MOODLE_TOKEN) {
@@ -154,7 +166,7 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
         [`*${t.title}*`, curso && `📚 ${curso}`, `⏰ Vence *${cuandoTexto(env, t.due_at)}*`, `⏳ ${timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase())}`].filter(Boolean).join('\n'),
         '_Cuando la entregues, márcala como hecha en Rumbo._',
       ), { title: `📌 ${t.title}`, pushBody: `${curso ? curso + ' · ' : ''}vence ${cuandoTexto(env, t.due_at)}`, tag: `task-${t.id}`, url: `/#tareas/${t.id}`, type: 'tareas', tg: {
-        html: [`${urgent ? '🚨' : '📌'} <b>${urgent ? '¡Vence pronto!' : 'Recordatorio de entrega'}</b>`, '', `<b>${tgEsc(t.title)}</b>`, curso && `📚 <i>${tgEsc(curso)}</i>`, `⏰ Vence <b>${tgEsc(cuandoTexto(env, t.due_at))}</b>`, `⏳ ${tgEsc(timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase()))}`].filter(Boolean).join('\n'),
+        html: tgCard({ icon: urgent ? '🚨' : '📌', title: urgent ? '¡Vence pronto!' : 'Recordatorio de entrega', chip: tgEsc(timeLeft(t.due_at, now).replace(/^./, (x) => x.toUpperCase())), lines: [`<b>${tgEsc(t.title)}</b>`, curso && `📚 <i>${tgEsc(curso)}</i>`, '', `⏰ Vence <b>${tgEsc(cuandoTexto(env, t.due_at))}</b>`], foot: 'Cuando la entregues, márcala como hecha.' }),
         kb: [[{ text: '✅ Ya la entregué', callback_data: `dr:${t.id}` }], [{ text: '⏰ +1 h', callback_data: `s:${t.id}:1h` }, { text: '⏰ +3 h', callback_data: `s:${t.id}:3h` }, { text: '🌙 Esta noche', callback_data: `s:${t.id}:night` }]],
       } });
       if (!r.ok) for (const x of thresholds.filter((x) => x >= h)) await unmarkSent(env, `task:${t.id}:${x}`);
@@ -205,7 +217,7 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
   }
 
   // Novedades de Rumbo (se anuncian una sola vez por versión)
-  try { await announceRelease(env); } catch (e) { log.push('Novedades: ' + (e as Error).message); }
+  if (hourly) try { await announceRelease(env); } catch (e) { log.push('Novedades: ' + (e as Error).message); }
 
   // Hora de estudio: a la hora que elegiste, lo que te toca estudiar hoy (lo que vence pronto).
   const studyHour = Number(s.study_hour || 19);
@@ -216,6 +228,17 @@ async function runForUser(env: Env, syncNow: boolean, backupError?: string): Pro
       const lines = todo.map((t) => { const c = courseLabel(t.course_name, t.course); return `• *${t.title}*${c ? ` _(${c})_` : ''}\n   ${t.due_at < now ? '⚠️ atrasada' : '⏰ vence ' + cuandoTexto(env, t.due_at)}`; });
       const r = await sendToMe(env, blocks('📚 *Hora de estudiar*', 'Esto es lo que vence pronto:', lines.join('\n'), '💡 _Abre la tarea y toca «Estudiar con IA»: te arma un plan y tarjetas para repasar._'), { title: `📚 Hora de estudiar: ${todo.length === 1 ? todo[0].title : todo.length + ' tareas'}`, pushBody: todo.map((t) => `• ${t.title} · ${t.due_at < now ? 'atrasada' : 'vence ' + cuandoTexto(env, t.due_at)}`).join('\n'), tag: 'study', url: todo.length === 1 ? `/#tareas/${todo[0].id}` : '/#tareas', type: 'tareas' });
       log.push(`Hora de estudio: ${r.ok ? 'avisada' : r.error}`);
+    }
+  }
+
+  // Repaso del día: fichas vencidas (a la hora de estudio, una vez al día)
+  if (s.study_enabled !== '0' && local.getUTCHours() >= studyHour && local.getUTCHours() < 23) {
+    const due = (await env.DB.prepare('SELECT COUNT(*) AS n FROM cards WHERE user_id = ? AND due_at <= ?').bind(env.UID, now).first<{ n: number }>())?.n ?? 0;
+    if (due > 0 && await markSent(env, `fichas:${today}`)) {
+      const hoy = Math.min(due, 20);
+      const r = await sendToMe(env, blocks('🃏 *Repaso del día*', `Repasa *${hoy}* ficha${hoy > 1 ? 's' : ''} hoy${due > hoy ? ` (tienes ${due} pendientes)` : ''}.`, '_Cinco minutos hoy valen más que dos horas la noche antes del examen._'),
+        { title: '🃏 Fichas para repasar', pushBody: `Repasa ${hoy} fichas hoy`, tag: 'fichas', url: '/#apuntes', type: 'avisos' });
+      log.push(`Repaso de fichas: ${r.ok ? 'avisado' : r.error}`);
     }
   }
 

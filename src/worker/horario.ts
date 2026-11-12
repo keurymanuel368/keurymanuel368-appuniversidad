@@ -199,7 +199,14 @@ export async function classAlerts(env: Env): Promise<string[]> {
     if (inMin <= 0 || inMin > lead + 14) continue;
     if (!(await markSent(env, `clase:${today}:${k.crn}:${k.start_min}`))) continue;
     const where = [k.building, k.room].filter(Boolean).join(' · ');
-    const r = await sendToMe(env, `🎓 *${k.title}* empieza en ${inMin} min (${h12(k.start_min)})${where ? `\n📍 ${where}` : ''}`, {
+    // Lo que viste la última vez en esa materia (de tus clases en vivo ya explicadas)
+    let last = '';
+    try {
+      const row = await env.DB.prepare(`SELECT notes FROM class_sessions WHERE user_id = ? AND status = 'ready' AND lower(course) = lower(?) ORDER BY started_at DESC LIMIT 1`).bind(env.UID, k.title).first<{ notes: string }>();
+      const temas = row ? (JSON.parse(row.notes) as { temas?: string[] }).temas : undefined;
+      if (temas?.length) last = `\n📚 La última vez viste: ${temas.slice(0, 3).join(', ')}`;
+    } catch { /* sin clases guardadas */ }
+    const r = await sendToMe(env, `🎓 *${k.title}* empieza en ${inMin} min (${h12(k.start_min)})${where ? `\n📍 ${where}` : ''}${last}`, {
       title: `🎓 ${k.title} · en ${inMin} min`, pushBody: `${h12(k.start_min)} – ${h12(k.end_min)}${where ? ' · ' + where : ''}`, tag: `clase-${k.crn}`, url: '/#horario', type: 'clases',
     });
     log.push(`Clase ${k.crn}: ${r.ok ? 'avisada' : r.error}`);

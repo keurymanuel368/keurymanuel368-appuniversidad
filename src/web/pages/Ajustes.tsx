@@ -369,6 +369,23 @@ function BackupCard() {
 }
 
 /** Motores de IA gratis en cadena: si uno se agota, sigue el siguiente. */
+function DbUsageCard() {
+  const u = useLoad(() => api<{ read: number; limit: number; saver: boolean }>('/usage'));
+  const d = u.data;
+  if (!d) return null;
+  const pct = Math.min(100, (d.read / d.limit) * 100);
+  return (
+    <div className="toggle">
+      <span className="set-ic blue"><Icon name="sync" size={18} /></span>
+      <div className="t">
+        <b>Base de datos de hoy</b>
+        <span>{Math.round(d.read / 1000).toLocaleString('es-DO')} mil de {(d.limit / 1e6).toLocaleString('es-DO')} millones de lecturas gratis{d.saver ? ' · modo ahorro activo' : ''}. Se reinicia a las 8 p. m.</span>
+        <div className="vs-bar"><i style={{ width: `${pct}%` }} /></div>
+      </div>
+    </div>
+  );
+}
+
 function AiEnginesCard({ engines }: { engines: string[] }) {
   const [help, setHelp] = useState(false);
   const [test, setTest] = useState<{ engine: string; ok: boolean; ms: number; detail: string }[] | null>(null);
@@ -753,6 +770,7 @@ export function Ajustes({ onLogout }: { onLogout: () => void }) {
                 <Status ok text="Listo" />
               </div>
               {admin && <AiEnginesCard engines={st.ai.engines} />}
+              {admin && <DbUsageCard />}
             </div>
           </Block>
         </>}

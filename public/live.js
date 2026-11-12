@@ -103,8 +103,9 @@
   var ws = null, retry = 0, timer = null, pingT = null, last = 0;
   function refresh(src) {
     try { navigator.serviceWorker && navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage('api-dirty'); } catch (e) {}
+    if (document.visibilityState === 'hidden') return;
     var now = Date.now();
-    if (now - last < 700) return;
+    if (now - last < 6000) return;
     last = now;
     ['rumbo:live', 'rumbo:badges', 'rumbo:grades'].forEach(function (n) { window.dispatchEvent(new Event(n)); });
     if (src === 'telegram') toast('✨ Actualizado desde Telegram');

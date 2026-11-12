@@ -18,15 +18,32 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   study_hour: '19', study_enabled: '1', achievements_seen: '', notify_plan: '1', plan_hour: '18',
 };
 
+// Memoria: dentro de una misma petición los ajustes se leen una sola vez; los del sistema, además, se guardan 2 minutos.
+const memo = new WeakMap<Env, Record<string, string>>();
+let globals: { at: number; rows: Record<string, string> } | null = null;
+
+async function globalSettings(env: Env): Promise<Record<string, string>> {
+  if (globals && Date.now() - globals.at < 120_000) return globals.rows;
+  const { results } = await env.DB.prepare(`SELECT key, value FROM settings WHERE key NOT LIKE 'u%:%'`).all<{ key: string; value: string }>();
+  const rows: Record<string, string> = {};
+  for (const r of results) if (isGlobal(r.key)) rows[r.key] = r.value;
+  globals = { at: Date.now(), rows };
+  return rows;
+}
+
 export async function getSettings(env: Env): Promise<Record<string, string>> {
+  const hit = memo.get(env);
+  if (hit) return { ...hit };
   const p = prefix(env);
-  const { results } = await env.DB.prepare(`SELECT key, value FROM settings WHERE substr(key, 1, ?) = ? OR key NOT LIKE 'u%:%'`).bind(p.length, p).all<{ key: string; value: string }>();
-  const out: Record<string, string> = {};
-  for (const r of results) {
-    if (r.key.startsWith(p)) out[r.key.slice(p.length)] = r.value;
-    else if (isGlobal(r.key)) out[r.key] = r.value;
-  }
-  return out;
+  const hi = p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1); // 'u1:' → 'u1;' (rango por índice, sin recorrer toda la tabla)
+  const [mine, glob] = await Promise.all([
+    env.DB.prepare('SELECT key, value FROM settings WHERE key >= ? AND key < ?').bind(p, hi).all<{ key: string; value: string }>(),
+    globalSettings(env),
+  ]);
+  const out: Record<string, string> = { ...glob };
+  for (const r of mine.results) out[r.key.slice(p.length)] = r.value;
+  memo.set(env, out);
+  return { ...out };
 }
 
 export async function getSetting(env: Env, key: string, fallback = ''): Promise<string> {
@@ -35,6 +52,7 @@ export async function getSetting(env: Env, key: string, fallback = ''): Promise<
 }
 
 export async function setSetting(env: Env, key: string, value: string): Promise<void> {
+  memo.delete(env); globals = null;
   await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(fullKey(env, key), value).run();
 }
 

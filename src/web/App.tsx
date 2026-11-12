@@ -1,4 +1,4 @@
-import { Suspense, lazy, startTransition, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Suspense, lazy, startTransition, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { api, ApiError, type Course } from './api';
 import { Icon } from './icons';
 import { Modal, SyncBar, TaskModal, Toaster, clearLoadCache, haptic, toast } from './components';
@@ -21,6 +21,7 @@ const Avisos = lazy(() => import('./pages/Avisos').then((m) => ({ default: m.Avi
 const Conectar = lazy(() => import('./pages/Conectar').then((m) => ({ default: m.Conectar })));
 const Companeros = lazy(() => import('./pages/Companeros').then((m) => ({ default: m.Companeros })));
 import { Buddy } from './Buddy';
+import { getLive, subscribeLive } from './clasesLive';
 
 const PAGES: { id: string; label: string; icon: string; hint: string; admin?: boolean }[] = [
   { id: 'inicio', label: 'Inicio', icon: 'home', hint: 'Tu día de un vistazo' },
@@ -40,6 +41,8 @@ const PAGES: { id: string; label: string; icon: string; hint: string; admin?: bo
 // Barra inferior en móvil: dos a cada lado del botón central del asistente.
 const TABS_LEFT = ['inicio', 'tareas'];
 const TABS_RIGHT = ['asignaturas'];
+const RAIL_TOP = ['inicio', 'tareas', 'asignaturas', 'horario'];
+const RAIL_BOTTOM = ['apuntes', 'pensum', 'pagos', 'avisos', 'ajustes'];
 const IN_TABS = [...TABS_LEFT, ...TABS_RIGHT, 'asistente']; // el asistente va en el botón central
 
 function currentPage() {
@@ -204,6 +207,15 @@ export function App() {
     );
   };
 
+  const railItem = (id: string) => {
+    const p = PAGES.find((x) => x.id === id)!;
+    return (
+      <button key={id} className={page === id ? 'active' : ''} onClick={() => go(id)} aria-current={page === id ? 'page' : undefined}>
+        <span className="nv-ic"><Icon name={p.icon} size={22} />{badgeFor(id) > 0 && <span className="nav-count num">{badgeFor(id)}</span>}</span><span className="nv-lb">{p.label}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="shell">
       <a className="skip-link" href="#contenido" onClick={(e) => { e.preventDefault(); document.getElementById('contenido')?.focus(); }}>Saltar al contenido</a>
@@ -212,18 +224,18 @@ export function App() {
           <div className="brand-mark"><Icon name="compass" size={22} style={{ strokeWidth: 2.2 }} /></div>
           <div className="brand-txt"><span className="brand-name">Rumbo</span><span className="brand-sub">BY DEXA</span></div>
         </div>
-        <button className="btn primary block" onClick={openNew}><Icon name="plus" size={18} />Nueva tarea</button>
+        <button className="rail-new" onClick={openNew} aria-label="Nueva tarea" title="Nueva tarea"><Icon name="plus" size={20} /></button>
         <nav className="nav" aria-label="Navegación principal">
-          {visiblePages().map((p) => <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => go(p.id)} aria-current={page === p.id ? 'page' : undefined}><Icon name={p.icon} />{p.label}{badgeFor(p.id) > 0 && <span className="nav-count num">{badgeFor(p.id)}</span>}</button>)}
+          {RAIL_TOP.map(railItem)}
+          <button className={`rail-orb ${page === 'asistente' ? 'on' : ''}`} onClick={() => go('asistente')} aria-label="Rumbo IA" aria-current={page === 'asistente' ? 'page' : undefined}>
+            <span className="orb"><Icon name="compass" size={30} style={{ strokeWidth: 2 }} /></span><span className="orb-lb">Rumbo IA</span>
+          </button>
+          {RAIL_BOTTOM.map(railItem)}
+          <button onClick={() => { haptic(5); setMore(true); }} aria-haspopup="dialog"><Icon name="grid" /><span className="nv-lb">Más</span></button>
         </nav>
-        <div className="side-card">
-          <span className="side-ic"><Icon name="spark" size={18} /></span>
-          <b>Pregúntale a Rumbo</b>
-          <span>“¿Cuánto saqué en el foro?”, “¿quién es mi facilitador?” o “¿qué me falta?”.</span>
-          <button className="btn white sm" onClick={() => go('asistente')}>Probar aquí</button>
-        </div>
       </aside>
 
+      <LiveBanner page={page} go={go} />
       <main className="main" id="contenido" tabIndex={-1} aria-label={PAGES.find((p) => p.id === page)?.label}>
         <div className="page" key={page + ':' + version}>
           <Suspense fallback={<PageLoading />}>
@@ -250,7 +262,7 @@ export function App() {
           style={{ ['--i' as string]: page === 'inicio' ? 0 : page === 'tareas' ? 1 : page === 'asistente' ? 2 : page === 'asignaturas' ? 3 : 4 }} />
         {TABS_LEFT.map(tab)}
         <button className={`fab ${page === 'asistente' ? 'on' : ''}`} onClick={() => go('asistente')} aria-label="Asistente" aria-current={page === 'asistente' ? 'page' : undefined}>
-          <Icon name="spark" size={26} style={{ strokeWidth: 2 }} />
+          <Icon name="compass" size={28} style={{ strokeWidth: 2 }} />
         </button>
         {TABS_RIGHT.map(tab)}
         <button className={!IN_TABS.includes(page) ? 'active' : ''} onClick={() => { haptic(5); setMore(true); }} aria-haspopup="dialog" aria-current={!IN_TABS.includes(page) ? 'page' : undefined}>
@@ -436,5 +448,18 @@ function PageLoading() {
       <div className="sk" style={{ height: 90, borderRadius: 20 }} />
       <div className="sk" style={{ height: 90, borderRadius: 20 }} />
     </div>
+  );
+}
+
+
+/** Mientras se escucha una clase en vivo, desde cualquier pantalla hay un aviso para volver a ella. */
+function LiveBanner({ page, go }: { page: string; go: (p: string) => void }) {
+  const s = useSyncExternalStore(subscribeLive, getLive);
+  if (s.phase === 'idle' || page === 'apuntes') return null;
+  return (
+    <button className="live-banner" onClick={() => go('apuntes')} aria-label="Volver a la clase en vivo">
+      <span className="live-dot" aria-hidden="true" />
+      <span>{s.phase === 'ending' ? 'Terminando la clase…' : `Escuchando · ${s.title}`}</span><b>Volver</b>
+    </button>
   );
 }
