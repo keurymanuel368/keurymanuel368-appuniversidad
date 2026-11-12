@@ -177,3 +177,6 @@ h1, h2, h3 { text-wrap: balance; }
   body .shell .nav button:hover:not(.active) { background: rgba(255, 255, 255, .07) !important; color: #fff !important; }
   body .shell .nav button.rail-orb { color: #fff !important; background: none !important; }
 }
+
+/* La barra mini es fija: la animación de entrada de .page > * la dejaba siempre visible */
+.page > .mini-bar { animation: none !important; }

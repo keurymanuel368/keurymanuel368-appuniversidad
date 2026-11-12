@@ -288,3 +288,18 @@ body .rbx .tj{padding:22px;border-radius:28px;background:var(--card);border:0;bo
 /* Calendario del mes: celdas cuadradas del ancho de la tarjeta */
 .rbx .mgd{aspect-ratio:1/1;display:flex !important;flex-direction:column;align-items:center;justify-content:center;padding:0 !important;gap:2px;width:100%;min-height:0}
 @media (max-width:900px){ .rbx .mgd{border-radius:11px !important;font-size:13px} }
+
+/* Cuadernos: dos por fila en el móvil */
+@media (max-width:900px){
+  .rbx .nb-shelf{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 16px;padding:8px 8px 24px}
+  .rbx .nb-label b{font-size:20px}
+  .rbx .nb-cover.nb-new{height:auto;aspect-ratio:3/4}
+}
+.rbx .hide-m{display:inline}
+@media (max-width:900px){.rbx .hide-m{display:none}}
+@media (max-width:900px){
+  .rbx .nb-label{top:26%;left:24px;right:12px;padding:7px 9px 6px}
+  .rbx .nb-label b{font-size:17px;-webkit-line-clamp:3}
+  .rbx .nb-meta{left:24px;bottom:10px;gap:4px}
+  .rbx .nb-meta i{font-size:10px;padding:2px 7px}
+}

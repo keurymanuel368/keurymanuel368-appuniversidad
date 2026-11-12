@@ -140,7 +140,7 @@ export function Tareas() {
             ) : (filter === 'plan' && !q.trim() ? groups : groups.filter((g) => g.items.length)).map((g) => (
               <section className={`card ${g.key === 'v' ? 'vencidas' : ''}`} key={g.key} style={g.tone === 'red' ? { borderLeft: '8px solid var(--rose)' } : undefined}>
                 <div className="head">
-                  <h3 style={g.tone === 'red' ? { color: 'var(--rose)' } : undefined}>{g.color && <span className="dot" style={{ background: g.color, display: 'inline-block', marginRight: 8 }} />}{g.key === 'v' ? 'Vencidas · hazlas primero' : g.title}</h3>
+                  <h3 style={g.tone === 'red' ? { color: 'var(--rose)' } : undefined}>{g.color && <span className="dot" style={{ background: g.color, display: 'inline-block', marginRight: 8 }} />}{g.key === 'v' ? <>Vencidas<span className="hide-m"> · hazlas primero</span></> : g.title}</h3>
                   <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {g.extra && <small style={{ color: 'var(--muted)', fontWeight: 700 }}>{g.extra}</small>}
                     {g.key === 'v' && g.items.length > 1 && <MarkAll items={g.items} onDone={() => { tasks.reload(); window.dispatchEvent(new Event('rumbo:badges')); }} />}
