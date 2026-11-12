@@ -131,3 +131,19 @@
 .rbx .eb{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cobalt)}
 .rbx .pay-hero,.rbx .acct-hero{border-radius:34px}
 .rbx .pay-config,.rbx .acct-period{border-radius:26px}
+
+/* Arreglos de desborde y espacios vacíos */
+.rbx .grid2{align-items:start}
+.rbx .col{min-width:0}
+.rbx .card,.rbx .hero{height:auto;min-height:0;align-self:start;max-width:100%}
+.rbx .hero h2,.rbx .hero p,.rbx .card h3,.rbx .card p{overflow-wrap:anywhere;word-break:normal}
+.rbx .hero{padding:26px}
+.rbx .row{flex-wrap:wrap;row-gap:8px}
+.rbx .row .t{flex:1 1 200px}
+.rbx .row .chip{margin-left:auto}
+.rbx .row .t + .chip{margin-left:0}
+.rbx .head{margin-bottom:10px;flex-wrap:wrap}
+.rbx .tile{min-height:0;justify-content:flex-start}
+.rbx .hand{max-width:100%;overflow:hidden}
+.rbx .goals,.rbx .ea,.rbx .goals-empty{height:auto;min-height:0}
+@media (max-width:900px){.rbx .hero{padding:20px}.rbx .row .chip{margin-left:0}}
