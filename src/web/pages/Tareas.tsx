@@ -138,7 +138,7 @@ export function Tareas() {
                 title={q.trim() ? 'Sin resultados' : day ? 'Nada vence ese día' : filter === 'hechas' ? 'Aún no hay entregas' : 'Todo al día'}
                 text={day ? 'Toca el día otra vez para ver todo.' : filter === 'hechas' ? 'Pulsa sincronizar para traer del EVA lo que ya entregaste.' : 'No hay tareas aquí. Toca «Nueva tarea» para agregar una.'} /></div>
             ) : (filter === 'plan' && !q.trim() ? groups : groups.filter((g) => g.items.length)).map((g) => (
-              <section className="card" key={g.key} style={g.tone === 'red' ? { borderLeft: '8px solid var(--rose)' } : undefined}>
+              <section className={`card ${g.key === 'v' ? 'vencidas' : ''}`} key={g.key} style={g.tone === 'red' ? { borderLeft: '8px solid var(--rose)' } : undefined}>
                 <div className="head">
                   <h3 style={g.tone === 'red' ? { color: 'var(--rose)' } : undefined}>{g.color && <span className="dot" style={{ background: g.color, display: 'inline-block', marginRight: 8 }} />}{g.key === 'v' ? 'Vencidas · hazlas primero' : g.title}</h3>
                   <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

@@ -31,7 +31,7 @@ export function RbTask({ t, onToggle, onOpen }: { t: Task; onToggle: (t: Task) =
       </button>
       {late && <span className="chip c-rose">Atrasada</span>}
       {soon && <span className="chip c-orange">{whenLabel(t.due_at)}</span>}
-      {!done && <button className="chip c-blue" onClick={() => onOpen(t)}>Hacer con IA</button>}
+      {!done && <button className="chip c-blue ia-chip" onClick={() => onOpen(t)}><span className="ia-long">Hacer con </span>IA</button>}
     </li>
   );
 }

@@ -188,3 +188,38 @@
   .rbx .tile span{font-size:12.5px}
   .rbx .pay-hero .amount{font-size:44px}
 }
+
+/* ===== Móvil exacto al lienzo ===== */
+.rbx .ia-long{display:inline}
+@media (max-width:900px){
+  .rbx{gap:14px}
+  .rbx .hero{display:block !important;min-height:0 !important;height:auto !important;padding:18px 18px 20px;border-radius:28px}
+  .rbx .hero-row{flex-wrap:nowrap !important;gap:12px !important;align-items:center}
+  .rbx .hero-copy{flex:1 1 0 !important;gap:8px !important;min-width:0}
+  .rbx .hero-copy .chip{display:none}
+  .rbx .hero-copy h2{font-size:21px !important;line-height:1.08;padding:0 !important}
+  .rbx .hero-copy p{font-size:12.5px !important;line-height:1.35;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .rbx .hero-copy > div{margin-top:2px !important;gap:8px !important}
+  .rbx .hero-copy .btn{padding:9px 14px;font-size:12.5px}
+  .rbx .hero-copy .btn + .btn{display:none}
+  .rbx .hero .ringsvg{zoom:1 !important;width:92px !important;height:92px !important;flex:none}
+  .rbx .hero .ringsvg .mid{font-size:20px !important}
+  .rbx .hero .tick{width:200px;height:200px;right:-70px;top:-70px}
+  .rbx .tile{padding:12px 14px;border-radius:20px;gap:0}
+  .rbx .tile b{font-size:30px}
+  .rbx .card{padding:14px 16px;border-radius:24px;gap:0}
+  .rbx .card .head{margin-bottom:6px}
+  .rbx .row{padding:10px 0}
+  .rbx .row b{font-size:14px}
+  .rbx .row small{font-size:11.5px}
+  .rbx .ia-long{display:none}
+  .rbx .row .chip.c-rose + .ia-chip,.rbx .row .chip.c-orange + .ia-chip{display:none}
+  .rbx .vencidas{border-left:5px solid var(--rose)}
+  .rbx .vencidas .chip.c-rose{display:none}
+  .rbx .vencidas .chip.c-rose + .ia-chip{display:inline-flex}
+  .rbx .row .chip.ia-chip{padding:3px 9px}
+  .rbx .seg{padding:3px}
+  .rbx .seg button{padding:7px 12px;font-size:12.5px}
+  .rbx .top h1{font-size:26px}
+  .rbx .top .eb{font-size:10.5px}
+}

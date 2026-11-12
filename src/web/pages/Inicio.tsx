@@ -94,8 +94,8 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         <div className="col">
           <section className="hero">
             <div className="tick" />
-            <div style={{ display: 'flex', gap: 28, alignItems: 'center', position: 'relative', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="hero-row" style={{ display: 'flex', gap: 28, alignItems: 'center', position: 'relative', flexWrap: 'wrap' }}>
+              <div className="hero-copy" style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <span className="chip" style={{ alignSelf: 'flex-start' }}>Hoy</span>
                 <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(26px,3.2vw,38px)', lineHeight: 1.05, letterSpacing: '-.025em', fontWeight: 800 }}>{heroTitle}</h2>
                 <p style={{ color: '#CFD8FF', fontSize: 15.5, maxWidth: 420 }}>
