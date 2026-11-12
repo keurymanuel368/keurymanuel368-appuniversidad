@@ -877,23 +877,31 @@ export function Empty({ icon, title, text, children }: { icon: string; title: st
 
 /** Datos ya vistos: al volver a una pantalla se pinta al instante y se refresca por detrás (nada de pantallas en blanco). */
 const loadCache = new Map<string, unknown>();
-export function clearLoadCache() { loadCache.clear(); }
+// Copia en el teléfono: al abrir la app (o sin internet) las pantallas se pintan al instante con lo último visto.
+const LC = 'rumbo-lc:';
+const lcHash = (s: string) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+function lcGet(key: string): unknown { try { const v = localStorage.getItem(LC + lcHash(key)); return v ? JSON.parse(v) : undefined; } catch { return undefined; } }
+function lcSet(key: string, v: unknown) { try { const s = JSON.stringify(v); if (s.length < 300000) localStorage.setItem(LC + lcHash(key), s); } catch { /* sin espacio */ } }
+export function clearLoadCache() {
+  loadCache.clear();
+  try { Object.keys(localStorage).filter((k) => k.startsWith(LC)).forEach((k) => localStorage.removeItem(k)); } catch { /* sin almacenamiento */ }
+}
 
 export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const key = fn.toString() + '|' + JSON.stringify(deps);
-  const [data, setDataRaw] = useState<T | null>(() => (loadCache.get(key) as T | undefined) ?? null);
+  const [data, setDataRaw] = useState<T | null>(() => ((loadCache.get(key) ?? lcGet(key)) as T | undefined) ?? null);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
   const setData = (d: T | null | ((prev: T | null) => T | null)) => setDataRaw((prev) => {
     const next = typeof d === 'function' ? (d as (p: T | null) => T | null)(prev) : d;
-    if (next !== null) loadCache.set(key, next);
+    if (next !== null) { loadCache.set(key, next); lcSet(key, next); }
     return next;
   });
   useEffect(() => {
     let alive = true;
-    const cached = loadCache.get(key) as T | undefined;
+    const cached = (loadCache.get(key) ?? lcGet(key)) as T | undefined;
     if (cached !== undefined) setDataRaw(cached);
-    fn().then((d) => { loadCache.set(key, d); if (alive) { setDataRaw(d); setError(''); } }).catch((e) => alive && setError(e.message));
+    fn().then((d) => { loadCache.set(key, d); lcSet(key, d); if (alive) { setDataRaw(d); setError(''); } }).catch((e) => { if (alive && cached === undefined) setError(e.message); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);

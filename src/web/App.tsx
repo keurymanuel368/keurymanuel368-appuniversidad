@@ -248,10 +248,10 @@ export function App() {
           {page === 'pagos' && <Pagos />}
           {page === 'avisos' && <Avisos />}
           {page === 'asistente' && <Asistente />}
-          {page === 'ajustes' && <Ajustes onLogout={logout} />}
-          {page === 'ayuda' && <Ayuda go={go} />}
-          {page === 'conectar' && <Conectar />}
-          {page === 'companeros' && (isAdmin() ? <Companeros /> : null)}
+          {page === 'ajustes' && <div className="rbx"><Ajustes onLogout={logout} /></div>}
+          {page === 'ayuda' && <div className="rbx"><Ayuda go={go} /></div>}
+          {page === 'conectar' && <div className="rbx"><Conectar /></div>}
+          {page === 'companeros' && (isAdmin() ? <div className="rbx"><Companeros /></div> : null)}
           </Suspense>
         </div>
       </main>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, type Course, type Task } from '../api';
 import { CountUp, Empty, PageHead, PullIndicator, Segmented, Skeleton, TaskModal, TaskRow, TaskSheet, WeekStrip, fmtGrade, haptic, runSync, setActivityIgnored, syncToast, toast, toggleTask, usePullToRefresh, useLoad } from '../components';
 import { Icon } from '../icons';
-import { RbRing, RbTask } from '../rb';
+import { GestureHint, RbRing, RbTask } from '../rb';
 
 type Filter = 'pendientes' | 'plan' | 'mes' | 'hechas' | 'todas';
 const dayKey = (sec: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo' }).format(new Date(sec * 1000));
@@ -114,6 +114,7 @@ export function Tareas() {
         )}
       </div>
 
+      {filter === 'pendientes' && tasks.data && list.length > 0 && <GestureHint />}
       {filter === 'mes' && tasks.data && <MonthView tasks={list} onOpen={setOpen} onToggle={toggle} />}
       {filter !== 'mes' && tasks.data && list.length > 5 && (
         <label className="search" style={{ width: '100%', maxWidth: 420 }}><Icon name="search" size={18} /><span className="sr-only">Buscar tareas</span>

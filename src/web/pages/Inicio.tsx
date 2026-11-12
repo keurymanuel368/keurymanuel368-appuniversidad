@@ -6,7 +6,7 @@ import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
 import { TodayTimeline } from '../Today';
 import { TermJourney } from '../Journey';
-import { RbRing, RbTask, RbTop } from '../rb';
+import { GestureHint, RbRing, RbTask, RbTop } from '../rb';
 
 function greeting() {
   const h = Number(new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', hour: 'numeric', hour12: false }).format(new Date()));
@@ -116,6 +116,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
             <button className="tile" style={{ background: 'var(--mintsoft)', color: 'var(--mint)', border: 0, textAlign: 'left', cursor: 'pointer' }} onClick={() => go('tareas')}><b className="num">{d.counts.week}</b><span>Esta semana</span></button>
           </section>
 
+          <GestureHint />
           <section className="card">
             <div className="head"><h3>Para hacer primero</h3><button className="link" onClick={() => go('tareas')}>Ver todas</button></div>
             {todo.length === 0 ? <p style={{ color: 'var(--muted)' }}>Nada pendiente por ahora. ¡Estás al día!</p> : <ul>{todo.map((t) => <RbTask key={t.id} t={t} onToggle={toggle} onOpen={setEditing} />)}</ul>}
@@ -152,6 +153,11 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         </div>
       </div>
 
+      <button className="btn b-line more-btn" style={{ background: 'var(--card)', alignSelf: 'center' }} onClick={() => { haptic(5); setMore((m) => !m); }} aria-expanded={more}>
+        {more ? 'Ver menos' : 'Ver más: asignaturas, notas, metas y logros'}<Icon name="chevron" size={16} style={{ transform: more ? 'rotate(-90deg)' : 'rotate(90deg)' }} />
+      </button>
+      {more && (
+        <>
       {d.courses.length > 0 && (
         <section className="card">
           <div className="head"><h3>Asignaturas</h3><button className="link" onClick={() => go('asignaturas')}>Notas</button></div>
@@ -189,6 +195,9 @@ export function Inicio({ go }: { go: (p: string) => void }) {
         <GoalsCard goals={d.goals || []} ids={d.goalIds || []} onChanged={reload} />
         <AchievementsCard />
       </section>
+
+        </>
+      )}
 
       {creating && <TaskModal task={{}} courses={d.courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); reload(); }} />}
       {editing && <TaskSheet task={editing} courses={d.courses} onClose={() => setEditing(null)} onChanged={() => { setEditing(null); reload(); }} />}

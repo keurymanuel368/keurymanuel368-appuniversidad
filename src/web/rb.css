@@ -303,3 +303,16 @@ body .rbx .tj{padding:22px;border-radius:28px;background:var(--card);border:0;bo
   .rbx .nb-meta{left:24px;bottom:10px;gap:4px}
   .rbx .nb-meta i{font-size:10px;padding:2px 7px}
 }
+
+/* Gestos en las filas de tareas */
+.rbx .row{touch-action:pan-y}
+.rbx .swbg{position:absolute;top:2px;bottom:2px;display:flex;align-items:center;font-style:normal;font-weight:800;font-size:12.5px;color:#fff;background:var(--cobalt);border-radius:14px;opacity:.55;overflow:hidden;white-space:nowrap;pointer-events:none}
+.rbx .swbg.r{right:100%;justify-content:flex-end;padding-right:14px;margin-right:6px}
+.rbx .swbg.l{left:100%;padding-left:14px;margin-left:6px;background:var(--orange)}
+.rbx .swbg.on{opacity:1}
+.rbx .gesto{background:var(--cobaltsoft);box-shadow:none}
+
+/* El componente Ring de la app usa la clase .ring con su propio dibujo: el estilo del lienzo no debe tapar su centro */
+.rbx .ring{background:none !important;border-radius:0}
+.rbx .ring::before{content:none !important}
+.rbx .ring span{color:inherit;font-family:inherit;font-weight:inherit;font-size:inherit}

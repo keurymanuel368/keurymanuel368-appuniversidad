@@ -10,6 +10,18 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 82,
+    date: '2026-11-12',
+    title: '✨ Rumbo más ágil',
+    items: [
+      'Inicio más corto en el teléfono: lo urgente arriba y el resto en «Ver más».',
+      'Gestos en las tareas: desliza a la derecha para marcar, a la izquierda para pasar a mañana, o mantén presionado para más opciones (con una pista la primera vez).',
+      'Abre más rápido: las pantallas se pintan al instante con lo último que viste, incluso sin internet.',
+      'El recorrido inicial termina en «Conectar mi EVA» si aún no lo conectaste.',
+      'Ajustes, Conexiones y Ayuda con el diseño nuevo.',
+    ],
+  },
+  {
     version: 81,
     date: '2026-11-11',
     title: '🧭 Rumbo completo con el diseño nuevo',

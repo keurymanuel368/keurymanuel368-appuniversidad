@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './icons';
 import { Mascot } from './Mascot';
 import { haptic, toast } from './components';
 import { enablePush } from './push';
+import { api } from './api';
 
 // Recorrido de bienvenida guiado por la mascota (se puede repetir desde Ajustes).
 const SLIDES: { mood: string; wave?: boolean; icon: string; kicker: string; title: string; text: string }[] = [
@@ -17,12 +18,16 @@ const SLIDES: { mood: string; wave?: boolean; icon: string; kicker: string; titl
 
 export function Welcome({ onDone }: { onDone: () => void }) {
   const [i, setI] = useState(0);
+  const [eva, setEva] = useState<boolean | null>(null);
+  useEffect(() => { api<{ setup?: { eva?: boolean } }>('/dashboard').then((d) => setEva(!!d.setup?.eva)).catch(() => setEva(null)); }, []);
   const track = useRef<HTMLDivElement>(null);
   const last = i === SLIDES.length - 1;
   const go = (n: number) => { haptic(6); track.current?.scrollTo({ left: n * track.current.clientWidth, behavior: 'smooth' }); };
   const finish = () => { try { localStorage.setItem('rumbo-welcome', '1'); } catch { /* sin almacenamiento */ } onDone(); };
+  const connect = () => { finish(); location.hash = 'conectar'; };
   async function activate() {
     try { await enablePush(); toast('¡Listo! Notificaciones activadas'); } catch (e) { toast((e as Error).message, 'err'); }
+    if (eva === false) location.hash = 'conectar';
     finish();
   }
   return createPortal(
@@ -41,10 +46,17 @@ export function Welcome({ onDone }: { onDone: () => void }) {
       <div className="welcome-dots" aria-label={`Paso ${i + 1} de ${SLIDES.length}`}>{SLIDES.map((_, n) => <i key={n} className={n === i ? 'on' : n < i ? 'past' : ''} />)}</div>
       <div className="welcome-actions">
         {last ? (
-          <>
-            <button className="auth-btn" onClick={activate}><Icon name="bell" size={19} />Activar notificaciones</button>
-            <button className="welcome-later" onClick={finish}>Ahora no</button>
-          </>
+          eva === false ? (
+            <>
+              <button className="auth-btn" onClick={connect}><Icon name="plug" size={19} />Conectar mi EVA</button>
+              <button className="welcome-later" onClick={activate}>Activar notificaciones primero</button>
+            </>
+          ) : (
+            <>
+              <button className="auth-btn" onClick={activate}><Icon name="bell" size={19} />Activar notificaciones</button>
+              <button className="welcome-later" onClick={finish}>Ahora no</button>
+            </>
+          )
         ) : <button className="auth-btn" onClick={() => go(i + 1)}>Siguiente<Icon name="chevron" size={20} style={{ strokeWidth: 2.4 }} /></button>}
       </div>
     </div>,

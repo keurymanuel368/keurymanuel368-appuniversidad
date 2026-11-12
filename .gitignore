@@ -13,3 +13,4 @@ android-widget/local.properties
 *.jks
 hs_err_pid*.log
 replay_pid*.log
+visual-check/
