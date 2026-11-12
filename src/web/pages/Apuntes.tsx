@@ -6,6 +6,7 @@ import { TrabajosHechos } from '../TrabajoIA';
 import { Clases } from '../Clases';
 import { Cuadernos } from '../Cuadernos';
 import { Empty, Modal, PageHead, Segmented, Skeleton, confetti, haptic, toast, useLoad } from '../components';
+import { ExamenPlan } from '../ExamenPlan';
 import { Icon } from '../icons';
 
 type Note = { id: number; course: string | null; title: string; body: string; pinned: number; updated_at: number };
@@ -202,12 +203,12 @@ function Cards({ names }: { names: string[] }) {
 }
 
 export function Apuntes() {
-  type Tab = 'semana' | 'clases' | 'trabajos' | 'apuntes' | 'tarjetas';
-  const [tab, setTab] = useState<Tab>(() => { try { const v = localStorage.getItem('rumbo-estudio-tab'); if (v && ['semana', 'clases', 'trabajos', 'apuntes', 'tarjetas'].includes(v)) return v as Tab; } catch { /* sin almacenamiento */ } return 'semana'; });
+  type Tab = 'semana' | 'examen' | 'clases' | 'trabajos' | 'apuntes' | 'tarjetas';
+  const [tab, setTab] = useState<Tab>(() => { try { const v = localStorage.getItem('rumbo-estudio-tab'); if (v && ['semana', 'examen', 'clases', 'trabajos', 'apuntes', 'tarjetas'].includes(v)) return v as Tab; } catch { /* sin almacenamiento */ } return 'semana'; });
   useEffect(() => { try { localStorage.setItem('rumbo-estudio-tab', tab); } catch { /* sin almacenamiento */ } }, [tab]);
   const courses = useLoad(() => api<Course[]>('/courses'));
   const names = (courses.data || []).map((c) => c.name);
-  const TABS: { id: Tab; label: string }[] = [{ id: 'semana', label: 'Semana' }, { id: 'clases', label: 'Clases' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Cuadernos' }, { id: 'tarjetas', label: 'Tarjetas' }];
+  const TABS: { id: Tab; label: string }[] = [{ id: 'semana', label: 'Semana' }, { id: 'examen', label: 'Examen' }, { id: 'clases', label: 'Clases' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Cuadernos' }, { id: 'tarjetas', label: 'Tarjetas' }];
   return (
     <div className="rbx">
       <header className="top">
@@ -217,7 +218,7 @@ export function Apuntes() {
           {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => { haptic(5); setTab(t.id); }}>{t.label}</button>)}
         </div>
       </header>
-      {tab === 'semana' ? <SemanaEficiente /> : tab === 'clases' ? <Clases /> : tab === 'trabajos' ? <TrabajosHechos /> : tab === 'apuntes' ? <Cuadernos names={names} Editor={NoteEditor} List={Notes} onReview={() => setTab('tarjetas')} /> : <Cards names={names} />}
+      {tab === 'semana' ? <SemanaEficiente /> : tab === 'examen' ? <ExamenPlan /> : tab === 'clases' ? <Clases /> : tab === 'trabajos' ? <TrabajosHechos /> : tab === 'apuntes' ? <Cuadernos names={names} Editor={NoteEditor} List={Notes} onReview={() => setTab('tarjetas')} /> : <Cards names={names} />}
     </div>
   );
 }

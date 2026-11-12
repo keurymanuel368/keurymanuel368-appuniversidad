@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 83,
+    date: '2026-11-12',
+    title: '🎯 Plan de examen',
+    items: [
+      'Estudio → Examen: eliges el examen (los del DEA aparecen solos) o pones la fecha, y Rumbo arma tu calendario día por día con los temas de tu cuaderno.',
+      'Cada día: estudiar, repasar lo de ayer, practicar y, la víspera, repaso general y simulacro. Marcas lo que vas haciendo y ves tu avance.',
+      'Simulacro con 10 preguntas y respuestas hechas con tus cuadernos.',
+      'A la hora de estudio te aviso qué te toca hoy para tu examen.',
+    ],
+  },
+  {
     version: 82,
     date: '2026-11-12',
     title: '✨ Rumbo más ágil',
