@@ -260,3 +260,31 @@ body .rbx .seg button{min-height:0;flex:0 0 auto;white-space:nowrap}
   .rbx .top:has(> .seg),.rbx .top:has(.seg){flex-wrap:wrap}
   .rbx .top > .seg{order:5;flex:1 1 100%}
 }
+
+/* Las tarjetas ocupan todo el ancho de su columna */
+.rbx .col > *{align-self:stretch}
+.rbx .col > .card,.rbx .col > .hero{width:100%}
+
+/* El .card viejo era una columna: las tarjetas con display:flex en línea son filas */
+.rbx .card[style*="display: flex"]{flex-direction:row}
+
+/* PC: tarjetas y héroes ocupan todo el ancho; columnas vacías no ocupan lugar; pestañas con aire */
+.rbx > *{align-self:stretch}
+.rbx .card,.rbx .hero{align-self:stretch}
+.rbx .col:empty{display:none}
+.rbx .card .hand{overflow:visible}
+@media (min-width:901px){
+  body .rbx .seg button{padding:9px 18px;font-size:14px}
+}
+
+/* Recorrido del trimestre con el estilo del lienzo */
+body .rbx .tj{padding:22px;border-radius:28px;background:var(--card);border:0;box-shadow:0 1px 2px rgba(11,18,48,.05),0 18px 40px -26px rgba(11,18,48,.35)}
+.rbx .tj small{font-size:12px;letter-spacing:.1em;color:var(--cobalt)}
+.rbx .tj h3{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.02em}
+.rbx .tj .tj-left{background:var(--cobaltsoft);color:#1A3FD1;border-radius:99px;padding:5px 12px;font-weight:800;font-size:13px}
+.rbx .tj footer{color:var(--muted)}
+.rbx .tj footer b{color:var(--ink)}
+
+/* Calendario del mes: celdas cuadradas del ancho de la tarjeta */
+.rbx .mgd{aspect-ratio:1/1;display:flex !important;flex-direction:column;align-items:center;justify-content:center;padding:0 !important;gap:2px;width:100%;min-height:0}
+@media (max-width:900px){ .rbx .mgd{border-radius:11px !important;font-size:13px} }

@@ -168,3 +168,12 @@ h1, h2, h3 { text-wrap: balance; }
 @keyframes brujPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06) rotate(8deg); } }
 .page-loading { display: flex; flex-direction: column; gap: 16px; }
 .sk { border-radius: 24px; }
+
+/* El riel oscuro manda aunque el sistema pida menos transparencias */
+@media (min-width: 901px) { body .shell .sidebar { background: linear-gradient(180deg, #0C1233, #070C24) !important; border: 0; } }
+@media (min-width: 901px) {
+  body .shell .nav button { color: #A5B0E2 !important; }
+  body .shell .nav button.active { background: var(--blue) !important; color: #fff !important; box-shadow: 0 12px 26px -10px rgba(35, 80, 255, .95); }
+  body .shell .nav button:hover:not(.active) { background: rgba(255, 255, 255, .07) !important; color: #fff !important; }
+  body .shell .nav button.rail-orb { color: #fff !important; background: none !important; }
+}

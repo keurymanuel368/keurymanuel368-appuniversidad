@@ -237,7 +237,7 @@ function MonthView({ tasks, onOpen, onToggle }: { tasks: Task[]; onOpen: (t: Tas
             <h3 style={{ textTransform: 'capitalize' }}>{MONTHS[ym.m - 1]} {ym.y}</h3>
             <button className="pill-btn" style={{ width: 38, height: 38, boxShadow: 'none', background: 'var(--cobaltsoft)' }} onClick={() => move(1)} aria-label="Mes siguiente"><Icon name="chevron" size={18} /></button>
           </div>
-          <div role="grid" aria-label={`${MONTHS[ym.m - 1]} ${ym.y}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: 6, textAlign: 'center', fontSize: 13, fontWeight: 700 }}>
+          <div role="grid" aria-label={`${MONTHS[ym.m - 1]} ${ym.y}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: 5, textAlign: 'center', fontSize: 13, fontWeight: 700 }}>
             {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <span key={i} aria-hidden="true" style={{ color: 'var(--muted)' }}>{d}</span>)}
             {cells.map((k, i) => {
               if (!k) return <span key={i} />;
@@ -246,9 +246,9 @@ function MonthView({ tasks, onOpen, onToggle }: { tasks: Task[]; onOpen: (t: Tas
               const nClases = classesOn(k).length;
               const isSel = k === sel, isToday = k === today;
               return (
-                <button key={k} onClick={() => { haptic(4); setSel(k); }} aria-pressed={isSel}
+                <button key={k} className="mgd" onClick={() => { haptic(4); setSel(k); }} aria-pressed={isSel}
                   aria-label={`${Number(k.slice(8))} de ${MONTHS[ym.m - 1]}: ${list.length ? list.length + ' entrega' + (list.length > 1 ? 's' : '') : 'sin entregas'}${nClases ? `, ${nClases} clase${nClases > 1 ? 's' : ''}` : ''}`}
-                  style={{ padding: '9px 0', borderRadius: 12, border: 0, cursor: 'pointer', font: 'inherit', fontWeight: 700, position: 'relative', background: isSel ? 'var(--cobalt)' : isToday ? 'var(--cobaltsoft)' : late ? 'var(--rosesoft)' : list.length ? 'var(--orangesoft)' : 'none', color: isSel ? '#fff' : late ? 'var(--rose)' : list.length ? '#B04A00' : 'var(--ink)' }}>
+                  style={{ padding: '9px 0', borderRadius: 12, border: 0, cursor: 'pointer', font: 'inherit', fontWeight: 700, position: 'relative', background: isSel ? 'var(--cobalt)' : isToday ? 'var(--cobaltsoft)' : late ? 'var(--rosesoft)' : list.length ? 'var(--orangesoft)' : 'var(--bg)', color: isSel ? '#fff' : late ? 'var(--rose)' : list.length ? '#B04A00' : 'var(--ink)' }}>
                   <span className="num">{Number(k.slice(8))}</span>
                   <span style={{ display: 'flex', gap: 2, justifyContent: 'center', height: 5, marginTop: 2 }}>{nClases > 0 && <i style={{ width: 5, height: 5, borderRadius: 3, background: isSel ? '#fff' : 'var(--cobalt)' }} />}{list.slice(0, 3).map((t) => <i key={t.id} style={{ width: 5, height: 5, borderRadius: 3, background: t.course_color || 'var(--orange)', opacity: t.status === 'done' ? 0.4 : 1 }} />)}</span>
                 </button>

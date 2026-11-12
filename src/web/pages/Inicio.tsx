@@ -124,6 +124,7 @@ export function Inicio({ go }: { go: (p: string) => void }) {
 
         <div className="col">
           <TodayTimeline d={d} go={go} />
+          <TermJourney />
 
           <section className="card" style={{ background: 'var(--night)', color: '#fff', display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{ flex: 1 }}>
