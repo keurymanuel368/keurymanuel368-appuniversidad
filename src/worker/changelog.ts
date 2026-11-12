@@ -17,6 +17,7 @@ export const CHANGELOG: Release[] = [
       'Inicio, Tareas, Notas, Horario, Estudio, Avisos, Pagos y Pensum rehechos con el diseño de la brújula: tarjetas grandes, anillos de avance y listas limpias.',
       'Horario en cuadrícula con la línea de «ahora», semana eficiente por columnas y notas con el índice del trimestre en grande.',
       'Textos que ya no se montan: se acortan con puntos suspensivos.',
+      'Login y pantalla de carga nuevos: noche con brújula y bisel.',
     ],
   },
   {

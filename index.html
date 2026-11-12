@@ -52,6 +52,20 @@
       @keyframes bt-slide{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
       @keyframes bt-tick{0%,22%{transform:none}33%,55%{transform:translateY(-20px)}66%,88%{transform:translateY(-40px)}100%{transform:translateY(-60px)}}
       @keyframes bt-drift{to{transform:translate(8vmax,6vmax) scale(1.15)}}
+      /* Rediseño Brújula: pantalla de carga nocturna con bisel */
+      .boot,:root[data-mode=dark] .boot{background:radial-gradient(130% 150% at 0% 0%,#3463FF 0%,#1B2DA8 42%,#0B1140 100%);color:#fff}
+      .bt-aura i{mix-blend-mode:screen;opacity:.22}
+      .bt-aura i:nth-child(2){background:#FF7A1A;opacity:.14}
+      .bt-logo{width:104px;height:104px;border-radius:50%;box-shadow:0 0 0 7px rgba(255,255,255,.1),0 0 0 15px rgba(255,255,255,.06),0 26px 50px -14px rgba(0,0,0,.6)}
+      .bt-logo:before{content:"";position:absolute;inset:-26px;border-radius:50%;background:repeating-conic-gradient(rgba(255,255,255,.55) 0 .8deg,transparent .8deg 6deg);-webkit-mask:radial-gradient(circle,transparent 66%,#000 67%,#000 76%,transparent 77%);mask:radial-gradient(circle,transparent 66%,#000 67%,#000 76%,transparent 77%);animation:bt-spin 14s linear infinite}
+      .bt-logo{overflow:visible}.bt-logo svg{border-radius:50%}
+      .bt-word{font-family:Sora,Inter,system-ui,sans-serif;font-weight:800;color:#fff}
+      .bt-hi,:root[data-mode=dark] .bt-hi{color:#CFD8FF}
+      .bt-tip{color:#9FB0E8}
+      .bt-bar{background:rgba(255,255,255,.18)}
+      .bt-bar i{background:linear-gradient(90deg,#8FA8FF,#FF7A1A)}
+      .bt-foot{color:#8FA0DA}
+      @keyframes bt-spin{to{transform:rotate(360deg)}}
       @media (prefers-reduced-motion:reduce){.boot *,.boot{animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important}}
     </style>
     <script src="/live.js"></script>
