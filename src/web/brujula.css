@@ -197,3 +197,17 @@ h1, h2, h3 { text-wrap: balance; }
 .welcome-dots i.on { background: var(--orange); width: 26px; }
 .welcome-actions .auth-btn { background: #fff !important; color: #0B1140 !important; border-radius: 99px; font-family: var(--display); font-weight: 800; }
 @media (prefers-reduced-motion: reduce) { .wl-bezel { animation: none; } }
+
+/* Reglas del trabajo (ficha de la tarea) */
+.work-rules{background:var(--surface-2,#F5F8FF);border-radius:20px;padding:12px 14px;margin:10px 0;font-size:14px}
+.work-rules summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;list-style:none}
+.work-rules summary::-webkit-details-marker{display:none}
+.work-rules summary small{color:var(--muted);font-size:12px;flex-basis:100%}
+.work-rules ul{list-style:none;margin:6px 0 0;padding:0}
+.work-rules .rrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line-2)}
+.work-rules .rrow:first-child{border-top:0}
+.work-rules .rrow > div{flex:1;min-width:0}
+.work-rules .rrow b{display:block;line-height:1.3;font-size:14px}.work-rules .rrow small{display:block;color:var(--muted);font-size:12px}
+.work-rules .chip{display:inline-flex;border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700;border:0;cursor:pointer;font-family:inherit;background:var(--line-2)}
+.work-rules .chip.c-blue{background:var(--blue-soft);color:var(--blue-dark)}.work-rules .chip.c-orange{background:var(--orange-soft);color:var(--orange-ink)}
+.work-rules .chip.c-mint{background:var(--green-soft);color:var(--green)}.work-rules .chip.c-rose{background:var(--red-soft);color:var(--red)}.work-rules .chip.c-vio{background:var(--violet-soft);color:var(--violet)}

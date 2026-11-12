@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 84,
+    date: '2026-11-12',
+    title: '📋 Cada trabajo con sus reglas',
+    items: [
+      'Rumbo lee lo que exige el EVA para cada trabajo (consigna, rúbrica y archivos Word o PDF del facilitador) y lo convierte en una lista de reglas.',
+      'Al darle a «Hacer con IA» el trabajo tiene que cumplir TODAS: extensión, secciones, referencias y cada criterio de la rúbrica.',
+      'Puedes quitar reglas, agregar las tuyas o volver a leer el EVA, y al terminar ves qué reglas cumple cada trabajo.',
+    ],
+  },
+  {
     version: 83,
     date: '2026-11-12',
     title: '🎯 Plan de examen',

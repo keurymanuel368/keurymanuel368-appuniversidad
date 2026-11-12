@@ -17,7 +17,10 @@ function savedLargo(): Largo {
 }
 function saveLargo(v: Largo) { try { localStorage.setItem('rumbo-work-len', v); } catch { /* sin almacenamiento */ } }
 
-type Info = { status: 'none' | 'pending' | 'ready' | 'error'; work?: Work; profile?: Profile; error?: string };
+type Cumple = { texto: string; ok: boolean; nota: string };
+type Info = { status: 'none' | 'pending' | 'ready' | 'error'; work?: Work; profile?: Profile; error?: string; cumplimiento?: Cumple[] };
+type Regla = { id: string; texto: string; tipo: string; puntos: number | null };
+type Reglas = { resumen: string; palabras: { min: number | null; max: number | null } | null; referencias: { min: number | null; estilo: string | null } | null; reglas: Regla[]; fuentes: string[]; quitadas: string[]; propias: string[] };
 
 /** Estado del trabajo de una tarea; mientras se está haciendo, pregunta cada 4 s. */
 export function useWork(taskId: number) {
@@ -53,6 +56,76 @@ async function downloadWordFor(work: Work, profile: Profile) {
   await m.downloadWord(work, profile, `${work.titulo}_${profile.nombre.split(' ').slice(0, 2).join('_')}`);
 }
 
+
+/** Reglas del trabajo: lo que el EVA exige (consigna, rúbrica y archivos). La IA tiene que cumplirlas todas; tú puedes quitar o agregar. */
+function ReglasPanel({ taskId }: { taskId: number }) {
+  const [r, setR] = useState<Reglas | null>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [nueva, setNueva] = useState('');
+  useEffect(() => { api<Reglas>(`/tasks/${taskId}/reglas`).then(setR).catch((e) => setErr((e as Error).message)); }, [taskId]);
+  const save = async (b: { propias?: string[]; quitadas?: string[] }) => {
+    try { setR(await api<Reglas>(`/tasks/${taskId}/reglas`, { method: 'PUT', body: b })); } catch (e) { toast((e as Error).message, 'err'); }
+  };
+  const refresh = async () => {
+    setBusy(true); haptic(8);
+    try { setR(await api<Reglas>(`/tasks/${taskId}/reglas/actualizar`, { method: 'POST' })); toast('Reglas actualizadas desde el EVA'); } catch (e) { toast((e as Error).message, 'err'); }
+    setBusy(false);
+  };
+  if (err) return <p className="sm" style={{ color: 'var(--muted)' }}>No pude leer las reglas del EVA ahora: {err}</p>;
+  if (!r) return <p className="sm" style={{ color: 'var(--muted)' }}>Leyendo las reglas de este trabajo en el EVA…</p>;
+  const activas = r.reglas.filter((x) => !r.quitadas.includes(x.id));
+  const total = activas.length + r.propias.length;
+  return (
+    <details className="work-rules" open={total > 0 && total <= 6}>
+      <summary><b>Reglas de este trabajo</b><span className="chip c-blue num">{total}</span><small>{r.fuentes.length ? `de: ${r.fuentes.join(', ')}` : 'sin consigna escrita'}</small></summary>
+      {r.resumen && <p className="sm" style={{ margin: '8px 0', color: 'var(--ink-2)' }}>{r.resumen}</p>}
+      {(r.palabras || r.referencias) && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+          {r.palabras && <span className="chip c-orange">{r.palabras.min ? r.palabras.min : ''}{r.palabras.min && r.palabras.max ? '–' : ''}{r.palabras.max ? r.palabras.max : ''} palabras</span>}
+          {r.referencias && <span className="chip c-vio">{r.referencias.min ? `${r.referencias.min}+ referencias` : 'Referencias'}{r.referencias.estilo ? ` · ${r.referencias.estilo}` : ''}</span>}
+        </div>
+      )}
+      <ul>
+        {r.reglas.map((x) => {
+          const off = r.quitadas.includes(x.id);
+          return (
+            <li key={x.id} className="rrow" style={{ opacity: off ? 0.45 : 1 }}>
+              <div><b style={{ textDecoration: off ? 'line-through' : 'none' }}>{x.texto}</b><small>{x.tipo}{x.puntos ? ` · ${x.puntos} pts` : ''}</small></div>
+              <button className="chip c-gray" onClick={() => void save({ quitadas: off ? r.quitadas.filter((y) => y !== x.id) : [...r.quitadas, x.id] })} aria-label={off ? 'Volver a usar esta regla' : 'Quitar esta regla'}>{off ? 'Usar' : 'Quitar'}</button>
+            </li>
+          );
+        })}
+        {r.propias.map((x, i) => (
+          <li key={'p' + i} className="rrow"><div><b>{x}</b><small>tu regla</small></div><button className="chip c-gray" onClick={() => void save({ propias: r.propias.filter((_, j) => j !== i) })}>Quitar</button></li>
+        ))}
+      </ul>
+      <form style={{ display: 'flex', gap: 8, marginTop: 8 }} onSubmit={(e) => { e.preventDefault(); const t = nueva.trim(); if (t) { setNueva(''); void save({ propias: [...r.propias, t] }); } }}>
+        <input className="input" style={{ flex: 1 }} value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Agregar una regla tuya…" aria-label="Agregar una regla" />
+        <button className="btn line" type="submit" disabled={!nueva.trim()}>Agregar</button>
+      </form>
+      <button className="link-btn" style={{ marginTop: 8 }} onClick={() => void refresh()} disabled={busy}>{busy ? 'Leyendo el EVA…' : 'Volver a leer el EVA'}</button>
+    </details>
+  );
+}
+
+/** Después de hacer el trabajo: cada regla, cumplida o no. */
+function Cumplimiento({ items }: { items: Cumple[] }) {
+  if (!items.length) return null;
+  const ok = items.filter((x) => x.ok).length;
+  return (
+    <details className="work-rules" open={ok < items.length}>
+      <summary><b>Cumplimiento de las reglas</b><span className={`chip ${ok === items.length ? 'c-mint' : 'c-orange'} num`}>{ok}/{items.length}</span></summary>
+      <ul>
+        {items.map((x, i) => (
+          <li key={i} className="rrow"><span className={`chip ${x.ok ? 'c-mint' : 'c-rose'}`} style={{ flex: 'none' }}>{x.ok ? '✓' : '✗'}</span><div style={{ flex: 1 }}><b>{x.texto}</b>{x.nota && <small>{x.nota}</small>}</div></li>
+        ))}
+      </ul>
+      {ok < items.length && <p className="sm" style={{ color: 'var(--muted)', marginTop: 6 }}>Lo marcado con ✗ conviene ajustarlo a mano en el Word, o agrega esa regla y pulsa «Rehacer».</p>}
+    </details>
+  );
+}
+
 /** Botón grande para la ficha de la tarea. Cuando el trabajo está listo, salen «Ver» y «Descargar Word» a la vista. */
 export function WorkButton({ taskId, title }: { taskId: number; title: string }) {
   const { info, start } = useWork(taskId);
@@ -77,6 +150,7 @@ export function WorkButton({ taskId, title }: { taskId: number; title: string })
         </div>
       ) : (
         <div className="work-start">
+          {!pending && <ReglasPanel taskId={taskId} />}
           {!pending && (
             <div className="work-len" role="radiogroup" aria-label="Extensión del trabajo">
               {LARGOS.map((l) => (
@@ -95,6 +169,7 @@ export function WorkButton({ taskId, title }: { taskId: number; title: string })
         </button>
         </div>
       )}
+      {ready && <Cumplimiento items={info.cumplimiento || []} />}
       {open && info.work && info.profile && <WorkSheet work={info.work} profile={info.profile} title={title} onClose={() => setOpen(false)} onRedo={() => { setOpen(false); void start(largo); }} />}
     </>
   );

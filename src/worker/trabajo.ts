@@ -8,6 +8,7 @@ import { llmComplete } from './llm';
 import { sendToMe } from './notify';
 import { blocks } from './wa';
 import { nowSec } from './time';
+import { getReglas, palabrasObjetivo, reglasActivas, reglasBlock, verifyWork, type Cumple } from './reglas';
 
 type App = Hono<{ Bindings: Env }>;
 
@@ -18,7 +19,7 @@ export type Work = {
   conclusion: string; referencias: string[];
 };
 export type Profile = { nombre: string; matricula: string; carrera: string; facilitador: string; asignatura: string; codigo: string; institucion: string; fecha: string };
-export type WorkInfo = { status: 'none' | 'pending' | 'ready' | 'error'; work?: Work; error?: string; profile?: Profile; updated_at?: number };
+export type WorkInfo = { status: 'none' | 'pending' | 'ready' | 'error'; work?: Work; error?: string; profile?: Profile; updated_at?: number; cumplimiento?: Cumple[] };
 
 /** Estilo sacado de los trabajos entregados (Análisis «A la deriva», Razonamiento Lógico, Evolución de la Web…). */
 export const DEFAULT_STYLE = `ESTILO DE LOS TRABAJOS (copia este estilo):
@@ -132,13 +133,18 @@ export async function generateWork(env: Env, taskId: number, largo: Largo = 'med
     if (!t) throw new Error('Tarea no encontrada');
     const s = await getSettings(env);
     const style = (s.ai_style || '').trim() || DEFAULT_STYLE;
-    const total = LARGOS[largo] || LARGOS.medio;
+    // Las reglas del trabajo (consigna, rúbrica y archivos del EVA): si fijan la extensión, esa manda sobre el largo elegido.
+    const reglas = await getReglas(env, taskId).catch(() => null);
+    const total = palabrasObjetivo(reglas) ?? (LARGOS[largo] || LARGOS.medio);
     const asignatura = decode(t.course_name || 'Asignatura');
     const titulo = decode(t.title);
     const desc = decode((t as { description?: string | null }).description || '').slice(0, 5000);
     const crs = t.course_id ? await env.DB.prepare('SELECT code FROM courses WHERE id = ? AND user_id = ?').bind(t.course_id, env.UID).first<{ code: string | null }>() : null;
     const profile = await profileFor(env, asignatura, crs?.code ?? null, t.facilitator);
-    const sys = `Eres Keury Manuel, estudiante universitario de Ingeniería de Software en la UAPA, y escribes tus trabajos académicos.\n${style}\nNombre EXACTO de la asignatura: «${asignatura}». Cuando la menciones, escríbela exactamente así (no la abrevies ni la cambies).`;
+    const sys = `Eres Keury Manuel, estudiante universitario de Ingeniería de Software en la UAPA, y escribes tus trabajos académicos.\n${style}\nNombre EXACTO de la asignatura: «${asignatura}». Cuando la menciones, escríbela exactamente así (no la abrevies ni la cambies).${reglas && reglasActivas(reglas).length ? `
+
+${reglasBlock(reglas)}
+Si las reglas piden un número de referencias o una extensión, ese dato manda sobre cualquier otra indicación.` : ''}`;
     const ctx = `Asignatura: ${asignatura}\nTarea: ${titulo}\n${desc ? `Consigna / guía del facilitador (síguela punto por punto):\n${desc}` : 'No hay consigna escrita: deduce lo que pide el título.'}`;
     const profundidad = largo === 'corto' ? 'Lo mínimo que pide la consigna, una sección por punto.' : largo === 'medio' ? 'Una sección por cada punto de la consigna.' : 'Una sección por cada punto de la consigna; si algún punto es amplio, divídelo en subsecciones (por ejemplo 2.1 y 2.2).';
 
@@ -157,7 +163,7 @@ Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes real
         const o = (x || {}) as Record<string, unknown>;
         return { titulo: str(o.titulo, 140), puntos: (Array.isArray(o.puntos) ? o.puntos : []).map((p) => str(p, 300)).filter(Boolean).slice(0, 6), tabla: typeof o.tabla === 'string' && o.tabla.trim() ? o.tabla.trim().slice(0, 140) : null };
       }).filter((x) => x.titulo),
-      referencias: (Array.isArray(plan.referencias) ? plan.referencias : []).map((r) => str(r, 400)).filter(Boolean).slice(0, 8),
+      referencias: (Array.isArray(plan.referencias) ? plan.referencias : []).map((r) => str(r, 400)).filter(Boolean).slice(0, Math.max(8, (reglas?.referencias?.min ?? 0) + 2)),
     };
     if (!pl.secciones.length) throw new Error('La IA no pudo planear las secciones. Inténtalo otra vez.');
 
@@ -180,8 +186,20 @@ Referencias: 3 a 6 en APA 7, CADA UNA con su enlace https. Usa solo fuentes real
       referencias: [...(refsOk.filter(Boolean) as string[]), 'Anthropic. (2026). *Claude* [Modelo de lenguaje grande]. https://claude.ai'],
     });
     if (!work) throw new Error('La IA no devolvió un trabajo completo. Inténtalo otra vez.');
+    // Revisión final: cada regla contra el trabajo ya escrito (y las palabras contadas de verdad).
+    const textoTrabajo = [work.introduccion, ...work.secciones.flatMap((x) => [x.titulo, ...x.parrafos, ...(x.lista || [])]), work.conclusion].join('\n');
+    const palabras = textoTrabajo.split(/\s+/).filter(Boolean).length;
+    let cumplimiento: Cumple[] = [];
+    if (reglas) {
+      cumplimiento = await verifyWork(env, reglas, textoTrabajo, palabras).catch(() => []);
+      const pw = reglas.palabras;
+      if (pw && (pw.min || pw.max)) {
+        const ok = (!pw.min || palabras >= pw.min * 0.9) && (!pw.max || palabras <= pw.max * 1.1);
+        cumplimiento.unshift({ texto: `Extensión pedida: ${pw.min ? pw.min : ''}${pw.min && pw.max ? ' a ' : ''}${pw.max ? pw.max : ''} palabras`, ok, nota: `El trabajo tiene ${palabras} palabras.` });
+      }
+    }
     await env.DB.prepare(`UPDATE ai_works SET status = 'ready', content = ?, error = NULL, updated_at = ? WHERE task_id = ? AND user_id = ?`)
-      .bind(JSON.stringify({ work, profile }), nowSec(), taskId, env.UID).run();
+      .bind(JSON.stringify({ work, profile, cumplimiento }), nowSec(), taskId, env.UID).run();
     await sendToMe(env, blocks('📝 *Tu trabajo está listo*', `*${titulo}*`, 'Revísalo, ajústalo y descárgalo en Word desde la tarea.'),
       { title: '📝 Tu trabajo está listo', tag: `work-${taskId}`, url: `/#tareas/${taskId}`, pushBody: titulo.slice(0, 120), type: 'avisos' });
   } catch (e) {
@@ -224,9 +242,9 @@ export function registerTrabajo(app: App) {
       await c.env.DB.prepare(`UPDATE ai_works SET status = 'error', error = 'Tardó demasiado. Inténtalo otra vez.' WHERE task_id = ? AND user_id = ?`).bind(id, c.env.UID).run();
       return c.json({ status: 'error', error: 'Tardó demasiado. Inténtalo otra vez.' } satisfies WorkInfo);
     }
-    const parsed = row.content ? (JSON.parse(row.content) as { work: Work; profile: Profile }) : null;
+    const parsed = row.content ? (JSON.parse(row.content) as { work: Work; profile: Profile; cumplimiento?: Cumple[] }) : null;
     if (parsed?.work) parsed.work.secciones = cleanSections(parsed.work.secciones);
-    return c.json({ status: row.status, work: parsed?.work, profile: parsed?.profile, error: row.error || undefined, updated_at: row.updated_at } as WorkInfo);
+    return c.json({ status: row.status, work: parsed?.work, profile: parsed?.profile, cumplimiento: parsed?.cumplimiento, error: row.error || undefined, updated_at: row.updated_at } as WorkInfo);
   });
 
   app.post('/api/tasks/:id/work', async (c) => {
