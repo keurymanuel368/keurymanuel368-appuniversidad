@@ -147,3 +147,13 @@
 .rbx .hand{max-width:100%;overflow:hidden}
 .rbx .goals,.rbx .ea,.rbx .goals-empty{height:auto;min-height:0}
 @media (max-width:900px){.rbx .hero{padding:20px}.rbx .row .chip{margin-left:0}}
+
+/* Móvil: las cuadrículas de dos columnas pasan a una sola (incluso las que traen columnas en línea) */
+@media (max-width:900px){
+  .rbx .grid2{grid-template-columns:minmax(0,1fr) !important}
+  .rbx .top{flex-wrap:wrap}
+  .rbx .pensum{margin:0 -16px;padding:2px 16px 10px}
+  .rbx .term{min-width:0}
+  .rbx .tile{padding:14px 16px}
+  .rbx .tile b{font-size:32px}
+}
