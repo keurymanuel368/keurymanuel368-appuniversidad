@@ -7,7 +7,7 @@ import { classes as uapaClasses } from './horario';
 import { cuandoTexto, fechaLarga, horaTexto, localDate, nowSec, offsetSec, ymd } from './time';
 
 /** versionCode del APK publicado en public/rumbo-widget.apk (súbelo junto con android-widget/app/build.gradle). */
-export const WIDGET_VERSION = 7;
+export const WIDGET_VERSION = 8;
 
 export type WidgetData = {
   mood: 'feliz' | 'tranqui' | 'atento' | 'alerta';
