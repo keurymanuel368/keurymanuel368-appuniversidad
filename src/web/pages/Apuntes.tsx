@@ -207,11 +207,17 @@ export function Apuntes() {
   useEffect(() => { try { localStorage.setItem('rumbo-estudio-tab', tab); } catch { /* sin almacenamiento */ } }, [tab]);
   const courses = useLoad(() => api<Course[]>('/courses'));
   const names = (courses.data || []).map((c) => c.name);
+  const TABS: { id: Tab; label: string }[] = [{ id: 'semana', label: 'Semana' }, { id: 'clases', label: 'Clases' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Cuadernos' }, { id: 'tarjetas', label: 'Tarjetas' }];
   return (
-    <>
-      <PageHead eyebrow="Tus materias" title="Estudio" />
-      <Segmented label="Estudio" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'clases', label: 'Clases' }, { id: 'trabajos', label: 'Trabajos' }, { id: 'apuntes', label: 'Cuadernos' }, { id: 'tarjetas', label: 'Tarjetas' }]} />
+    <div className="rbx">
+      <header className="top">
+        <div><div className="eb">Tus materias</div><h1 tabIndex={-1}>Estudio</h1></div>
+        <div className="sp" />
+        <div className="seg" role="tablist" aria-label="Estudio" style={{ maxWidth: '100%', overflowX: 'auto' }}>
+          {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => { haptic(5); setTab(t.id); }}>{t.label}</button>)}
+        </div>
+      </header>
       {tab === 'semana' ? <SemanaEficiente /> : tab === 'clases' ? <Clases /> : tab === 'trabajos' ? <TrabajosHechos /> : tab === 'apuntes' ? <Cuadernos names={names} Editor={NoteEditor} List={Notes} onReview={() => setTab('tarjetas')} /> : <Cards names={names} />}
-    </>
+    </div>
   );
 }

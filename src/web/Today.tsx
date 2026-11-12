@@ -59,36 +59,31 @@ export function TodayTimeline({ d, go }: { d: Dashboard; go: (p: string) => void
   if (nowAt === -1 && today.length) rows.push({ nowMark: true });
   if (!today.length) rows.push({ nowMark: true });
 
+  const upcoming = today.filter((x) => x.kind !== 'task');
+  const list = upcoming.length ? upcoming : today;
   return (
-    <section className="td" aria-label="Hoy">
-      <header>
-        <div><small>Hoy</small><h3>{label}</h3></div>
-        <span className="td-count num">{today.length ? (pending ? `${pending} por delante` : 'Terminaste por hoy 🎉') : 'Día libre'}</span>
-      </header>
-      <ol className="td-rail">
-        {rows.map((r, i) => 'nowMark' in r ? (
-          <li key={`now${i}`} className="td-now"><i /><span>Ahora · {h12(nowMin)}</span></li>
-        ) : (
-          <li key={r.key} className={`td-item ${r.kind} ${(r.end ?? r.t + 1) <= nowMin ? 'past' : r.t <= nowMin ? 'live' : ''}`} style={{ ['--h' as string]: r.hue }}>
-            <span className="td-time num">{h12(r.t).replace(' ', ' ')}</span>
-            <button onClick={() => go(r.go)}>
-              <span className="td-ic"><Icon name={r.kind === 'class' ? 'cap' : r.kind === 'exam' ? 'tasks' : 'check'} size={15} /></span>
-              <span className="td-copy"><b>{r.title}</b><small>{r.end ? `${h12(r.t)} – ${h12(r.end)} · ` : ''}{r.meta}</small></span>
-              {r.t <= nowMin && (r.end ?? 0) > nowMin && <em className="td-live"><i />Ahora</em>}
-            </button>
-          </li>
-        ))}
-      </ol>
-      {!today.length && (
-        <div className="td-empty"><Mascot mood="tranqui" size={54} /><span>No tienes clases ni entregas con hora hoy. Buen día para adelantar o descansar.</span></div>
+    <section className="card" aria-label="Hoy">
+      <div className="head"><h3>Agenda de hoy · {label}</h3><button className="link" onClick={() => go('horario')}>Horario</button></div>
+      {!list.length ? (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', color: 'var(--muted)', fontSize: 14 }}><Mascot mood="tranqui" size={54} /><span>No tienes clases ni entregas con hora hoy. Buen día para adelantar o descansar.</span></div>
+      ) : (
+        <ul style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {list.map((r) => {
+            const past = (r.end ?? r.t + 1) <= nowMin, live = r.t <= nowMin && (r.end ?? 0) > nowMin;
+            return (
+              <li key={r.key} className="agenda" style={{ opacity: past ? 0.5 : 1 }}>
+                <div className="tm num">{h12(r.t)}</div>
+                <button className="bl" onClick={() => go(r.go)} style={{ textAlign: 'left', border: 0, cursor: 'pointer', background: `hsl(${r.hue} 90% 94%)`, borderLeft: `5px solid hsl(${r.hue} 75% 52%)`, color: '#0B1230' }}>
+                  <b>{r.title}</b>
+                  <small style={{ color: '#59638A' }}>{r.end ? `${h12(r.t)} – ${h12(r.end)} · ` : ''}{r.meta}{live ? ' · AHORA' : ''}</small>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
       {later && (
-        <button className="td-later" onClick={() => go(later.items[0].go)}>
-          <small>{later.i === 1 ? 'Mañana' : `${DIAS[dayIdx(later.day)][0].toUpperCase()}${DIAS[dayIdx(later.day)].slice(1)} ${later.day.getDate()}`}</small>
-          <b>{later.items[0].title}</b>
-          <em className="num">{h12(later.items[0].t)}</em>
-          <Icon name="chevron" size={16} />
-        </button>
+        <button className="link" style={{ marginTop: 14 }} onClick={() => go(later.items[0].go)}>{later.i === 1 ? 'Mañana' : `${DIAS[dayIdx(later.day)]} ${later.day.getDate()}`}: {later.items[0].title} · {h12(later.items[0].t)} ›</button>
       )}
     </section>
   );

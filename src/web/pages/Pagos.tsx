@@ -61,8 +61,8 @@ export function Pagos() {
     : Array.from({ length: w.closeDay - w.openDay + 1 }, (_, i) => String(w.openDay + i));
 
   return (
-    <>
-      <PageHead eyebrow="Cuotas del trimestre" title="Pagos" />
+    <div className="rbx">
+      <header className="top"><div><div className="eb">Cuotas del trimestre</div><h1 tabIndex={-1}>Pagos</h1></div></header>
       <AccountCard cuota={Number(data.data.window.amount) || 0} paidMonth={data.data.window.paid} />
       <section className="grid2 stagger">
         <div className={`pay-hero ${tone}`}>
@@ -103,23 +103,24 @@ export function Pagos() {
         </details>
       </section>
 
-      <div className="section">
-        <div className="section-head"><h3>Historial</h3>{data.data.history.length > 0 && <span className="pill gray num">{data.data.history.length}</span>}</div>
-        <div className="card list">
-          {data.data.history.length === 0 ? <Empty icon="wallet" title="Sin pagos registrados" text="Cuando registres una cuota, aparecerá aquí." /> : data.data.history.map((p) => (
-            <div key={p.id} className="task">
-              <span className="check on static"><Icon name="check" size={15} style={{ strokeWidth: 3.2 }} /></span>
-              <div className="body static"><span className="title">Cuota de {periodLabel(p.period)}</span><span className="sub"><span className="sub-txt">Pagado el {dateLabel(p.paid_at)}{p.note ? ' · ' + p.note : ''}</span></span></div>
-              <span className="num money">{p.amount ? `RD$ ${p.amount.toLocaleString('es-DO')}` : '—'}</span>
-              {p.has_receipt
-                ? <button className="icon-btn ghosty" onClick={() => setViewing(p.id)} aria-label="Ver comprobante"><Icon name="book" size={17} /></button>
-                : <label className="icon-btn ghosty" aria-label="Adjuntar foto del comprobante" title="Adjuntar comprobante"><Icon name="upload" size={17} /><input type="file" accept="image/*" hidden onChange={(e) => attach(p.id, e.target.files?.[0])} /></label>}
-              <button className="icon-btn ghosty" onClick={() => remove(p.id)} aria-label="Eliminar pago"><Icon name="trash" size={17} /></button>
-            </div>
-          ))}
-        </div>
-        {data.data.history.length > 0 && <p className="small muted">Toca <Icon name="upload" size={13} /> para guardar la foto del comprobante de cada pago.</p>}
-      </div>
+      <section className="card">
+        <div className="head"><h3>Historial</h3>{data.data.history.length > 0 && <span className="chip c-gray num">{data.data.history.length}</span>}</div>
+        {data.data.history.length === 0 ? <Empty icon="wallet" title="Sin pagos registrados" text="Cuando registres una cuota, aparecerá aquí." /> : (
+          <ul>
+            {data.data.history.map((p) => (
+              <li key={p.id} className="row">
+                <span className="chk on" aria-hidden="true" style={{ cursor: 'default' }} />
+                <div className="t"><b>Cuota de {periodLabel(p.period)}</b><small>Pagado el {dateLabel(p.paid_at)}{p.note ? ' · ' + p.note : ''}</small></div>
+                <span className="chip c-mint num">{p.amount ? `RD$ ${p.amount.toLocaleString('es-DO')}` : '—'}</span>
+                {p.has_receipt
+                  ? <button className="pill-btn" style={{ width: 38, height: 38, boxShadow: 'none', background: 'var(--cobaltsoft)' }} onClick={() => setViewing(p.id)} aria-label="Ver comprobante"><Icon name="book" size={17} /></button>
+                  : <label className="pill-btn" style={{ width: 38, height: 38, boxShadow: 'none', background: 'var(--cobaltsoft)' }} aria-label="Adjuntar foto del comprobante" title="Adjuntar comprobante"><Icon name="upload" size={17} /><input type="file" accept="image/*" hidden onChange={(e) => attach(p.id, e.target.files?.[0])} /></label>}
+                <button className="pill-btn" style={{ width: 38, height: 38, boxShadow: 'none', background: 'var(--rosesoft)', color: 'var(--rose)' }} onClick={() => remove(p.id)} aria-label="Eliminar pago"><Icon name="trash" size={17} /></button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {viewing !== null && (
         <Modal title="Comprobante de pago" onClose={() => setViewing(null)}>
           <img className="receipt-img" src={`/api/payments/${viewing}/receipt`} alt="Comprobante de pago" />
@@ -129,7 +130,7 @@ export function Pagos() {
           </div>
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 

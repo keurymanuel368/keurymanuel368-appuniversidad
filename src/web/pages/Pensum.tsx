@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type CareersRes, type Elective, type PensumRow } from '../api';
 import { Empty, Modal, PageHead, Ring, Skeleton, haptic, toast, useLoad } from '../components';
 import { Icon } from '../icons';
+import { RbRing } from '../rb';
 
 const ORD = ['', 'Primer', 'Segundo', 'Tercer', 'Cuarto', 'Quinto', 'Sexto', 'Séptimo', 'Octavo', 'Noveno', 'Décimo', 'Décimo primer', 'Décimo segundo', 'Décimo tercer', 'Décimo cuarto', 'Décimo quinto', 'Décimo sexto'];
 const termName = (t: number) => `${ORD[t] || t + '.º'} trimestre`;
@@ -46,11 +47,13 @@ export function Pensum() {
   const loading = !rows.data && !rows.error;
 
   return (
-    <>
-      <PageHead eyebrow={career ? career.name : 'Tu carrera en la UAPA'} title="Mi pensum">
-        <button className="btn line" onClick={() => setChoosing(true)} aria-label="Elegir carrera"><Icon name="cap" size={18} /><span className="lbl">{career ? 'Cambiar carrera' : 'Elegir carrera'}</span></button>
-        <button className="btn primary" onClick={() => setEdit({ term: terms.at(-1) || 1, status: 'pendiente', credits: 3 })} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Asignatura</span></button>
-      </PageHead>
+    <div className="rbx">
+      <header className="top">
+        <div><div className="eb">{career ? career.name : 'Tu carrera en la UAPA'}</div><h1 tabIndex={-1}>Mi pensum</h1></div>
+        <div className="sp" />
+        <button className="btn b-line" style={{ background: 'var(--card)' }} onClick={() => setChoosing(true)} aria-label="Elegir carrera"><Icon name="cap" size={18} /><span className="lbl">{career ? 'Cambiar carrera' : 'Elegir carrera'}</span></button>
+        <button className="btn b-pri" onClick={() => setEdit({ term: terms.at(-1) || 1, status: 'pendiente', credits: 3 })} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Asignatura</span></button>
+      </header>
 
       {loading ? <Skeleton hero rows={1} /> : rows.data && list.length === 0 ? (
         <div className="card">
@@ -60,23 +63,22 @@ export function Pensum() {
         </div>
       ) : (
         <>
-          <section className="career stagger">
-            <div className="career-hero">
-              <div className="b1" /><div className="b2" />
-              <Ring value={pct} size={112} label="carrera" />
-              <div className="career-copy">
-                <span className="kicker"><Icon name="cap" size={14} />AVANCE DE LA CARRERA</span>
-                <b className="num">{done} <small>/ {total} créditos</small></b>
-                <span>{list.filter((r) => r.status === 'aprobada').length} de {list.length} asignaturas aprobadas · cursando {inCourse} créditos · {termName(currentTerm).toLowerCase()}</span>
+          <div className="grid2" style={{ gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)' }}>
+            <section className="hero" style={{ padding: 28 }}>
+              <div className="tick" />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+                <RbRing pct={pct} size={124} />
+                <div style={{ flex: '1 1 220px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#BCD0FF' }}>Avance de la carrera</div>
+                  <div className="num" style={{ fontSize: 'clamp(34px,5vw,52px)', fontWeight: 800, letterSpacing: '-.04em', lineHeight: 1.05, margin: '4px 0' }}>{done} <small style={{ fontSize: '.4em', fontWeight: 600, color: '#BCD0FF' }}>/ {total} créditos</small></div>
+                  <p style={{ color: '#D8E2FF', fontSize: 14.5 }}>{list.filter((r) => r.status === 'aprobada').length} de {list.length} asignaturas aprobadas · cursando {inCourse} créditos · {termName(currentTerm).toLowerCase()}</p>
+                </div>
               </div>
+            </section>
+            <div className="tile" style={{ background: 'var(--mintsoft)', color: 'var(--mint)', justifyContent: 'center', padding: '22px 26px' }}>
+              <b className="num">{idx ?? '—'}</b><span>Índice acumulado</span><small style={{ color: 'var(--ink2)', fontWeight: 600 }}>Necesitas 70 para graduarte</small>
             </div>
-            <div className="stat static">
-              <span className="stat-ic green"><Icon name="trend" size={18} /></span>
-              <span className="value num">{idx ?? '—'}</span>
-              <span className="label">Índice acumulado</span>
-              <span className="foot good">Necesitas 70 para graduarte</span>
-            </div>
-          </section>
+          </div>
 
           <div className="section">
             <div className="legend">
@@ -131,7 +133,7 @@ export function Pensum() {
       {choosing && <ChooseCareer data={careers.data} onClose={() => setChoosing(false)} onImport={() => setImporting(true)} onSaved={() => { setChoosing(false); rows.reload(); careers.reload(); }} />}
       {edit && <EditSubject row={edit} electives={career?.electives || []} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); rows.reload(); }} />}
       {importing && <ImportPensum onClose={() => setImporting(false)} onSaved={() => { setImporting(false); setChoosing(false); rows.reload(); }} />}
-    </>
+    </div>
   );
 }
 

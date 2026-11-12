@@ -123,16 +123,51 @@ function Hero({ data, now }: { data: Data; now: Date }) {
   if (!k) return null;
   const mins = live ? live.end_min - min : Math.round((nxt!.at.getTime() - now.getTime()) / 60000);
   return (
-    <section className="hz-hero" style={{ ['--h' as string]: hue(k.title) }}>
-      <div className="hz-hero-top">
-        <span className={`hz-pill ${live ? 'live' : ''}`}>{live ? <><i />En clase ahora</> : sameDay ? 'Siguiente clase · hoy' : `Siguiente clase · ${DIAS_LARGO[k.day].toLowerCase()}`}</span>
-        <span className="hz-count num">{live ? `termina en ${left(mins)}` : `en ${left(mins)}`}</span>
-      </div>
-      <h2>{k.title}</h2>
-      <div className="hz-hero-meta">
-        <span><Icon name="clock" size={15} />{h12(k.start_min)} – {h12(k.end_min)}</span>
-        {(k.building || k.room) ? <span><Icon name="pin" size={15} />{[k.building, k.room].filter(Boolean).join(' · ')}</span> : <span><Icon name="link" size={15} />Virtual</span>}
-        {k.code && <span className="num">{k.code}</span>}
+    <section className="card" style={{ background: 'var(--night)', color: '#fff' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8FB0FF' }}>{live ? 'En clase ahora' : sameDay ? 'Siguiente clase · hoy' : `Siguiente clase · ${DIAS_LARGO[k.day].toLowerCase()}`}</div>
+      <h3 style={{ fontFamily: 'var(--display)', fontSize: 22, margin: '6px 0 4px' }}>{k.title}</h3>
+      <p style={{ color: '#B8C3EE', fontSize: 14, marginBottom: 14 }}>{live ? `Termina en ${left(mins)}` : `Empieza en ${left(mins)}`} · {h12(k.start_min)} – {h12(k.end_min)} · {(k.building || k.room) ? [k.building, k.room].filter(Boolean).join(' · ') : 'Virtual'}</p>
+      <button className="btn b-or" onClick={() => { location.hash = 'apuntes'; }}>Escuchar en vivo</button>
+    </section>
+  );
+}
+
+/** Horario de la semana en cuadrícula, con bloques de color y la línea de «ahora». */
+function Timetable({ data, sel, onSel, now }: { data: Data; sel: number; onSel: (d: number) => void; now: Date }) {
+  const list = data.classes;
+  const lo = Math.min(...list.map((k) => k.start_min), 8 * 60);
+  const hi = Math.max(...list.map((k) => k.end_min), 17 * 60);
+  const start = Math.floor(lo / 60) * 60, end = Math.ceil(hi / 60) * 60;
+  const H = 56, px = (m: number) => ((m - start) / 60) * H, total = ((end - start) / 60) * H;
+  const hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start + i * 60);
+  const todayI = dayIdx(now), nowMin = now.getHours() * 60 + now.getMinutes();
+  const cols = list.some((k) => k.day === 6) ? 7 : 6;
+  return (
+    <section className="card" style={{ padding: '18px 14px 18px 6px', overflowX: 'auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `52px repeat(${cols},minmax(74px,1fr))`, minWidth: 52 + cols * 74 }} role="group" aria-label="Semana">
+        <div />
+        {DIAS.slice(0, cols).map((d, i) => (
+          <button key={d} onClick={() => { haptic(6); onSel(i); }} aria-pressed={sel === i} style={{ textAlign: 'center', fontWeight: 700, padding: '0 0 10px', fontSize: 14, color: todayI === i ? 'var(--cobalt)' : 'var(--ink)' }}>
+            {d}{todayI === i && <> <span className="chip c-blue" style={{ padding: '1px 8px' }}>hoy</span></>}
+          </button>
+        ))}
+        <div style={{ position: 'relative', height: total, fontSize: 11.5, color: 'var(--muted)', fontWeight: 700 }}>
+          {hours.map((h) => <span key={h} style={{ position: 'absolute', top: px(h) - 7, right: 8 }}>{h12(h).replace(':00', '')}</span>)}
+        </div>
+        {DIAS.slice(0, cols).map((_, i) => (
+          <div key={i} className="col-d" style={{ height: total, background: sel === i ? '#F5F8FF' : undefined }}>
+            {hours.slice(1, -1).map((h) => <div key={h} className="hl" style={{ top: px(h) }} />)}
+            {list.filter((k) => k.day === i).map((k) => {
+              const h = hue(k.title), live = todayI === i && nowMin >= k.start_min && nowMin < k.end_min;
+              return (
+                <div key={k.id} className="blk" style={{ top: px(k.start_min), height: Math.max(34, px(k.end_min) - px(k.start_min) - 2), background: `hsl(${h} 90% 94%)`, borderLeft: `5px solid hsl(${h} 75% 52%)`, boxShadow: live ? `0 0 0 2px hsl(${h} 75% 52%)` : undefined }}>
+                  <b>{k.title}</b>{hShort(k.start_min)}–{hShort(k.end_min)}
+                </div>
+              );
+            })}
+            {todayI === i && nowMin >= start && nowMin <= end && <div style={{ position: 'absolute', left: 0, right: 0, top: px(nowMin), borderTop: '2px solid var(--orange)' }}><i style={{ position: 'absolute', left: -5, top: -6, width: 10, height: 10, borderRadius: '50%', background: 'var(--orange)' }} /></div>}
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -169,25 +204,21 @@ function DayAgenda({ data, day, now }: { data: Data; day: number; now: Date }) {
   const min = now.getHours() * 60 + now.getMinutes();
   if (!list.length) return <Empty icon="calendar" title={`${DIAS_LARGO[day]} libre`} text="No tienes clases este día. Buen momento para adelantar tareas." />;
   return (
-    <ol className="hz-agenda">
+    <ul style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {list.map((k) => {
         const state = !isToday ? '' : min >= k.end_min ? 'past' : min >= k.start_min ? 'live' : 'next';
+        const h = hue(k.title);
         return (
-          <li key={k.id} className={`hz-item ${state}`} style={{ ['--h' as string]: hue(k.title) }}>
-            <div className="hz-time num"><b>{h12(k.start_min).replace(' ', ' ')}</b><span>{h12(k.end_min).replace(' ', ' ')}</span></div>
-            <div className="hz-card">
+          <li key={k.id} className="agenda" style={{ opacity: state === 'past' ? 0.5 : 1 }}>
+            <div className="tm num">{h12(k.start_min)}</div>
+            <div className="bl" style={{ background: `hsl(${h} 90% 94%)`, borderLeft: `5px solid hsl(${h} 75% 52%)`, color: '#0B1230' }}>
               <b>{k.title}</b>
-              <div className="hz-meta">
-                <span>{(k.end_min - k.start_min)} min</span>
-                <span>{k.building || k.room ? [k.building, k.room].filter(Boolean).join(' · ') : 'Virtual'}</span>
-                {k.code && <span className="num">{k.code}</span>}
-              </div>
-              {state === 'live' && <em className="hz-livetag"><i />Ahora</em>}
+              <small style={{ color: '#59638A' }}>{h12(k.start_min)} – {h12(k.end_min)} · {k.building || k.room ? [k.building, k.room].filter(Boolean).join(' · ') : 'Virtual'}{state === 'live' ? ' · AHORA' : ''}</small>
             </div>
           </li>
         );
       })}
-    </ol>
+    </ul>
   );
 }
 
@@ -195,18 +226,14 @@ function Exams({ data }: { data: Data }) {
   const now = Date.now() / 1000;
   if (!data.exams.length) return <Empty icon="tasks" title="Sin exámenes del DEA" text="Importa el DEA con el marcador de abajo para ver tus pruebas finales y recibir avisos." />;
   return (
-    <ul className="hz-exams">
+    <ul>
       {data.exams.map((e) => {
         const o = e.opens_at, c = e.closes_at;
         const st = o && now < o ? 'soon' : c && now > c ? 'past' : 'open';
         return (
-          <li key={e.id} className={`hz-exam ${st}`} style={{ ['--h' as string]: hue(e.course || e.title) }}>
-            <span className="hz-exam-ic"><Icon name="tasks" size={18} /></span>
-            <div>
-              <b>{e.title.replace(/^PRUEBA DE EVALUACIÓN FINAL:\s*/i, '')}</b>
-              <small>{o ? `Abre ${dateStr(o)}` : ''}{o && c ? ' · ' : ''}{c ? `Cierra ${dateStr(c)}` : ''}</small>
-            </div>
-            <span className="hz-badge">{st === 'soon' ? `en ${left(Math.round((o! - now) / 60))}` : st === 'open' ? 'Abierto' : 'Pasó'}</span>
+          <li key={e.id} className="row nol">
+            <div className="t"><b>{e.title.replace(/^PRUEBA DE EVALUACIÓN FINAL:\s*/i, '')}</b><small>{o ? `Abre ${dateStr(o)}` : ''}{o && c ? ' · ' : ''}{c ? `Cierra ${dateStr(c)}` : ''}</small></div>
+            <span className={`chip ${st === 'open' ? 'c-mint' : st === 'soon' ? 'c-orange' : 'c-gray'}`}>{st === 'soon' ? `En ${left(Math.round((o! - now) / 60))}` : st === 'open' ? 'Abierto' : 'Pasó'}</span>
           </li>
         );
       })}
@@ -328,26 +355,45 @@ export function Horario() {
   if (!data.data) return <Skeleton rows={2} />;
   const d = data.data;
   const examsOpen = d.exams.filter((e) => !e.closes_at || e.closes_at * 1000 > Date.now()).length;
+  const TABS = [{ id: 'semana', label: 'Semana' }, { id: 'examenes', label: `Exámenes${examsOpen ? ` · ${examsOpen}` : ''}` }, { id: 'calendario', label: 'Calendario' }, { id: 'proximo', label: 'Próximo' }] as const;
   return (
-    <>
-      <PageHead eyebrow={d.classes[0] ? `Trimestre ${d.classes[0].term}` : 'Mi UAPA'} title="Horario" />
-      {d.classes.length ? <Hero data={d} now={now} /> : (
-        <Empty icon="calendar" title="Aún no tienes tu horario aquí" text="Impórtalo desde Mi UAPA con el marcador (abajo) y Rumbo te avisará antes de cada clase." />
-      )}
-      <Segmented label="Horario" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'examenes', label: 'Exámenes', count: examsOpen || undefined }, { id: 'calendario', label: 'Calendario' }, { id: 'proximo', label: 'Próximo' }]} />
+    <div className="rbx">
+      <header className="top">
+        <div><div className="eb">{d.classes[0] ? `Mi UAPA · trimestre ${d.classes[0].term}` : 'Mi UAPA'}</div><h1 tabIndex={-1}>Horario</h1></div>
+        <div className="sp" />
+        <div className="seg" role="tablist" aria-label="Horario">
+          {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => { haptic(5); setTab(t.id); }}>{t.label}</button>)}
+        </div>
+      </header>
+      {!d.classes.length && <div className="card"><Empty icon="calendar" title="Aún no tienes tu horario aquí" text="Impórtalo desde Mi UAPA con el marcador (abajo) y Rumbo te avisará antes de cada clase." /></div>}
       {tab === 'semana' && d.classes.length > 0 && (
-        <>
-          <WeekGrid data={d} sel={sel} onSel={(i) => { setPicked(true); setSel(i); }} now={now} />
-          <h3 className="hz-day">{DIAS_LARGO[sel]}{dayIdx(now) === sel ? <span>hoy</span> : null}</h3>
-          <DayAgenda data={d} day={sel} now={now} />
-          <AttendanceCard />
-        </>
+        <div className="grid2" style={{ gridTemplateColumns: 'minmax(0,2.2fr) minmax(0,1fr)' }}>
+          <div className="col">
+            <Timetable data={d} sel={sel} onSel={(i) => { setPicked(true); setSel(i); }} now={now} />
+            <section className="card">
+              <div className="head"><h3>{DIAS_LARGO[sel]}{dayIdx(now) === sel ? ' · hoy' : ''}</h3></div>
+              <DayAgenda data={d} day={sel} now={now} />
+            </section>
+          </div>
+          <div className="col">
+            <Hero data={d} now={now} />
+            <section className="card">
+              <div className="head"><h3>Exámenes del DEA</h3>{examsOpen > 0 && <span className="chip c-orange">{examsOpen} próximos</span>}</div>
+              <Exams data={d} />
+            </section>
+            <section className="card" style={{ background: 'var(--cobaltsoft)' }}>
+              <h3 style={{ color: '#1A3FD1' }}>Antes de cada clase</h3>
+              <p className="sm" style={{ marginTop: 6, color: 'var(--ink2)' }}>Rumbo te avisa {d.lead} minutos antes y te recuerda qué viste la última vez en esa materia.</p>
+            </section>
+            <AttendanceCard />
+          </div>
+        </div>
       )}
-      {tab === 'examenes' && <Exams data={d} />}
+      {tab === 'examenes' && <section className="card"><Exams data={d} /></section>}
       {tab === 'calendario' && <><UapaCalendar /><RequestsCard /></>}
       {tab === 'proximo' && <><NextTerm data={d} /><h3 className="hz-day">Planificador de selección</h3><Planner /></>}
       <Importer data={d} reload={data.reload} />
-    </>
+    </div>
   );
 }
 

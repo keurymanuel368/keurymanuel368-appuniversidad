@@ -10,6 +10,16 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 81,
+    date: '2026-11-11',
+    title: '🧭 Rumbo completo con el diseño nuevo',
+    items: [
+      'Inicio, Tareas, Notas, Horario, Estudio, Avisos, Pagos y Pensum rehechos con el diseño de la brújula: tarjetas grandes, anillos de avance y listas limpias.',
+      'Horario en cuadrícula con la línea de «ahora», semana eficiente por columnas y notas con el índice del trimestre en grande.',
+      'Textos que ya no se montan: se acortan con puntos suspensivos.',
+    ],
+  },
+  {
     version: 80,
     date: '2026-11-11',
     title: '🧭 Rumbo estrena diseño: la brújula',

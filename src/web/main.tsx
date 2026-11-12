@@ -10,6 +10,7 @@ import './identity.css';
 import './home.css';
 import './today.css';
 import './elevate.css';
+import './rb.css';
 import './brujula.css';
 import { initTheme } from './theme';
 import { startUpdater } from './updater';

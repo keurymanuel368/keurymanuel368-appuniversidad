@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, dateLabel, type Course, type PensumRow, type Task } from '../api';
 import { CountUp, Empty, Modal, PageHead, Ring, Segmented, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, runSync, setActivityIgnored, syncToast, toast, toggleTask, useLoad } from '../components';
 import { Icon } from '../icons';
+import { RbRing, RbTask } from '../rb';
 import { AverageChart, FeedbackNotes, RecordModal } from '../NotasExtras';
 import { gradeWeights, neededFor } from '../../shared/promedio';
 
@@ -24,40 +25,35 @@ export function Asignaturas() {
   const current = list.find((c) => c.id === sel) || list[0] || null;
 
   return (
-    <>
-      <PageHead eyebrow="Este trimestre" title="Notas">
-        <button className="btn line" onClick={() => { haptic(6); setRecord(true); }} aria-label="Récord de notas"><Icon name="download" size={18} /><span className="lbl">Récord</span></button>
-        <button className="btn line" onClick={() => setAdding(true)} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Agregar a mano</span></button>
-      </PageHead>
+    <div className="rbx">
+      <header className="top">
+        <div><div className="eb">Este trimestre</div><h1 tabIndex={-1}>Notas</h1></div>
+        <div className="sp" />
+        <button className="btn b-line" style={{ background: 'var(--card)' }} onClick={() => { haptic(6); setRecord(true); }} aria-label="Récord de notas"><Icon name="download" size={18} /><span className="lbl">Récord de notas</span></button>
+        <button className="btn b-pri" onClick={() => setAdding(true)} aria-label="Agregar asignatura"><Icon name="plus" size={18} /><span className="lbl">Agregar a mano</span></button>
+      </header>
       {courses.error && <div className="error">{courses.error}</div>}
       {!courses.data ? <Skeleton hero={false} rows={4} /> : list.length === 0 ? (
         <div className="card"><Empty icon="book" title="Aún no hay asignaturas de este trimestre" text="El EVA las publica cuando empieza la docencia. Tus notas del trimestre anterior están abajo, en «Trimestres anteriores».">
-          <button className="btn primary" onClick={() => runSync().then((r) => { syncToast(r); courses.reload(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA ahora</button>
+          <button className="btn b-pri" onClick={() => runSync().then((r) => { syncToast(r); courses.reload(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA ahora</button>
         </Empty></div>
-      ) : (<>
-        <TermSummary courses={list} onPick={(id) => { haptic(5); setSel(id); }} />
-        <FinalGrades courses={list} onPick={(id) => { haptic(5); setSel(id); if (window.innerWidth < 900) setTimeout(() => document.querySelector('.detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }} />
-        <AverageChart />
-        <section className="grid2 courses-layout">
-          <div className="courses scroller picker">
-            {list.map((c) => (
-              <button key={c.id} className={`course ${current?.id === c.id ? 'on' : ''}`} onClick={() => { haptic(5); setSel(c.id); if (window.innerWidth < 900) setTimeout(() => document.querySelector('.detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }} style={{ ['--c' as string]: c.color }} aria-pressed={current?.id === c.id}>
-                <span className="course-top"><span className="code">{c.code || (c.short_name || '').toUpperCase().slice(0, 14)}</span><span className="grade num">{c.average ?? '—'}</span></span>
-                <span className="name">{c.name}</span>
-                <div className="progress"><div style={{ width: `${c.total ? (c.graded / c.total) * 100 : 0}%` }} /></div>
-                <span className="meta num">{c.graded}/{c.total} calificadas{c.pending_tasks ? ` · ${c.pending_tasks} pend.` : ''}</span>
-                {c.progress != null && <span className="course-prog"><span className="muted small">Avance EVA <b className="num">{c.progress}%</b></span><i style={{ ['--p' as string]: `${c.progress}%`, ['--c' as string]: c.color }} /></span>}
-              </button>
-            ))}
+      ) : (
+        <div className="grid2">
+          <div className="col">
+            <TermSummary courses={list} onPick={(id) => { haptic(5); setSel(id); }} />
+            <FinalGrades courses={list} onPick={(id) => { haptic(5); setSel(id); if (window.innerWidth < 900) setTimeout(() => document.querySelector('.detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }} />
+            <AverageChart />
           </div>
-          {current && <Detail key={current.id} course={current} courses={list} onChanged={courses.reload} />}
-        </section>
-      </>)}
+          <div className="col">
+            {current && <Detail key={current.id} course={current} courses={list} onChanged={courses.reload} />}
+          </div>
+        </div>
+      )}
       <FeedbackNotes />
       <History />
       {record && <RecordModal onClose={() => setRecord(false)} />}
       {adding && <AddCourse onClose={() => setAdding(false)} onSaved={() => { setAdding(false); courses.reload(); }} />}
-    </>
+    </div>
   );
 }
 
@@ -85,25 +81,36 @@ function TermSummary({ courses, onPick }: { courses: Course[]; onPick: (id: numb
     return rows.reduce((a, c) => a + ((c.average ?? x) * c.graded + x * Math.max(0, c.total - c.graded)) / Math.max(1, c.total) * creditsOf(c), 0) / Math.max(1, cr);
   };
   return (
-    <div className="term-summary stagger">
-      <div className="ts-index">
-        <span className="kicker"><Icon name="trend" size={14} />ÍNDICE DEL TRIMESTRE</span>
-        <b className="num"><CountUp value={index} decimals={1} /></b>
-        <span>{index >= 90 ? 'Excelente: vas con honores 🏅' : index >= 80 ? 'Muy bien, sigue así' : index >= 70 ? 'Aprobando, pero con poco margen' : 'Por debajo de 70: hay que subirlo'}</span>
-        <div className="ts-bar"><div style={{ width: `${Math.min(100, index)}%` }} /><i style={{ left: '70%' }} /></div>
-        <small>Ponderado por los créditos de tu pensum · mínimo 70</small>
+    <>
+      <section className="hero" style={{ padding: 32 }}>
+        <div className="tick" />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 32, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 260px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#BCD0FF' }}>Índice del trimestre</div>
+            <div className="num" style={{ fontSize: 'clamp(64px,9vw,110px)', lineHeight: 1, fontWeight: 800, letterSpacing: '-.05em', margin: '6px 0 8px' }}><CountUp value={index} decimals={1} /></div>
+            <p style={{ fontSize: 16, color: '#DDE6FF' }}>{index >= 90 ? 'Excelente: vas con honores. ' : index >= 80 ? 'Muy bien, sigue así. ' : index >= 70 ? 'Aprobando, pero con poco margen. ' : 'Por debajo de 70: hay que subirlo. '}Ponderado por los créditos de tu pensum, mínimo 70.</p>
+          </div>
+          <div style={{ width: 260, maxWidth: '100%' }}>
+            <div style={{ position: 'relative', height: 12, borderRadius: 99, background: 'rgba(255,255,255,.2)' }}>
+              <i style={{ display: 'block', height: '100%', width: `${Math.min(100, index)}%`, borderRadius: 'inherit', background: 'var(--orange)' }} />
+              <i style={{ position: 'absolute', left: '70%', top: -6, width: 3, height: 24, background: '#fff', borderRadius: 2 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#BCD0FF', marginTop: 8 }}><span>0</span><span>mínimo 70</span><span>100</span></div>
+          </div>
+        </div>
         {left > 0 && <Projection left={left} projected={projected} />}
-      </div>
-      <div className="ts-risk">
-        <span className="label"><Icon name="alert" size={15} />{risky.length ? 'Asignaturas a vigilar' : 'Sin riesgo'}</span>
-        {risky.length === 0 ? <p className="muted small">Todas tus asignaturas van por encima de 75. 🎉</p> : risky.map((c) => (
-          <button key={c.id} className={`risk-row ${c.average! < 70 ? 'bad' : 'warn'}`} onClick={() => onPick(c.id)}>
-            <span className="dot" style={{ background: c.color }} /><span className="risk-name">{c.name}</span>
-            <b className="num">{c.average}</b><span className="risk-tag">{c.average! < 70 ? 'En riesgo' : 'Cerca de 70'}</span>
-          </button>
-        ))}
-      </div>
-    </div>
+      </section>
+      {risky.length > 0 && (
+        <section className="card">
+          <div className="head"><h3>Asignaturas a vigilar</h3><span className="chip c-rose num">{risky.length}</span></div>
+          <ul>
+            {risky.map((c) => (
+              <li key={c.id} className="row"><span className="dot" style={{ background: c.color }} /><button className="t" onClick={() => onPick(c.id)}><b>{c.name}</b><small>{c.average! < 70 ? 'En riesgo' : 'Cerca de 70'}</small></button><span className={`chip ${c.average! < 70 ? 'c-rose' : 'c-orange'} num`}>{c.average}</span></li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -112,10 +119,10 @@ function Projection({ left, projected }: { left: number; projected: (x: number) 
   const [x, setX] = useState(85);
   const end = projected(x);
   return (
-    <div className="ts-proj">
-      <label htmlFor="proj">Si saco <b className="num">{x}</b> en {left === 1 ? 'la actividad que falta' : `las ${left} actividades que faltan`}…</label>
-      <input id="proj" type="range" min={50} max={100} step={1} value={x} onChange={(e) => { setX(Number(e.target.value)); haptic(3); }} className="range" style={{ ['--p' as string]: `${((x - 50) / 50) * 100}%` }} aria-valuetext={`${x}: terminarías con ${end.toFixed(1)}`} />
-      <span className="ts-proj-out">Terminarías el trimestre con <b className="num">{end.toFixed(1)}</b> {end >= 90 ? '🏅' : end >= 70 ? '✅' : '⚠️'}</span>
+    <div style={{ position: 'relative', marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,.2)' }}>
+      <label htmlFor="proj" style={{ fontSize: 14.5, color: '#DDE6FF' }}>Si saco <b className="num">{x}</b> en {left === 1 ? 'la actividad que falta' : `las ${left} actividades que faltan`}…</label>
+      <input id="proj" type="range" min={50} max={100} step={1} value={x} onChange={(e) => { setX(Number(e.target.value)); haptic(3); }} className="range" style={{ width: '100%', accentColor: '#FF7A1A', margin: '10px 0 6px' }} aria-valuetext={`${x}: terminarías con ${end.toFixed(1)}`} />
+      <span style={{ fontSize: 15, color: '#fff' }}>Terminarías el trimestre con <b className="num" style={{ fontSize: 22 }}>{end.toFixed(1)}</b> {end >= 90 ? '🏅' : end >= 70 ? '✅' : '⚠️'}</span>
     </div>
   );
 }
@@ -125,18 +132,18 @@ function History() {
   const h = useLoad(() => api<PastCourse[]>('/courses/history'));
   if (!h.data?.length) return null;
   return (
-    <div className="section">
-      <div className="section-head"><h3>Trimestres anteriores</h3><span className="pill gray num">{h.data.length}</span></div>
-      <div className="card list">
+    <section className="card rbx">
+      <div className="head"><h3>Trimestres anteriores</h3><span className="chip c-gray num">{h.data.length}</span></div>
+      <ul>
         {h.data.map((c) => (
-          <div key={c.id} className="hist-row">
+          <li key={c.id} className="row">
             <span className="dot" style={{ background: c.color }} />
-            <span className="hist-copy"><b>{c.name}</b><small>{c.code ? c.code + ' · ' : ''}{c.delivered} entregas · {c.total ? `${c.graded} de ${c.total}` : c.graded} calificadas</small></span>
-            {c.average !== null ? <span className={`grade-badge ${c.average >= 70 ? 'good' : 'bad'}`}><b className="num">{c.average}</b></span> : <span className="pill gray">Sin nota</span>}
-          </div>
+            <div className="t"><b>{c.name}</b><small>{c.code ? c.code + ' · ' : ''}{c.delivered} entregas · {c.total ? `${c.graded} de ${c.total}` : c.graded} calificadas</small></div>
+            {c.average !== null ? <span className={`chip ${c.average >= 70 ? 'c-mint' : 'c-rose'} num`} style={{ fontSize: 15 }}>{c.average}</span> : <span className="chip c-gray">Sin nota</span>}
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 }
 
@@ -182,91 +189,87 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
     : null;
 
   return (
-    <div className="col detail">
-      <div className="card course-detail" style={{ ['--c' as string]: course.color }}>
-        <div className="detail-head">
-          <div className="detail-copy">
-            <span className="code num">{course.code || course.short_name}</span>
-            <h2>{course.name}</h2>
-            <span className="muted small">{graded.length} de {countable} actividades calificadas{off.length ? ` · ${off.length} no cuenta${off.length === 1 ? '' : 'n'}` : ''}</span>
-            {course.progress != null && <span className="course-prog" aria-label={`Avance en el EVA ${course.progress}%`}><span className="muted small">Avance del curso en el EVA · <b className="num">{course.progress}%</b></span><i style={{ ['--p' as string]: `${course.progress}%` }} /></span>}
-            {course.eva_total != null && course.eva_total_max ? (() => {
-              const evaPct = (course.eva_total / course.eva_total_max) * 100;
-              const off = course.average !== null && Math.abs(evaPct - course.average) > 2;
-              return <span className={`eva-total ${off ? 'off' : ''}`}>Total oficial en el EVA: <b className="num">{fmtGrade(Math.round(course.eva_total * 100) / 100)}/{fmtGrade(course.eva_total_max)}</b>{off ? ' · no coincide con el promedio de Rumbo: el EVA calcula con su propia fórmula (pesos y actividades que cuenta)' : ''}</span>;
-            })() : null}
+    <>
+      <section className="card detail" style={{ ['--c' as string]: course.color }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+          <RbRing pct={course.average ?? pct} size={96} dark>{course.average !== null ? fmtGrade(course.average) : `${pct}%`}</RbRing>
+          <div style={{ flex: 1 }}>
+            <span className="chip c-blue num">{course.code || course.short_name}</span>
+            <h3 style={{ fontSize: 21, marginTop: 6 }}>{course.name}</h3>
+            <p className="sm" style={{ color: 'var(--muted)' }}>{graded.length} de {countable} actividades calificadas{off.length ? ` · ${off.length} no cuenta${off.length === 1 ? '' : 'n'}` : ''}</p>
+            {course.progress != null && <p className="sm" style={{ color: 'var(--muted)' }}>Avance del curso en el EVA · <b className="num">{course.progress}%</b></p>}
           </div>
-          <Ring value={course.average ?? pct} size={84} stroke={10} light={false} display={course.average !== null ? fmtGrade(course.average) : `${pct}%`} label={course.average !== null ? 'promedio' : 'calificado'} />
         </div>
+        {course.eva_total != null && course.eva_total_max ? (() => {
+          const evaPct = (course.eva_total / course.eva_total_max) * 100;
+          const offc = course.average !== null && Math.abs(evaPct - course.average) > 2;
+          return <p className="sm" style={{ color: offc ? 'var(--rose)' : 'var(--muted)', marginBottom: 12 }}>Total oficial en el EVA: <b className="num">{fmtGrade(Math.round(course.eva_total * 100) / 100)}/{fmtGrade(course.eva_total_max)}</b>{offc ? ' · no coincide con el promedio de Rumbo: el EVA calcula con su propia fórmula (pesos y actividades que cuenta)' : ''}</p>;
+        })() : null}
         {course.facilitator_eva && !course.facilitator ? (
-          <div className="facilitator"><span className="set-ic violet"><Icon name="cap" size={18} /></span><div><span className="small muted">Facilitador/a · según el EVA</span><b>{course.facilitator_eva}</b></div></div>
+          <p className="sm" style={{ color: 'var(--muted)', marginBottom: 12 }}>Facilitador/a · según el EVA: <b style={{ color: 'var(--ink)' }}>{course.facilitator_eva}</b></p>
         ) : (
-          <div className="field"><label htmlFor="fac">Facilitador/a</label><input id="fac" className="input" value={fac} onChange={(e) => setFac(e.target.value)} onBlur={saveFac} placeholder={course.facilitator_eva || 'El EVA no lo publica: escríbelo aquí'} /></div>
+          <div className="field" style={{ marginBottom: 12 }}><label htmlFor="fac" className="sm" style={{ color: 'var(--muted)' }}>Facilitador/a</label><input id="fac" className="input" value={fac} onChange={(e) => setFac(e.target.value)} onBlur={saveFac} placeholder={course.facilitator_eva || 'El EVA no lo publica: escríbelo aquí'} /></div>
         )}
         {grades.error && <div className="error">{grades.error}</div>}
         {!grades.data ? <div className="sk" style={{ height: 120 }} /> : g.length === 0 ? (
           <Empty icon="trend" title="Todavía no hay notas" text="Aparecen cuando el facilitador califica en el EVA. Rumbo revisa solo cada rato; si te acaban de calificar, revísalo ahora.">
-            <button className="btn line" onClick={() => runSync().then((r) => { syncToast(r); grades.reload(); onChanged(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA</button>
+            <button className="btn b-line" onClick={() => runSync().then((r) => { syncToast(r); grades.reload(); onChanged(); }).catch((e) => toast((e as Error).message, 'err'))}><Icon name="sync" size={17} />Revisar el EVA</button>
           </Empty>
         ) : (<>
-          <Segmented label="Ordenar notas" value={order} onChange={(o) => { haptic(4); setOrder(o); }} options={[{ id: 'fecha', label: 'Por fecha' }, { id: 'sin', label: 'Sin nota', count: pending }, { id: 'nota', label: 'Por nota' }]} />
-          <div className="grades">
-            {shownGrades.length === 0 && <p className="muted small center">Todo lo de esta asignatura ya tiene nota. 🎉</p>}
+          <div className="seg" role="tablist" aria-label="Ordenar notas" style={{ marginBottom: 8 }}>
+            {([['fecha', 'Por fecha'], ['sin', `Sin nota${pending ? ` · ${pending}` : ''}`], ['nota', 'Por nota']] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={order === id} className={order === id ? 'on' : ''} onClick={() => { haptic(4); setOrder(id); }}>{label}</button>)}
+          </div>
+          <ul>
+            {shownGrades.length === 0 && <p className="sm" style={{ color: 'var(--muted)', padding: '10px 0' }}>Todo lo de esta asignatura ya tiene nota. 🎉</p>}
             {shownGrades.map((x) => {
               const v = x.grade === null ? null : (x.grade / x.grade_max) * 100;
-              const tone = v === null ? 'gray' : v >= 70 ? 'green' : 'red';
+              const cls = v === null ? 'c-gray' : v >= 90 ? 'c-mint' : v >= 70 ? 'c-blue' : 'c-rose';
               return (
-                <button key={x.id} className="grade-row tappable" onClick={() => { haptic(5); setSheet(x); }}>
-                  <div className="grade-top">
-                    <span className="grade-name">{x.item_name}<small>{x.due_at ? dateLabel(x.due_at) : ''}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota tomada del foro' : x.source === 'manual' ? ' · nota puesta por ti' : ''}{weighted ? (counts(x) ? ` · vale ${fmtGrade(Math.round(weightOf(x) * 1000) / 10)} %` : ' · vale 0 % en el EVA') : ''}</small></span>
-                    <span className={`grade-val num ${tone}`}>{x.grade === null ? (counts(x) ? 'Pendiente' : 'No cuenta') : `${fmtGrade(x.grade)}/${fmtGrade(x.grade_max)}`}</span>
-                    <Icon name="chevron" size={16} className="row-chevron" />
-                  </div>
-                  <div className="progress thin"><div className={tone} style={{ width: `${v ?? 0}%` }} /></div>
-                </button>
+                <li key={x.id} className="row">
+                  <button className="t" onClick={() => { haptic(5); setSheet(x); }}>
+                    <b>{x.item_name}</b>
+                    <small>{x.due_at ? dateLabel(x.due_at) : ''}{x.status === 'done' && x.grade === null ? ' · entregada, sin nota' : ''}{x.source === 'foro' ? ' · nota del foro' : x.source === 'manual' ? ' · nota puesta por ti' : ''}{weighted ? (counts(x) ? ` · vale ${fmtGrade(Math.round(weightOf(x) * 1000) / 10)} %` : ' · vale 0 % en el EVA') : ''}</small>
+                  </button>
+                  <span className={`chip ${cls} num`}>{x.grade === null ? (counts(x) ? 'Pendiente' : 'No cuenta') : `${fmtGrade(x.grade)}/${fmtGrade(x.grade_max)}`}</span>
+                </li>
               );
             })}
-          </div>
+          </ul>
           {off.length > 0 && (
-            <div className="grades-off">
-              <button className="link-btn" onClick={() => { haptic(4); setShowOff((v) => !v); }} aria-expanded={showOff}>
-                <Icon name="chevron" size={15} style={{ transform: showOff ? 'rotate(90deg)' : undefined }} />No cuentan para el promedio · {off.length}
-              </button>
+            <div style={{ marginTop: 10 }}>
+              <button className="link" onClick={() => { haptic(4); setShowOff((v) => !v); }} aria-expanded={showOff}>No cuentan para el promedio · {off.length} {showOff ? '▾' : '▸'}</button>
               {showOff && off.map((x) => (
-                <div key={x.id} className="grade-off-row">
-                  <span className="grade-name">{x.item_name}<small>{x.auto ? 'No se corrige: Rumbo la quitó sola' : 'La quitaste tú'}</small></span>
-                  <button className="btn soft sm" onClick={() => setActivityIgnored({ gradeId: x.id }, false, reloadAll).catch((e) => toast((e as Error).message, 'err'))}>Volver a contar</button>
+                <div key={x.id} className="row">
+                  <div className="t"><b>{x.item_name}</b><small>{x.auto ? 'No se corrige: Rumbo la quitó sola' : 'La quitaste tú'}</small></div>
+                  <button className="btn b-line" style={{ padding: '8px 14px', fontSize: 13 }} onClick={() => setActivityIgnored({ gradeId: x.id }, false, reloadAll).catch((e) => toast((e as Error).message, 'err'))}>Volver a contar</button>
                 </div>
               ))}
             </div>
           )}
         </>)}
-      </div>
+      </section>
 
       {upcoming.data && upcoming.data.length > 0 && (
-        <div className="card">
-          <div className="card-head"><h3>Próximas entregas</h3><span className="pill blue num">{upcoming.data.length}</span></div>
-          <div className="list">{upcoming.data.map((t) => <TaskRow key={t.id} t={t} onToggle={(x) => toggleTask(x, () => { upcoming.reload(); grades.reload(); }).catch((e) => toast((e as Error).message, 'err'))} onOpen={setOpen} />)}</div>
-        </div>
+        <section className="card">
+          <div className="head"><h3>Próximas entregas</h3><span className="chip c-blue num">{upcoming.data.length}</span></div>
+          <ul>{upcoming.data.map((t) => <RbTask key={t.id} t={t} onToggle={(x) => toggleTask(x, () => { upcoming.reload(); grades.reload(); }).catch((e) => toast((e as Error).message, 'err'))} onOpen={setOpen} />)}</ul>
+        </section>
       )}
-      <div className="card simulator">
-        <span className="kicker"><Icon name="spark" size={14} />SIMULADOR DE NOTA</span>
-        <h3>¿Cuánto necesito en lo que falta?</h3>
-        <div className="sim-goal">
-          <label htmlFor="goal">Quiero terminar con</label>
-          <b className="num">{goal}</b>
+      <section className="card" style={{ background: 'var(--night)', color: '#fff' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8FB0FF' }}>Simulador de nota</div>
+        <h3 style={{ fontFamily: 'var(--display)', fontSize: 20, margin: '6px 0 16px' }}>¿Cuánto necesito en lo que falta?</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><label htmlFor="goal" style={{ color: '#B8C3EE' }}>Quiero terminar con</label><b className="num" style={{ fontSize: 44, fontWeight: 800 }}>{goal}</b></div>
+        <input id="goal" type="range" min={60} max={100} step={1} value={goal} onChange={(e) => { setGoal(Number(e.target.value)); haptic(3); }} style={{ width: '100%', accentColor: '#FF7A1A', margin: '10px 0 6px' }} />
+        <div className="num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#8FB0FF' }}><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span></div>
+        <div style={{ marginTop: 16, background: 'rgba(255,255,255,.1)', borderRadius: 16, padding: '12px 14px', fontSize: 14 }}>
+          {verdict ?? <>Necesitas un promedio de <b className="num" style={{ fontSize: 20 }}>{Math.max(0, Math.ceil(need ?? 0))}</b> {pending === 1 ? 'en la actividad que falta.' : `en las ${pending} actividades que faltan.`}</>}
         </div>
-        <input id="goal" type="range" min={60} max={100} step={1} value={goal} onChange={(e) => { setGoal(Number(e.target.value)); haptic(3); }} className="range" style={{ ['--p' as string]: `${((goal - 60) / 40) * 100}%` }} />
-        <div className="sim-scale num"><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span></div>
-        <div className="sim-result">
-          {verdict ?? <><span>Necesitas un promedio de</span><b className="num">{Math.max(0, Math.ceil(need ?? 0))}</b><span>{pending === 1 ? "en la actividad que falta." : `en las ${pending} actividades que faltan.`}</span></>}
-        </div>
-        <p className="sim-note">{weighted ? 'Usa el peso que cada actividad tiene en el EVA.' : 'Cálculo aproximado: el EVA no publica los pesos, así que supone que todas las actividades valen lo mismo.'}</p>
-      </div>
+        <p style={{ fontSize: 12, color: '#8FB0FF', marginTop: 10 }}>{weighted ? 'Usa el peso que cada actividad tiene en el EVA.' : 'Cálculo aproximado: el EVA no publica los pesos, así que supone que todas las actividades valen lo mismo.'}</p>
+      </section>
       {open && <TaskSheet task={open} courses={courses} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); reloadAll(); }} />}
       {sheet && <GradeSheet grade={sheet} course={course} weightText={weighted ? (counts(sheet) ? `Vale ${fmtGrade(Math.round(weightOf(sheet) * 1000) / 10)} % de la nota` : 'En el EVA vale 0 %: no suma a tu promedio') : 'Todas las actividades valen lo mismo'}
         onClose={() => setSheet(null)} onOpenTask={(id) => { setSheet(null); void openTask(id); }} onChanged={() => { setSheet(null); reloadAll(); }} />}
-    </div>
+    </>
   );
 }
 
@@ -347,36 +350,36 @@ function FinalGrades({ courses, onPick }: { courses: Course[]; onPick: (id: numb
     catch { toast('No pude copiar', 'err'); }
   }
   return (
-    <div className="section">
-      <div className="section-head">
-        <h3>Promedio final</h3>
-        <span className={`pill ${allDone ? 'green' : 'gray'}`}>{allDone ? 'Trimestre completo' : 'Parcial'}</span>
-        <button className="btn soft sm" onClick={copy}><Icon name="upload" size={15} />Copiar</button>
+    <section className="card">
+      <div className="head">
+        <h3>Promedio final por asignatura</h3>
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className={`chip ${allDone ? 'c-mint' : 'c-gray'}`}>{allDone ? 'Trimestre completo' : 'Parcial'}</span>
+          <button className="link" onClick={copy}>Copiar</button>
+        </span>
       </div>
-      <div className="card list final-grades">
+      <ul>
         {rows.map((c) => {
           const eva = evaOf(c);
           return (
-            <button key={c.id} className="final-row" onClick={() => onPick(c.id)} style={{ ['--c' as string]: c.color }}>
+            <li key={c.id} className="row">
               <span className="dot" style={{ background: c.color }} />
-              <span className="final-copy">
+              <button className="t" onClick={() => onPick(c.id)}>
                 <b>{c.name}</b>
                 <small>{c.credits || 3} créditos · {c.complete ? 'todas las notas' : `${c.graded} de ${c.total} calificadas`}{eva !== null && c.average !== null && Math.abs(eva - c.average) > 2 ? ` · EVA: ${fmtGrade(eva)}` : ''}</small>
-              </span>
-              {c.average !== null
-                ? <span className={`grade-badge ${c.average >= 70 ? 'good' : 'bad'}`}><b className="num">{fmtGrade(c.average)}</b>{!c.complete && <small>parcial</small>}</span>
-                : <span className="pill gray">Sin nota</span>}
-            </button>
+              </button>
+              {c.average !== null ? <span className={`chip ${c.average >= 90 ? 'c-mint' : c.average >= 70 ? 'c-blue' : 'c-rose'} num`} style={{ fontSize: 15 }}>{fmtGrade(c.average)}</span> : <span className="chip c-gray">Sin nota</span>}
+            </li>
           );
         })}
         {index !== null && (
-          <div className="final-row total">
-            <span className="final-copy"><b>Índice del trimestre</b><small>Ponderado por créditos · las actividades que no se corrigen no cuentan</small></span>
-            <span className={`grade-badge ${index >= 70 ? 'good' : 'bad'}`}><b className="num">{index.toFixed(1)}</b></span>
-          </div>
+          <li className="row" style={{ background: 'var(--cobaltsoft)', borderRadius: 16, marginTop: 6 }}>
+            <div className="t"><b>Índice del trimestre</b><small>Ponderado por créditos · lo que no se corrige no cuenta</small></div>
+            <span className={`chip ${index >= 70 ? 'c-mint' : 'c-rose'} num`} style={{ fontSize: 16 }}>{index.toFixed(1)}</span>
+          </li>
         )}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 }
 

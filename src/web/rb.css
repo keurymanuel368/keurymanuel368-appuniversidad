@@ -1,0 +1,133 @@
+/* Sistema de diseño del lienzo "Rumbo Nuevo Diseño", con el prefijo .rbx para no chocar con estilos viejos */
+.rbx{--ink:#0B1230;--ink2:#2A3358;--muted:#59638A;--line:#E1E7F5;--card:#FFFFFF;--cobalt:#2350FF;--cobaltsoft:#E4EBFF;--orange:#FF7A1A;--orangesoft:#FFEBD9;--mint:#0A8F68;--mintsoft:#DCF6EA;--rose:#D92D58;--rosesoft:#FFE3EA;--night:#070C24;--night2:#111B4A;--hand:'Caveat',cursive;display:flex;flex-direction:column;gap:22px;min-width:0;font-family:var(--body)}
+.rbx ul{list-style:none;margin:0;padding:0}.rbx h1,.rbx h2,.rbx h3,.rbx h4,.rbx p{margin:0}
+.rbx .i{width:22px;height:22px;flex:none}
+.rbx *{min-width:0}
+.rbx h1, .rbx h2, .rbx h3, .rbx h4, .rbx p, .rbx ul{margin:0;padding:0}
+.rbx ul{list-style:none}
+.rbx svg.i{width:22px;height:22px;flex:none}
+.rbx .num{font-family:var(--display);font-variant-numeric:tabular-nums}
+.rbx .card{background:var(--card);border-radius:28px;padding:22px;box-shadow:0 1px 2px rgba(11,18,48,.05),0 18px 40px -26px rgba(11,18,48,.35)}
+.rbx .card h3{font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:-.01em}
+.rbx .head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.rbx .link{color:var(--cobalt);font-weight:700;font-size:13.5px;text-decoration:none}
+.rbx .muted{color:var(--muted)}
+.rbx .sm{font-size:13px}
+.rbx .chip{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:4px 11px;font-size:12px;font-weight:700;white-space:nowrap}
+.rbx .c-blue{background:var(--cobaltsoft);color:#1A3FD1}
+.rbx .c-rose{background:var(--rosesoft);color:var(--rose)}
+.rbx .c-mint{background:var(--mintsoft);color:var(--mint)}
+.rbx .c-orange{background:var(--orangesoft);color:#B04A00}
+.rbx .c-gray{background:#EEF1F8;color:var(--ink2)}
+.rbx .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:99px;padding:13px 22px;font:inherit;font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:none}
+.rbx .b-pri{background:var(--cobalt);color:#fff;box-shadow:0 12px 24px -12px rgba(35,80,255,.9)}
+.rbx .b-or{background:var(--orange);color:#fff;box-shadow:0 12px 24px -12px rgba(255,122,26,.9)}
+.rbx .b-line{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.rbx .b-dark{background:var(--night);color:#fff}
+.rbx .seg{display:inline-flex;background:#E3E9F8;border-radius:99px;padding:4px;gap:2px}
+.rbx .seg a, .rbx .seg span{padding:9px 18px;border-radius:99px;font-weight:700;font-size:14px;color:var(--muted);text-decoration:none}
+.rbx .seg .on{background:var(--card);color:var(--ink);box-shadow:0 2px 8px -2px rgba(11,18,48,.2)}
+.rbx .grid2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px}
+.rbx .col{display:flex;flex-direction:column;gap:22px;min-width:0}
+.rbx .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.rbx .row{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}
+.rbx .row:first-of-type{border-top:0}
+.rbx .row .t{flex:1;min-width:0}
+.rbx .row b{display:block;font-size:15px;font-weight:700}
+.rbx .row small{color:var(--muted);font-size:12.5px}
+.rbx .chk{width:26px;height:26px;border-radius:9px;border:2px solid #C4CDE8;flex:none}
+.rbx .bar{height:8px;border-radius:99px;background:#E3E9F8;overflow:hidden}
+.rbx .bar i{display:block;height:100%;border-radius:inherit;background:var(--cobalt)}
+.rbx .ring{width:132px;height:132px;border-radius:50%;display:grid;place-items:center;flex:none;position:relative}
+.rbx .ring::before{content:'';position:absolute;inset:11px;border-radius:50%;background:var(--r-bg,var(--night2))}
+.rbx .ring span{position:relative;font-family:var(--display);font-weight:800;font-size:30px;color:#fff}
+.rbx .tile{border-radius:24px;padding:18px 20px;display:flex;flex-direction:column;gap:2px}
+.rbx .tile b{font-family:var(--display);font-size:46px;line-height:1;font-weight:800;letter-spacing:-.03em}
+.rbx .tile span{font-size:13.5px;font-weight:700}
+.rbx .hero{background:radial-gradient(120% 140% at 0% 0%,#2D5BFF 0%,#1B2FA8 45%,#0E1650 100%);color:#fff;border-radius:34px;padding:30px;position:relative;overflow:hidden}
+.rbx .tick{position:absolute;right:-60px;top:-60px;width:300px;height:300px;border-radius:50%;border:1.5px solid rgba(255,255,255,.18);box-shadow:0 0 0 38px rgba(255,255,255,.04),0 0 0 76px rgba(255,255,255,.03)}
+.rbx .hand{font-family:var(--hand);font-weight:700}
+.rbx .paper{background:#FFFDF6;background-image:linear-gradient(90deg,transparent 54px,#F2A3A3 54px,#F2A3A3 56px,transparent 56px),repeating-linear-gradient(to bottom,transparent 0,transparent 31px,#CFDCF0 31px,#CFDCF0 32px);border-radius:4px 14px 14px 4px;box-shadow:0 1px 1px rgba(0,0,0,.06),0 18px 34px -18px rgba(11,18,48,.45)}
+.rbx .book{position:relative;border-radius:6px 18px 18px 6px;color:#fff;aspect-ratio:3/4;overflow:hidden;box-shadow:inset 10px 0 0 rgba(0,0,0,.16),5px 5px 0 -1px #fff,6px 6px 0 -1px #D3DAEC,0 20px 28px -16px rgba(11,18,48,.5)}
+.rbx .book .rings{position:absolute;left:-7px;top:16px;bottom:16px;display:flex;flex-direction:column;justify-content:space-between}
+.rbx .book .rings i{width:26px;height:9px;border-radius:5px;background:linear-gradient(#F3F5FB,#97A3BC)}
+.rbx .book .lab{position:absolute;left:28px;right:26px;top:36%;background:#FFFDF5;color:var(--ink);border-radius:5px;padding:9px 11px;transform:rotate(-1.6deg);box-shadow:0 2px 7px rgba(0,0,0,.3)}
+.rbx .book .lab b{font-family:var(--hand);font-size:24px;line-height:.95;display:block}
+.rbx .book .lab small{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A94A8;font-weight:800}
+.rbx .book .meta{position:absolute;left:28px;bottom:12px;display:flex;gap:6px}
+.rbx .book .meta i{font-style:normal;font-size:11.5px;font-weight:800;background:rgba(0,0,0,.26);padding:3px 9px;border-radius:99px}
+.rbx .wave{display:flex;align-items:center;gap:4px;height:44px}
+.rbx .wave i{width:5px;border-radius:99px;background:var(--orange);display:block}
+.rbx .m-title{font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:-.025em;line-height:1.05}
+.rbx .m-eb{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cobalt)}
+.rbx .sheet{background:var(--card);border-radius:24px;padding:16px;box-shadow:0 1px 2px rgba(11,18,48,.05),0 14px 30px -22px rgba(11,18,48,.4)}
+
+/* ---- Encabezado de pantalla, buscador y campana ---- */
+.rbx .sp{flex:1}
+.rbx .top{display:flex;align-items:center;gap:16px}
+.rbx .top h1{font-family:var(--display);font-size:34px;line-height:1.05;letter-spacing:-.02em;font-weight:800;-webkit-text-fill-color:currentColor;background:none}
+.rbx .top .eb{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cobalt)}
+.rbx .search{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:99px;padding:11px 18px;color:var(--muted);font-size:14px;width:300px;box-shadow:0 1px 2px rgba(11,18,48,.06);border:0;cursor:pointer;font:inherit}
+.rbx .pill-btn{width:46px;height:46px;border-radius:50%;background:var(--card);display:grid;place-items:center;color:var(--ink2);box-shadow:0 1px 2px rgba(11,18,48,.06);position:relative;border:0;cursor:pointer;flex:none}
+.rbx .pill-btn b{position:absolute;top:-2px;right:-2px;background:var(--rose);color:#fff;border-radius:99px;font-size:11px;padding:1px 6px}
+.rbx .av{width:44px;height:44px;border-radius:50%;background:var(--orange);color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:800;border:0;flex:none}
+.rbx .chk{background:none;padding:0;cursor:pointer;transition:transform .4s var(--spring),background .2s,border-color .2s}
+.rbx .chk.on{background:var(--cobalt);border-color:var(--cobalt);position:relative}
+.rbx .chk.on::after{content:'';position:absolute;left:7px;top:3px;width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.rbx .chk:active{transform:scale(.85)}
+.rbx .row.done b{text-decoration:line-through;color:var(--muted)}
+.rbx .row .t{cursor:pointer;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;display:block}
+.rbx .row .t b,.rbx .row .t small{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-box-orient:vertical}
+.rbx .row .t b{-webkit-line-clamp:2}.rbx .row .t small{-webkit-line-clamp:1}
+.rbx .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;flex:none;border:0;font-family:inherit}
+.rbx button.chip{cursor:pointer}
+.rbx .c-orange{background:var(--orangesoft);color:#B04A00}
+.rbx .c-vio{background:#ECE7FF;color:#5B3FD6}
+.rbx .link{background:none;border:0;cursor:pointer;font:inherit;font-weight:700;font-size:13.5px;color:var(--cobalt);padding:0}
+.rbx .card{padding:22px}
+.rbx .hero .chip{background:rgba(255,255,255,.16);color:#fff}
+.rbx .ringsvg{position:relative;flex:none}
+.rbx .ringsvg svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.rbx .ringsvg .mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-family:var(--display);font-weight:800;color:#fff;letter-spacing:-.03em}
+.rbx .agenda{display:flex;gap:14px;align-items:stretch}
+.rbx .agenda .tm{width:66px;flex:none;font-size:13.5px;font-weight:700;padding-top:4px;color:var(--ink2)}
+.rbx .agenda .bl{flex:1;border-radius:18px;padding:12px 14px}
+.rbx .agenda .bl b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbx .agenda .bl small{display:block;color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- Móvil ---- */
+@media (max-width:900px){
+  .rbx{gap:16px}
+  .rbx .grid2{grid-template-columns:minmax(0,1fr)}
+  .rbx .top h1{font-size:30px}
+  .rbx .search{display:none}
+  .rbx .hero{padding:22px;border-radius:30px}
+  .rbx .tile b{font-size:36px}
+  .rbx .card{padding:18px;border-radius:26px}
+}
+.rbx .seg button{padding:9px 18px;border-radius:99px;font-weight:700;font-size:14px;color:var(--muted);background:none;border:0;cursor:pointer;font-family:inherit;transition:background .25s,color .25s,box-shadow .25s}
+.rbx .seg button.on{background:var(--card);color:var(--ink);box-shadow:0 2px 8px -2px rgba(11,18,48,.2)}
+.rbx .btn{border:0;cursor:pointer;font-family:inherit}
+.rbx .btn:disabled{opacity:.6}
+.rbx .b-line{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.rbx .search input{min-width:0}
+.rbx .col-d{position:relative;border-left:1px solid var(--line)}
+.rbx .hl{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.rbx .blk{position:absolute;left:3px;right:3px;border-radius:12px;padding:6px 8px;font-size:11.5px;color:var(--ink2);overflow:hidden;line-height:1.25}
+.rbx .blk b{display:block;font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbx .dot{display:inline-block}
+.rbx .dcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;align-items:start}
+.rbx .dcol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.rbx .dh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-radius:16px;background:var(--card)}
+.rbx .tk{background:var(--card);border-radius:20px;padding:14px 14px 14px 16px;border-left:6px solid var(--c,var(--cobalt));display:flex;flex-direction:column;gap:6px;cursor:pointer;box-shadow:0 1px 2px rgba(11,18,48,.05),0 12px 26px -20px rgba(11,18,48,.35);transition:transform .45s var(--spring)}
+.rbx .tk:hover{transform:translateY(-3px)}
+.rbx .tk b{font-size:14.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rbx .avi{display:flex;gap:14px;align-items:flex-start;text-align:left;width:100%;background:var(--card);border:0;border-radius:24px;padding:16px;cursor:pointer;font:inherit;color:inherit;box-shadow:0 1px 2px rgba(11,18,48,.05),0 14px 30px -22px rgba(11,18,48,.4);transition:transform .45s var(--spring)}
+.rbx .avi:hover{transform:translateY(-2px)}
+.rbx .avi .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none}
+.rbx .avi b{font-size:15.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rbx .clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rbx .clamp3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rbx .eb{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cobalt)}
+.rbx .pay-hero,.rbx .acct-hero{border-radius:34px}
+.rbx .pay-config,.rbx .acct-period{border-radius:26px}

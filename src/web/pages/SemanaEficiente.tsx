@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, type Course, type Task } from '../api';
-import { Empty, Skeleton, TaskSheet, haptic, toast, toggleTask, useLoad } from '../components';
-import { Icon } from '../icons';
+import { Skeleton, TaskSheet, haptic, toast, toggleTask, useLoad } from '../components';
+import { RbRing } from '../rb';
 import { WorkChip } from '../TrabajoIA';
 
 const TZ = 'America/Santo_Domingo';
@@ -24,7 +24,6 @@ export function SemanaEficiente() {
   const tasks = useLoad(() => api<Task[]>('/tasks'));
   const courses = useLoad(() => api<Course[]>('/courses'));
   const [open, setOpen] = useState<Task | null>(null);
-  const [sel, setSel] = useState<string | null>(null);
   const now = Date.now() / 1000;
   const today = key(now);
   const all = (tasks.data || []).filter((t) => t.due_at);
@@ -39,76 +38,63 @@ export function SemanaEficiente() {
   const pct = total ? Math.round((doneWeek / total) * 100) : 100;
   const byDay = (k: string) => pendWeek.filter((t) => key(t.due_at!) === k)
     .sort((a, b) => prioridad(b, now).score - prioridad(a, now).score || a.due_at! - b.due_at!);
-  const maxLoad = Math.max(1, ...days.map((k) => byDay(k).length));
   const toggle = (t: Task) => { haptic(8); toggleTask(t, tasks.reload).catch((e) => toast((e as Error).message, 'err')); };
 
   if (!tasks.data) return <Skeleton rows={4} />;
-  const shownDays = sel ? days.filter((k) => k === sel) : days;
-  const R = 34, C = 2 * Math.PI * R;
 
-  const row = (t: Task) => {
+  const card = (t: Task) => {
     const p = prioridad(t, now);
     return (
-      <div key={t.id} className={`se-row ${p.level}`} role="button" tabIndex={0} onClick={() => setOpen(t)} onKeyDown={(e) => e.key === 'Enter' && setOpen(t)}>
-        <button className="se-check" aria-label="Marcar como hecha" onClick={(e) => { e.stopPropagation(); toggle(t); }}><Icon name="check" size={14} /></button>
-        <div className="se-main">
-          <b>{t.title}</b>
-          <span className="se-sub"><i style={{ background: t.course_color || 'var(--blue)' }} />{t.course_short || t.course_name || 'Personal'} · {t.due_at! < now ? 'venció ' + dayName(key(t.due_at!), true) : hora(t.due_at!)}</span>
+      <div key={t.id} className="tk" style={{ ['--c' as string]: t.due_at! < now ? 'var(--rose)' : t.course_color || 'var(--cobalt)' }} role="button" tabIndex={0} onClick={() => setOpen(t)} onKeyDown={(e) => e.key === 'Enter' && setOpen(t)}>
+        <b>{t.title}</b>
+        <span className="sm" style={{ color: 'var(--muted)' }}>{t.course_short || t.course_name || 'Personal'} · {t.due_at! < now ? 'venció ' + dayName(key(t.due_at!), true) : hora(t.due_at!)}</span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className={`chip ${p.level === 'alta' ? (t.due_at! < now ? 'c-rose' : 'c-orange') : p.level === 'media' ? 'c-blue' : 'c-gray'}`}>{p.label}</span>
+          <WorkChip taskId={t.id} title={t.title} />
+          <button className="chip c-mint" onClick={(e) => { e.stopPropagation(); toggle(t); }} aria-label="Marcar como hecha">Hecha</button>
         </div>
-        <WorkChip taskId={t.id} title={t.title} />
-        <span className={`se-prio ${p.level}`}>{p.label}</span>
       </div>
     );
   };
+  const nAlta = [...late, ...pendWeek].filter((t) => prioridad(t, now).level === 'alta').length;
+  const nMedia = [...late, ...pendWeek].filter((t) => prioridad(t, now).level === 'media').length;
+  const nBaja = [...late, ...pendWeek].filter((t) => prioridad(t, now).level === 'baja').length;
 
   return (
-    <div className="se">
-      <section className="se-hero">
-        <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true">
-          <circle cx="42" cy="42" r={R} fill="none" stroke="rgba(255,255,255,.28)" strokeWidth="8" />
-          <circle cx="42" cy="42" r={R} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} transform="rotate(-90 42 42)" style={{ transition: 'stroke-dashoffset .8s ease' }} />
-          <text x="42" y="48" textAnchor="middle" fill="#fff" fontSize="20" fontWeight="800">{pct}%</text>
-        </svg>
-        <div>
-          <span className="se-eyebrow">Semana eficiente</span>
-          <h2>{pendWeek.length + late.length === 0 ? 'Semana libre ✨' : `${pendWeek.length + late.length} por hacer`}</h2>
-          <p>{late.length ? `${late.length} atrasada${late.length > 1 ? 's' : ''}: hazlas primero.` : pendWeek.length ? 'Todo al día. Sigue el orden de abajo.' : 'No tienes nada pendiente.'}{doneWeek ? ` ${doneWeek} ya hecha${doneWeek > 1 ? 's' : ''}.` : ''}</p>
+    <>
+      <section className="hero" style={{ padding: '26px 30px' }}>
+        <div className="tick" />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 26, flexWrap: 'wrap' }}>
+          <RbRing pct={pct} size={112} />
+          <div style={{ flex: '1 1 240px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#BCD0FF' }}>Semana eficiente</div>
+            <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(24px,3vw,34px)', fontWeight: 800, letterSpacing: '-.025em', margin: '2px 0' }}>{pendWeek.length + late.length === 0 ? 'Semana libre ✨' : `${pendWeek.length + late.length} por hacer${late.length ? `, ${late.length} atrasada${late.length > 1 ? 's' : ''} primero` : ''}`}</h2>
+            <p style={{ color: '#D8E2FF', fontSize: 15 }}>{late.length ? 'Hazlas primero y la semana queda limpia.' : pendWeek.length ? 'Todo al día. Sigue el orden de abajo.' : 'No tienes nada pendiente.'}{doneWeek ? ` ${doneWeek} ya hecha${doneWeek > 1 ? 's' : ''}.` : ''}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><span className="chip">Alta · {nAlta}</span><span className="chip">Media · {nMedia}</span><span className="chip">Baja · {nBaja}</span></div>
         </div>
       </section>
 
-      <div className="se-days" role="tablist" aria-label="Días de la semana">
+      <div className="dcols">
+        {late.length > 0 && (
+          <div className="dcol">
+            <div className="dh" style={{ background: 'var(--rosesoft)' }}><b style={{ color: 'var(--rose)', fontFamily: 'var(--display)' }}>Atrasadas</b><span className="chip c-rose num">{late.length}</span></div>
+            {late.map(card)}
+          </div>
+        )}
         {days.map((k) => {
-          const n = byDay(k).length;
+          const list = byDay(k);
+          const isToday = k === today;
           return (
-            <button key={k} role="tab" aria-selected={sel === k} className={`se-day ${k === today ? 'today' : ''} ${sel === k ? 'on' : ''}`} onClick={() => { haptic(4); setSel(sel === k ? null : k); }}>
-              <span>{dayName(k).replace('.', '')}</span><b className="num">{Number(k.slice(8))}</b>
-              <i style={{ height: `${8 + (n / maxLoad) * 22}px`, opacity: n ? 1 : 0.25 }} />
-            </button>
+            <div className="dcol" key={k}>
+              <div className="dh" style={isToday ? { background: 'var(--cobaltsoft)' } : undefined}><b style={{ fontFamily: 'var(--display)', color: isToday ? '#1A3FD1' : undefined, textTransform: 'capitalize' }}>{isToday ? 'Hoy' : dayName(k, false).replace('.', '')}</b><span className="sm" style={{ color: 'var(--muted)' }}>{isToday ? dayName(k).replace('.', '') + ' ' : ''}{Number(k.slice(8))}</span></div>
+              {list.length ? list.map(card) : <div style={{ border: '2px dashed #C9D3EE', borderRadius: 20, padding: 18, textAlign: 'center', color: 'var(--muted)', fontSize: 13.5, fontWeight: 600 }}>Día libre</div>}
+            </div>
           );
         })}
       </div>
 
-      {!sel && late.length > 0 && (
-        <section className="se-sec">
-          <h3 className="late">Atrasadas <span className="pill red num">{late.length}</span></h3>
-          <div className="se-card">{late.map(row)}</div>
-        </section>
-      )}
-
-      {shownDays.map((k) => {
-        const list = byDay(k);
-        if (!list.length && !sel) return null;
-        return (
-          <section className="se-sec" key={k}>
-            <h3>{k === today ? 'Hoy' : dayName(k, true)} {list.length > 0 && <span className="pill blue num">{list.length}</span>}</h3>
-            {list.length ? <div className="se-card">{list.map(row)}</div>
-              : <div className="se-card"><Empty icon="check" title="Día libre" text="No vence nada este día." /></div>}
-          </section>
-        );
-      })}
-      {!sel && late.length + pendWeek.length === 0 && <div className="se-card"><Empty icon="check" title="Semana libre" text="No tienes entregas en los próximos 7 días." /></div>}
-
       {open && <TaskSheet task={open} courses={courses.data || []} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); tasks.reload(); }} />}
-    </div>
+    </>
   );
 }

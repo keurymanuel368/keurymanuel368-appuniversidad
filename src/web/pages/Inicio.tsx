@@ -6,7 +6,7 @@ import { Mascot } from '../Mascot';
 import { AchievementsCard } from '../Achievements';
 import { TodayTimeline } from '../Today';
 import { TermJourney } from '../Journey';
-import { Panel } from '../Panel';
+import { RbRing, RbTask, RbTop } from '../rb';
 
 function greeting() {
   const h = Number(new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', hour: 'numeric', hour12: false }).format(new Date()));
@@ -74,122 +74,124 @@ export function Inicio({ go }: { go: (p: string) => void }) {
   // Compañero nuevo sin EVA ni datos: en vez de un Inicio en cero ("semana despejada"), una bienvenida con el siguiente paso.
   if (d.setup && !d.setup.eva && !d.courses.length && !d.tasks.length) return <FirstSteps d={d} go={go} initial={initial} />;
 
+  const todo = [...(overdueList.length ? overdueList : []), ...d.tasks.filter((t) => t.due_at && t.due_at >= now)].filter((t, i, a2) => a2.findIndex((x) => x.id === t.id) === i).slice(0, 4);
+  const firstName = d.name ? d.name.split(' ')[0] : 'Tu día';
+  const dateTxt = String(d.today || '').replace(/ de (\S{3})\S*/, ' $1').replace(/^(\S{3})\S*/, '$1');
+  const heroTitle = d.counts.overdue > 0 ? `${d.counts.overdue} atrasada${d.counts.overdue > 1 ? 's' : ''} y ${d.counts.week} entrega${d.counts.week === 1 ? '' : 's'} en tu semana` : headline;
+
   return (
-    <>
+    <div className="rbx">
       <PullIndicator pull={pull} refreshing={refreshing} />
-      <PageHead eyebrow={`${greeting()} · ${String(d.today || '').replace(/ de (\S{3})\S*/, ' $1').replace(/^(\S{3})\S*/, '$1')}`} title={d.name ? d.name.split(' ')[0] : 'Tu día'}>
-        <button className="avatar hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
-      </PageHead>
+      <RbTop eyebrow={`${greeting()} · ${dateTxt}`} title={firstName} go={go} unread={d.unreadNews}>
+        <button className="av hide-desktop" onClick={() => go('ajustes')} aria-label="Ajustes">{initial}</button>
+      </RbTop>
 
       <SetupBanner setup={d.setup} go={go} />
       {d.freshGrade && <FreshGrade g={d.freshGrade} onDone={reload} />}
-
-      <Panel d={d} now1={now1} next={next} syncing={syncing} busy={busy} go={go} onOpen={setEditing} onNew={() => setCreating(true)} onSync={sync} onSummary={sendSummary} />
-
-      <div className="home-grid">
-      <div className="home-main">
-      <QueToca d={d} go={go} onOpen={setEditing} onToggle={toggle} />
-      <TodayTimeline d={d} go={go} />
-      {now1 && <NowCard t={now1} onOpen={() => setEditing(now1)} onDone={() => toggle(now1)} />}
-      </div>
-      <div className="home-side">
-
       {d.lastSyncError && <div className="banner"><Icon name="alert" size={18} /><span>El EVA no respondió en la última sincronización: {d.lastSyncError}</span></div>}
 
-      <button className="more-toggle" onClick={() => { haptic(5); setMore((m) => !m); }} aria-expanded={more}>{more ? 'Ver menos' : 'Ver más: asignaturas, avisos y notas'}<Icon name="chevron" size={16} style={{ transform: more ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button>
-
-      {more && <>
-      <TermJourney />
-      <section className="grid2">
+      <div className="grid2">
         <div className="col">
-          {d.courses.length > 0 && (
-            <div className="section">
-              <div className="section-head"><h3>Asignaturas</h3><button className="link-btn" onClick={() => go('asignaturas')}>Notas<Icon name="chevron" size={16} /></button></div>
-              <div className="courses scroller">
-                {d.courses.map((c) => (
-                  <button key={c.id} className="course" onClick={() => go(`asignaturas/${c.id}`)} style={{ ['--c' as string]: c.color }}>
-                    <span className="course-top"><span className="code">{c.code || (c.short_name || '').toUpperCase().slice(0, 14)}</span><span className="grade num">{c.average ?? '—'}</span></span>
-                    <span className="name">{c.name}</span>
-                    <div className="progress"><div style={{ width: `${c.total ? (c.graded / c.total) * 100 : 0}%` }} /></div>
-                    <span className="meta num">{c.graded}/{c.total} calificadas{c.pending_tasks ? ` · ${c.pending_tasks} pend.` : ''}</span>
-                  </button>
-                ))}
+          <section className="hero">
+            <div className="tick" />
+            <div style={{ display: 'flex', gap: 28, alignItems: 'center', position: 'relative', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <span className="chip" style={{ alignSelf: 'flex-start' }}>Hoy</span>
+                <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(26px,3.2vw,38px)', lineHeight: 1.05, letterSpacing: '-.025em', fontWeight: 800 }}>{heroTitle}</h2>
+                <p style={{ color: '#CFD8FF', fontSize: 15.5, maxWidth: 420 }}>
+                  {now1 ? <>Lo más urgente: <b style={{ color: '#fff' }}>{now1.title}</b>{now1.due_at && now1.due_at < now ? ', atrasada' : ''}. Hazla primero y la semana queda limpia.</> : 'Estás al día. Buen momento para adelantar o repasar.'}
+                </p>
+                <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                  <button className="btn b-or" onClick={() => go('apuntes')}><Icon name="play" size={18} />Clase en vivo</button>
+                  <button className="btn" style={{ background: 'rgba(255,255,255,.14)', color: '#fff' }} onClick={() => go('tareas')}>Ver qué me toca</button>
+                </div>
               </div>
+              <RbRing pct={d.weekProgress.total ? (d.weekProgress.done / d.weekProgress.total) * 100 : d.termProgress ?? 0} size={150} />
             </div>
-          )}
+          </section>
+
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 16 }}>
+            <button className="tile" style={{ background: 'var(--rosesoft)', color: 'var(--rose)', border: 0, textAlign: 'left', cursor: 'pointer' }} onClick={() => go('tareas')}><b className="num">{Math.max(d.counts.overdue, overdueList.length)}</b><span>Atrasadas</span></button>
+            <button className="tile" style={{ background: 'var(--cobaltsoft)', color: '#1A3FD1', border: 0, textAlign: 'left', cursor: 'pointer' }} onClick={() => go('tareas')}><b className="num">{d.counts.today}</b><span>Hoy</span></button>
+            <button className="tile" style={{ background: 'var(--mintsoft)', color: 'var(--mint)', border: 0, textAlign: 'left', cursor: 'pointer' }} onClick={() => go('tareas')}><b className="num">{d.counts.week}</b><span>Esta semana</span></button>
+          </section>
+
+          <section className="card">
+            <div className="head"><h3>Para hacer primero</h3><button className="link" onClick={() => go('tareas')}>Ver todas</button></div>
+            {todo.length === 0 ? <p style={{ color: 'var(--muted)' }}>Nada pendiente por ahora. ¡Estás al día!</p> : <ul>{todo.map((t) => <RbTask key={t.id} t={t} onToggle={toggle} onOpen={setEditing} />)}</ul>}
+          </section>
         </div>
 
         <div className="col">
+          <TodayTimeline d={d} go={go} />
+
+          <section className="card" style={{ background: 'var(--night)', color: '#fff', display: 'flex', alignItems: 'center', gap: 18 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8FB0FF' }}>Repaso del día</div>
+              <h3 style={{ fontFamily: 'var(--display)', fontSize: 28, fontWeight: 800, margin: '4px 0 6px', letterSpacing: '-.02em' }}>Tus fichas</h3>
+              <p style={{ color: '#B8C3EE', fontSize: 14, marginBottom: 14 }}>Cinco minutos al día valen más que una noche antes.</p>
+              <button className="btn b-or" onClick={() => go('apuntes')}>Repasar ahora</button>
+            </div>
+            <div className="hand" style={{ fontSize: 64, lineHeight: 1, color: 'var(--orange)', transform: 'rotate(-6deg)' }}>¡ya!</div>
+          </section>
+
           {d.news.length > 0 && (
-            <section className="nw" aria-label="Avisos">
-              <header>
-                <h3>Avisos</h3>
-                {d.unreadNews > 0 && <span className="nw-count num">{d.unreadNews} nuevos</span>}
-                <button className="link-btn spacer" onClick={() => go('avisos')}>Ver todos<Icon name="chevron" size={16} /></button>
-              </header>
+            <section className="card">
+              <div className="head"><h3>Avisos</h3><button className="link" onClick={() => go('avisos')}>Ver todos</button></div>
               <ul>
-                {d.news.map((n) => (
-                  <li key={n.id}>
-                    <button className={n.read ? '' : 'unread'} onClick={() => go(`avisos/${n.id}`)}>
-                      <span className={`nw-ic ${n.kind}`}><Icon name={n.kind === 'pago' ? 'wallet' : n.kind === 'evento' ? 'calendar' : 'bell'} size={17} /></span>
-                      <span className="nw-body"><b>{cleanTitle(n.title)}</b><small>{n.course_name || (n.kind === 'pago' ? 'Pagos' : n.kind === 'evento' ? 'Evento' : 'UAPA')} · {agoLabel(n.created_at)}</small></span>
-                      {!n.read && <i className="nw-dot" aria-label="Sin leer" />}
-                    </button>
+                {d.news.slice(0, 3).map((n) => (
+                  <li key={n.id} className="row">
+                    <span className="dot" style={{ background: n.kind === 'pago' ? 'var(--orange)' : n.kind === 'evento' ? '#7B5CFF' : 'var(--cobalt)' }} />
+                    <button className="t" onClick={() => go(`avisos/${n.id}`)}><b>{cleanTitle(n.title)}</b><small>{n.course_name || (n.kind === 'pago' ? 'Pagos' : n.kind === 'evento' ? 'Evento' : 'UAPA')} · {agoLabel(n.created_at)}</small></button>
                   </li>
                 ))}
               </ul>
             </section>
           )}
-
-          <div className="card hide-mobile">
-            <div className="card-head"><h3>Hoy y mañana</h3><span className="pill gray num">{soon.length}</span></div>
-            {soon.length === 0 ? <p className="muted small">Nada vence en las próximas 36 horas. 🎉</p> : (
-              <ol className="timeline">
-                {soon.map((t) => (
-                  <li key={t.id}>
-                    <span className="tl-dot" style={{ background: t.course_color || 'var(--blue)' }} />
-                    <button onClick={() => setEditing(t)}><b>{t.title}</b><span>{whenLabel(t.due_at)}{t.course_short ? ' · ' + t.course_short : ''}</span></button>
-                  </li>
-                ))}
-              </ol>
-            )}
-            <p className="hint"><Icon name="bell" size={16} />Tu resumen del día llega como notificación a las {d.summaryHour > 12 ? d.summaryHour - 12 : d.summaryHour || 12}:00 {d.summaryHour < 12 ? 'a. m.' : 'p. m.'}</p>
-          </div>
-
-          {d.graded.length > 0 && (
-            <section className="gs" aria-label="Últimas calificaciones">
-              <header><h3>Últimas calificaciones</h3><button className="link-btn spacer" onClick={() => go('asignaturas')}>Ver notas<Icon name="chevron" size={16} /></button></header>
-              <div className="gs-row">
-                {d.graded.map((t) => {
-                  const pct = (t.grade! / t.grade_max!) * 100;
-                  return (
-                    <button key={t.id} className={`gs-card ${pct >= 90 ? 'top' : pct >= 70 ? 'ok' : 'low'}`} style={{ ['--c' as string]: t.course_color || '#1F5FE0' }} onClick={() => setEditing(t)}>
-                      <span className="gs-course"><i />{t.course_short || t.course_name}</span>
-                      <span className="gs-score"><b className="num">{fmtGrade(t.grade!)}</b><small className="num">/{fmtGrade(t.grade_max!)}</small></span>
-                      <span className="gs-title">{t.title}</span>
-                      <span className="gs-bar"><i style={{ width: `${Math.min(100, pct)}%` }} /></span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
         </div>
-      </section>
+      </div>
 
-      {/* Lo motivacional va al final: primero lo que hay que hacer */}
+      {d.courses.length > 0 && (
+        <section className="card">
+          <div className="head"><h3>Asignaturas</h3><button className="link" onClick={() => go('asignaturas')}>Notas</button></div>
+          <ul>
+            {d.courses.map((c) => (
+              <li key={c.id} className="row">
+                <span className="dot" style={{ background: c.color }} />
+                <button className="t" onClick={() => go(`asignaturas/${c.id}`)}>
+                  <b>{c.name}</b>
+                  <div className="bar"><i style={{ width: `${c.total ? (c.graded / c.total) * 100 : 0}%`, background: c.color }} /></div>
+                </button>
+                <span className={`chip ${c.average != null && c.average >= 90 ? 'c-mint' : 'c-blue'} num`}>{c.average ?? '—'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {d.graded.length > 0 && (
+        <section className="card">
+          <div className="head"><h3>Últimas calificaciones</h3><button className="link" onClick={() => go('asignaturas')}>Ver notas</button></div>
+          <ul>
+            {d.graded.map((t) => (
+              <li key={t.id} className="row">
+                <span className="dot" style={{ background: t.course_color || 'var(--cobalt)' }} />
+                <button className="t" onClick={() => setEditing(t)}><b>{t.title}</b><small>{t.course_short || t.course_name}</small></button>
+                <span className={`chip ${(t.grade! / t.grade_max!) >= 0.9 ? 'c-mint' : (t.grade! / t.grade_max!) >= 0.7 ? 'c-blue' : 'c-rose'} num`}>{fmtGrade(t.grade!)}/{fmtGrade(t.grade_max!)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="grid2 extras-row">
         <GoalsCard goals={d.goals || []} ids={d.goalIds || []} onChanged={reload} />
         <AchievementsCard />
       </section>
-      </>}
-      </div>
-      </div>
 
       {creating && <TaskModal task={{}} courses={d.courses} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); reload(); }} />}
       {editing && <TaskSheet task={editing} courses={d.courses} onClose={() => setEditing(null)} onChanged={() => { setEditing(null); reload(); }} />}
-    </>
+    </div>
   );
 }
 

@@ -88,66 +88,73 @@ export function Avisos() {
     if (!n.read) { await api('/announcements/read', { method: 'POST', body: { ids: [n.id] } }); data.setData(list.map((x) => (x.id === n.id ? { ...x, read: 1 } : x))); window.dispatchEvent(new Event('rumbo:badges')); }
   }
 
+  const FILTERS: { id: Filter; label: string }[] = [{ id: 'todo', label: 'Todo' }, { id: 'pago', label: 'Pagos' }, { id: 'evento', label: 'Eventos' }, { id: 'aviso', label: 'Avisos' }];
+  const tone = (t: string) => (t === 'orange' ? { bg: 'var(--orangesoft)', fg: '#B04A00' } : t === 'violet' ? { bg: '#ECE7FF', fg: '#5B3FD6' } : t === 'green' ? { bg: 'var(--mintsoft)', fg: 'var(--mint)' } : t === 'gray' ? { bg: 'var(--fill, #EEF1F8)', fg: 'var(--ink2)' } : { bg: 'var(--cobaltsoft)', fg: 'var(--cobalt)' });
+  const latestRumbo = list.find((n) => n.source === 'rumbo');
   return (
-    <>
+    <div className="rbx">
       <PullIndicator pull={pull} refreshing={refreshing} />
-      <PageHead eyebrow="De la UAPA y tus asignaturas" title="Avisos">
-        {unread > 0 && <button className="btn line" onClick={markAll} aria-label="Marcar todo como leído"><Icon name="check" size={18} /><span className="lbl">Marcar leídos</span></button>}
-      </PageHead>
-      <Segmented label="Filtrar avisos" value={filter} onChange={setFilter} options={[
-        { id: 'todo', label: 'Todo' }, { id: 'pago', label: 'Pagos' }, { id: 'evento', label: 'Eventos' }, { id: 'aviso', label: 'Avisos' },
-      ]} />
+      <header className="top">
+        <div><div className="eb">Del EVA y de Rumbo</div><h1 tabIndex={-1}>Avisos</h1></div>
+        <div className="sp" />
+        {unread > 0 && <button className="btn b-line" style={{ background: 'var(--card)' }} onClick={markAll} aria-label="Marcar todo como leído"><Icon name="check" size={18} /><span className="lbl">Marcar todo como leído</span></button>}
+      </header>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {FILTERS.map((f) => <button key={f.id} className={`chip ${filter === f.id ? '' : 'c-gray'}`} style={{ padding: '9px 16px', fontSize: 13.5, background: filter === f.id ? 'var(--ink)' : undefined, color: filter === f.id ? '#fff' : undefined }} onClick={() => { haptic(4); setFilter(f.id); }} aria-pressed={filter === f.id}>{f.label}</button>)}
+        {unread > 0 && <span className="chip c-blue" style={{ padding: '9px 16px', fontSize: 13.5 }}>No leídos · {unread}</span>}
+      </div>
       {data.error && <div className="error">{data.error}</div>}
       {!data.data ? <Skeleton hero={false} rows={4} /> : shown.length === 0 ? (
         <div className="card"><Empty icon="bell" title={list.length ? 'Nada en esta categoría' : 'Sin avisos todavía'} text={list.length ? 'Prueba con otro filtro.' : 'Se traen del EVA: el foro de avisos de cada asignatura y las notificaciones de la universidad.'}>
-          {list.length ? <button className="btn line" onClick={() => setFilter('todo')}>Ver todos los avisos</button>
-            : <button className="btn primary" onClick={() => { void refresh(); }}><Icon name="sync" size={17} />Revisar el EVA ahora</button>}
+          {list.length ? <button className="btn b-line" onClick={() => setFilter('todo')}>Ver todos los avisos</button>
+            : <button className="btn b-pri" onClick={() => { void refresh(); }}><Icon name="sync" size={17} />Revisar el EVA ahora</button>}
         </Empty></div>
       ) : (
-        <>
-        {groups.map((g) => (
-        <div key={g.title} className="news-group">
-        <h3 className="news-day">{g.title}</h3>
-        <div className="news-list stagger">
-          {g.items.map((n) => {
-            const k = KIND[n.kind] || KIND.aviso;
-            return (
-              <button key={n.id} className={`news ${n.read ? '' : 'unread'}`} onClick={() => openItem(n)}>
-                <span className={`news-ic ${k.tone}`}><Icon name={k.icon} size={19} /></span>
-                <span className="news-copy">
-                  <span className="news-meta"><b>{n.course_name || SOURCE[n.source] || 'EVA'}</b><span>{ago(n.created_at)}</span>{!n.read && <i className="news-dot" aria-label="Sin leer" />}</span>
-                  <span className="news-title">{newsTitle(n.title, n.body)}</span>
-                  {n.body && <span className="news-body">{n.body}</span>}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        </div>
-        ))}
-        {activity.length > 0 && (
-          <div className="news-group">
-            <button className="activity-toggle" onClick={() => { haptic(5); setShowActivity((v) => !v); }} aria-expanded={showActivity}>
-              <span className="news-ic gray"><Icon name="bell" size={18} /></span>
-              <span className="news-copy"><b>Actividad del EVA</b><small>{activity.length} notificaciones automáticas: mensajes de foros, entregas confirmadas e inicios de sesión</small></span>
-              <Icon name="chevron" size={18} className="row-chevron" style={{ transform: showActivity ? 'rotate(90deg)' : undefined }} />
-            </button>
-            {showActivity && (
-              <div className="news-list compact">
-                {activity.map((n) => (
-                  <button key={n.id} className={`news mini ${n.read ? '' : 'unread'}`} onClick={() => openItem(n)}>
-                    <span className="news-copy"><span className="news-title">{newsTitle(n.title, n.body)}</span><span className="news-meta"><span>{ago(n.created_at)}</span></span></span>
-                  </button>
-                ))}
+        <div className="grid2">
+          <div className="col" style={{ gap: 14 }}>
+            {groups.map((g) => (
+              <div key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="eb" style={{ padding: '0 6px', color: 'var(--muted)' }}>{g.title}</div>
+                {g.items.map((n) => {
+                  const k = KIND[n.kind] || KIND.aviso, t = tone(k.tone);
+                  return (
+                    <button key={n.id} className="avi" onClick={() => openItem(n)} style={n.read ? undefined : { boxShadow: '0 0 0 2px var(--cobalt), 0 12px 30px -20px rgba(35,80,255,.6)' }}>
+                      <span className="ic" style={{ background: t.bg, color: t.fg }}><Icon name={k.icon} size={20} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <b>{newsTitle(n.title, n.body)}</b>
+                        <span className="sm" style={{ display: 'block', color: 'var(--muted)', marginTop: 2 }}>{n.course_name || SOURCE[n.source] || 'EVA'} · {ago(n.created_at)}</span>
+                        {n.body && <p className="clamp2" style={{ color: 'var(--ink2)', fontSize: 14, marginTop: 4 }}>{n.body}</p>}
+                      </span>
+                      {!n.read && <i className="dot" style={{ background: 'var(--cobalt)', marginTop: 6 }} aria-label="Sin leer" />}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            ))}
           </div>
-        )}
-        {filter === 'todo' && rumbo.length > 1 && <button className="link-btn center-self more-rumbo" onClick={() => setAllRumbo((v) => !v)}>{allRumbo ? 'Ocultar novedades de Rumbo' : `Ver las ${rumbo.length - 1} novedades anteriores de Rumbo`}</button>}
-        </>
+          <div className="col">
+            {latestRumbo && (
+              <section className="card" style={{ background: 'linear-gradient(135deg,#101A3D,#1F3A73)', color: '#fff' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8FB0FF' }}>Novedades de Rumbo</div>
+                <h3 className="hand" style={{ fontSize: 32, margin: '4px 0 8px' }}>{newsTitle(latestRumbo.title, latestRumbo.body)}</h3>
+                <p className="clamp3" style={{ color: '#C9D3E8', fontSize: 14, lineHeight: 1.5 }}>{latestRumbo.body}</p>
+                <button className="link" style={{ color: '#FFB070', marginTop: 10 }} onClick={() => openItem(latestRumbo)}>Leer completo</button>
+              </section>
+            )}
+            {activity.length > 0 && (
+              <section className="card">
+                <div className="head"><h3>Actividad del EVA</h3><span className="chip c-gray">{activity.length} ocultos</span></div>
+                <p className="sm" style={{ color: 'var(--muted)' }}>Publicaciones de foros, inicios de sesión y confirmaciones se agrupan aquí para que no tapen lo importante.</p>
+                <button className="link" style={{ marginTop: 10 }} onClick={() => { haptic(5); setShowActivity((v) => !v); }} aria-expanded={showActivity}>{showActivity ? 'Ocultar' : 'Mostrar'}</button>
+                {showActivity && <ul style={{ marginTop: 6 }}>{activity.map((n) => <li key={n.id} className="row nol"><button className="t" onClick={() => openItem(n)}><b style={{ fontWeight: n.read ? 500 : 700 }}>{newsTitle(n.title, n.body)}</b><small>{ago(n.created_at)}</small></button></li>)}</ul>}
+              </section>
+            )}
+            {filter === 'todo' && rumbo.length > 1 && <button className="link" onClick={() => setAllRumbo((v) => !v)}>{allRumbo ? 'Ocultar novedades de Rumbo' : `Ver las ${rumbo.length - 1} novedades anteriores de Rumbo`}</button>}
+          </div>
+        </div>
       )}
       {open && <NewsSheet n={open} onClose={() => setOpen(null)} />}
-    </>
+    </div>
   );
 }
 

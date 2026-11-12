@@ -826,16 +826,14 @@ export function PageHead({ eyebrow, title, children }: { eyebrow: string; title:
   return (
     <>
       <div className={`mini-bar ${scrolled ? 'show' : ''}`} aria-hidden={!scrolled}><span>{title}</span></div>
-      <header className="topbar">
-        <div className="topbar-copy">
-          <span className="eyebrow">{cap(eyebrow)}</span>
-          <h1 tabIndex={-1}>{title}</h1>
-        </div>
-        <div className="topbar-actions">
+      <div className="rbx" style={{ gap: 0 }}>
+        <header className="top">
+          <div><div className="eb">{cap(eyebrow)}</div><h1 tabIndex={-1}>{title}</h1></div>
+          <div className="sp" />
           {children}
-          <button className="search-btn" onClick={() => { haptic(5); window.dispatchEvent(new Event('rumbo:search')); }} aria-label="Buscar en Rumbo" title="Buscar (/)"><Icon name="search" size={20} /></button>
-        </div>
-      </header>
+          <button className="search" onClick={() => { haptic(5); window.dispatchEvent(new Event('rumbo:search')); }} aria-label="Buscar o preguntar a Rumbo"><Icon name="search" size={18} />Buscar o preguntar a Rumbo</button>
+        </header>
+      </div>
     </>
   );
 }
