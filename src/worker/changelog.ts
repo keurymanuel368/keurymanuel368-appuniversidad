@@ -10,6 +10,17 @@ export type Release = { version: number; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: 89,
+    date: '2026-11-13',
+    title: '📚 Biblioteca con portadas y lector',
+    items: [
+      'En cada asignatura hay un espacio de libros: guarda enlaces (Drive, EVA, web) o sube el archivo (PDF, Word…, hasta 25 MB).',
+      'Arreglado: el icono de la sección activa en el menú lateral ya se ve (estaba azul sobre azul).',
+      'Nueva página Biblioteca (menú Más): todos tus libros por materia, con portada. Toca uno y lo lees dentro de Rumbo, sin salir.',
+      'Nuevo botón «Buscar en el EVA»: Rumbo recorre todas tus materias y guarda solo los libros que encuentre.',
+    ],
+  },
+  {
     version: 85,
     date: '2026-11-12',
     title: '✅ Revisa tu trabajo contra la rúbrica',

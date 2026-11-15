@@ -39,4 +39,18 @@
   // APP_PASSWORD, SESSION_SECRET, MOODLE_TOKEN,
   // WA_PHONE_NUMBER_ID, WA_TOKEN, WA_VERIFY_TOKEN, WA_APP_SECRET, WA_MY_NUMBER,
   // CALLMEBOT_APIKEY
+  ,
+  // Entorno de PRUEBAS: copia aparte (su propia base de datos), se despliega desde la rama "dev". No toca tus datos reales.
+  "env": {
+    "pruebas": {
+      "name": "rumbo-pruebas",
+      "d1_databases": [{ "binding": "DB", "database_name": "rumbo-pruebas", "database_id": "7f329197-d8bb-4fa1-954b-f7fa7b6d802c", "migrations_dir": "migrations" }],
+      "kv_namespaces": [{ "binding": "BACKUPS", "id": "a5cea9264557412086dbc93f1eb5594c" }],
+      "ai": { "binding": "AI" },
+      "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "RumboLive" }] },
+      "migrations": [{ "tag": "v1-live", "new_sqlite_classes": ["RumboLive"] }],
+      "triggers": { "crons": [] },
+      "vars": { "TZ_OFFSET_HOURS": "-4", "MOODLE_URL": "https://eva.uapa.edu.do", "APP_URL": "https://rumbo-pruebas.gestori.workers.dev" }
+    }
+  }
 }

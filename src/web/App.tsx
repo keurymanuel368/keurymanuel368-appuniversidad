@@ -12,6 +12,7 @@ const Tareas = lazy(() => import('./pages/Tareas').then((m) => ({ default: m.Tar
 const Asignaturas = lazy(() => import('./pages/Asignaturas').then((m) => ({ default: m.Asignaturas })));
 const Horario = lazy(() => import('./pages/Horario').then((m) => ({ default: m.Horario })));
 const Apuntes = lazy(() => import('./pages/Apuntes').then((m) => ({ default: m.Apuntes })));
+const Biblioteca = lazy(() => import('./pages/Biblioteca').then((m) => ({ default: m.Biblioteca })));
 const Pagos = lazy(() => import('./pages/Pagos').then((m) => ({ default: m.Pagos })));
 const Pensum = lazy(() => import('./pages/Pensum').then((m) => ({ default: m.Pensum })));
 const Asistente = lazy(() => import('./pages/Asistente').then((m) => ({ default: m.Asistente })));
@@ -29,6 +30,7 @@ const PAGES: { id: string; label: string; icon: string; hint: string; admin?: bo
   { id: 'asignaturas', label: 'Notas', icon: 'book', hint: 'Asignaturas y calificaciones' },
   { id: 'horario', label: 'Horario', icon: 'calendar', hint: 'Clases, exámenes y qué cursar' },
   { id: 'apuntes', label: 'Estudio', icon: 'book', hint: 'Apuntes y tarjetas de repaso' },
+  { id: 'biblioteca', label: 'Biblioteca', icon: 'book', hint: 'Libros de cada materia' },
   { id: 'pensum', label: 'Pensum', icon: 'cap', hint: 'Tu avance en la carrera' },
   { id: 'pagos', label: 'Pagos', icon: 'wallet', hint: 'Cuotas y ventana de pago' },
   { id: 'avisos', label: 'Avisos', icon: 'bell', hint: 'Novedades, pagos y eventos' },
@@ -242,6 +244,7 @@ export function App() {
           {page === 'inicio' && <Inicio go={go} />}
           {page === 'tareas' && <Tareas />}
           {page === 'asignaturas' && <Asignaturas />}
+          {page === 'biblioteca' && <Biblioteca />}
           {page === 'pensum' && <Pensum />}
           {page === 'horario' && <Horario />}
           {page === 'apuntes' && <Apuntes />}

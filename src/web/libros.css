@@ -1,0 +1,24 @@
+/* Biblioteca: estantería con portadas y lector de PDF */
+.shelf { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 12px; }
+.book { position: relative; min-width: 0; }
+.book-cover { display: block; width: 100%; aspect-ratio: 3 / 4; padding: 0; border: 1px solid var(--line, rgba(0,0,0,.1)); border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--c, #3b6fff) 14%, var(--card, #fff)); box-shadow: 0 4px 14px rgba(20, 30, 70, .12); cursor: pointer; }
+.book-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.book-ph { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; padding: 10px; color: var(--c, #3b6fff); text-align: center; }
+.book-ph i { font-style: normal; font-size: 11px; font-weight: 700; line-height: 1.25; color: var(--ink, #1a2140); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.book-meta { margin-top: 6px; display: grid; gap: 1px; min-width: 0; }
+.book-meta b { font-size: 12.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.book-meta .sm { color: var(--muted); font-size: 11px; }
+.book-x { position: absolute; top: 5px; right: 5px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #b3261e; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer; }
+.book-x .ic { fill: currentColor; }
+.lib-group { margin-top: 18px; }
+.lib-group h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; }
+.lib-group h3 .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+.lector { position: fixed; inset: 0; z-index: 400; display: flex; flex-direction: column; background: #20242e; color: #fff; }
+.lector header { display: flex; align-items: center; gap: 8px; padding: calc(8px + env(safe-area-inset-top)) 10px 8px; background: #11141b; }
+.lector header b { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lector header .btn { min-width: 44px; min-height: 44px; }
+.lector-body { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px 0 calc(24px + env(safe-area-inset-bottom)); touch-action: pan-x pan-y pinch-zoom; }
+.lector-page { margin: 0 auto 10px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+.lector-page canvas { width: 100%; height: 100%; display: block; }
+.lector-msg { text-align: center; padding: 60px 24px; color: #cfd6ea; }

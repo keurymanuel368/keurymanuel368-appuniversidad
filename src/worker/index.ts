@@ -30,6 +30,7 @@ import { cuandoTexto, localDate, localToUnix, nowSec } from './time';
 import { setIgnored } from './ignore';
 import { tokenFromValue, webLoginToken } from './evalogin';
 import { registerExtras } from './extras';
+import { registerLibros } from './libros';
 import { registerHorario } from './horario';
 import { registerTrabajo } from './trabajo';
 import { registerClases } from './clases';
@@ -494,6 +495,7 @@ app.use('/api/*', async (c, next) => {
 
 // Foros, entregas, historial del promedio, comentarios, récord y comprobantes (src/worker/extras.ts)
 registerExtras(app);
+registerLibros(app);
 registerTrabajo(app);
 registerClases(app);
 registerEstudio(app);

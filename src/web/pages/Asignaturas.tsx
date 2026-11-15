@@ -3,6 +3,7 @@ import { api, dateLabel, type Course, type PensumRow, type Task } from '../api';
 import { CountUp, Empty, Modal, PageHead, Ring, Segmented, Skeleton, TaskRow, TaskSheet, fmtGrade, haptic, runSync, setActivityIgnored, syncToast, toast, toggleTask, useLoad } from '../components';
 import { Icon } from '../icons';
 import { RbRing, RbTask } from '../rb';
+import { Libros } from '../Libros';
 import { AverageChart, FeedbackNotes, RecordModal } from '../NotasExtras';
 import { gradeWeights, neededFor } from '../../shared/promedio';
 
@@ -255,6 +256,7 @@ function Detail({ course, courses, onChanged }: { course: Course; courses: Cours
           <ul>{upcoming.data.map((t) => <RbTask key={t.id} t={t} onToggle={(x) => toggleTask(x, () => { upcoming.reload(); grades.reload(); }).catch((e) => toast((e as Error).message, 'err'))} onOpen={setOpen} />)}</ul>
         </section>
       )}
+      <Libros courseId={course.id} />
       <section className="card" style={{ background: 'var(--night)', color: '#fff' }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8FB0FF' }}>Simulador de nota</div>
         <h3 style={{ fontFamily: 'var(--display)', fontSize: 20, margin: '6px 0 16px' }}>¿Cuánto necesito en lo que falta?</h3>
