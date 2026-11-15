@@ -135,8 +135,8 @@ function Hero({ data, now }: { data: Data; now: Date }) {
 /** Horario de la semana en cuadrícula, con bloques de color y la línea de «ahora». */
 function Timetable({ data, sel, onSel, now }: { data: Data; sel: number; onSel: (d: number) => void; now: Date }) {
   const list = data.classes;
-  const lo = Math.min(...list.map((k) => k.start_min), 8 * 60);
-  const hi = Math.max(...list.map((k) => k.end_min), 17 * 60);
+  const lo = list.length ? Math.min(...list.map((k) => k.start_min)) - 60 : 8 * 60;
+  const hi = list.length ? Math.max(...list.map((k) => k.end_min)) + 60 : 17 * 60;
   const start = Math.floor(lo / 60) * 60, end = Math.ceil(hi / 60) * 60;
   const H = 56, px = (m: number) => ((m - start) / 60) * H, total = ((end - start) / 60) * H;
   const hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start + i * 60);
@@ -144,7 +144,7 @@ function Timetable({ data, sel, onSel, now }: { data: Data; sel: number; onSel: 
   const cols = list.some((k) => k.day === 6) ? 7 : 6;
   return (
     <section className="card" style={{ padding: '18px 14px 18px 6px', overflowX: 'auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: `52px repeat(${cols},minmax(74px,1fr))`, minWidth: 52 + cols * 74 }} role="group" aria-label="Semana">
+      <div style={{ display: 'grid', gridTemplateColumns: `40px repeat(${cols},minmax(46px,1fr))`, minWidth: 40 + cols * 46 }} role="group" aria-label="Semana">
         <div />
         {DIAS.slice(0, cols).map((d, i) => (
           <button key={d} onClick={() => { haptic(6); onSel(i); }} aria-pressed={sel === i} style={{ textAlign: 'center', fontWeight: 700, padding: '0 0 10px', fontSize: 14, color: todayI === i ? 'var(--cobalt)' : 'var(--ink)' }}>
@@ -152,7 +152,7 @@ function Timetable({ data, sel, onSel, now }: { data: Data; sel: number; onSel: 
           </button>
         ))}
         <div style={{ position: 'relative', height: total, fontSize: 11.5, color: 'var(--muted)', fontWeight: 700 }}>
-          {hours.map((h) => <span key={h} style={{ position: 'absolute', top: px(h) - 7, right: 8 }}>{h12(h).replace(':00', '')}</span>)}
+          {hours.map((h) => <span key={h} style={{ position: 'absolute', top: px(h) - 7, right: 8 }}>{h12(h).replace(':00', '').replace(/ /g, '')}</span>)}
         </div>
         {DIAS.slice(0, cols).map((_, i) => (
           <div key={i} className="col-d" style={{ height: total, background: sel === i ? '#F5F8FF' : undefined }}>

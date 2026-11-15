@@ -244,3 +244,7 @@ h1, h2, h3 { text-wrap: balance; }
 .dv-title { flex: 1 1 0; }
 .dv-actions { flex: 1 1 100%; order: 3; display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 8px; }
 .dv-actions .btn { white-space: nowrap; justify-content: center; padding: 10px 6px; font-size: 13px; }
+
+/* Horario en el teléfono: caben los 6 días sin deslizar; los bloques usan letra más pequeña. */
+.rbx .blk { padding: 4px 4px; font-size: 10px; border-radius: 9px; }
+.rbx .blk b { font-size: 10.5px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
