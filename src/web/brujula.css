@@ -232,3 +232,15 @@ h1, h2, h3 { text-wrap: balance; }
 
 /* El campo del login ya muestra su propio borde de enfoque: el input interno no dibuja otro encima. */
 .lg2-field input:focus, .lg2-field input:focus-visible { outline: none !important; box-shadow: none !important; border-color: transparent !important; background: transparent !important; }
+
+/* «Hacer con IA» listo: Ver y Descargar van lado a lado, mismo alto, sin texto cortado. */
+.ts-help .work-ready { align-items: stretch; }
+.ts-help .work-ready .work-btn, .ts-help .work-ready .work-dl { grid-column: auto; width: 100%; min-width: 0; padding: 12px; gap: 8px; }
+.ts-help .work-ready .tb-txt { min-width: 0; overflow-wrap: anywhere; }
+.ts-help .work-ready .tb-txt small { font-size: 11px; line-height: 1.25; }
+
+/* Visor del trabajo: título arriba y botones en una fila, sin que se partan en varias líneas. */
+.dv-bar { flex-wrap: wrap; row-gap: 8px; }
+.dv-title { flex: 1 1 0; }
+.dv-actions { flex: 1 1 100%; order: 3; display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 8px; }
+.dv-actions .btn { white-space: nowrap; justify-content: center; padding: 10px 6px; font-size: 13px; }

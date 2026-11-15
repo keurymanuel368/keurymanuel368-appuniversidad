@@ -1,6 +1,7 @@
 // Visor del trabajo «como en Word»: páginas tamaño carta sobre fondo gris, con la portada, tus datos,
 // el cuerpo repartido en páginas y número de página. Se escala solo para caber en el celular o en la PC.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './icons';
 import { haptic, toast } from './components';
 import { drawCover, type Profile, type Work } from './trabajo';
@@ -108,7 +109,7 @@ export function DocViewer({ work, profile, title, onClose, onRedo }: { work: Wor
   );
   const rows: [string, string][] = [['PARTICIPANTE', profile.nombre], ['MATRÍCULA', profile.matricula], ['FACILITADOR/A', profile.facilitador], ['CARRERA', profile.carrera], ['ASIGNATURA', profile.asignatura], ['CÓDIGO', profile.codigo]];
 
-  return (
+  return createPortal(
     <div className="dv" role="dialog" aria-label="Vista del trabajo">
       <header className="dv-bar">
         <button className="icon-round" onClick={onClose} aria-label="Cerrar"><Icon name="x" size={18} /></button>
@@ -135,5 +136,5 @@ export function DocViewer({ work, profile, title, onClose, onRedo }: { work: Wor
         <div className="dv-measure dv-body" ref={measure} aria-hidden="true">{blocks.map((b) => <div key={b.key} className="dv-b">{b.node}</div>)}</div>
       </div>
     </div>
-  );
+    , document.body);
 }
