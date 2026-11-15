@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>Rumbi</title>
+<link rel="stylesheet" href="/theme.css">
+<body style="margin:0;background:#EEF3FF;font:12px system-ui"><div id="r"></div>
+<script type="module">
+import React from '/node_modules/.vite/deps/react.js';
+import { createRoot } from 'react-dom/client';
+import { Mascot } from '/src/web/Mascot.tsx';
+import '/src/web/styles.css';
+const moods=['feliz','tranqui','atento','alerta','love','dizzy','wink','talk','sleep','wow'];
+createRoot(document.getElementById('r')).render(React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:14,padding:16}},
+ moods.map(m=>React.createElement('div',{key:m,style:{textAlign:'center',background:'#fff',borderRadius:18,padding:10}},React.createElement(Mascot,{mood:m,size:130,wave:m==='feliz'}),React.createElement('div',null,m)))));
+</script>

@@ -248,3 +248,20 @@ h1, h2, h3 { text-wrap: balance; }
 /* Horario en el teléfono: caben los 6 días sin deslizar; los bloques usan letra más pequeña. */
 .rbx .blk { padding: 4px 4px; font-size: 10px; border-radius: 9px; }
 .rbx .blk b { font-size: 10.5px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+
+/* Menú inferior más abajo, pegado a la barra de inicio del iPhone (antes flotaba muy arriba). */
+@media (max-width: 900px) {
+  html body .tabbar { bottom: calc(max(env(safe-area-inset-bottom, 0px) - 14px, 0px) + 6px) !important; }
+  html body .buddy { bottom: calc(max(env(safe-area-inset-bottom, 0px) - 14px, 0px) + 82px) !important; }
+}
+
+/* Barras de pestañas deslizables: degradado donde hay más contenido (lo pone tabFade.ts). */
+[role="tablist"].fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); }
+[role="tablist"].fade-l { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 34px), transparent); }
+[role="tablist"].fade-l.fade-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); }
+
+/* La mascota se asoma por el borde mostrando la cara (antes solo se veía un pedazo azul). */
+.buddy.peek .buddy-peek { transform: translateX(30%) rotate(-8deg) scale(.9) !important; opacity: 1 !important; }
+
+/* Estudiar con IA: el plan no se encoge dentro de la hoja (se encimaba con «Guardar en mi cuaderno»); la hoja se desliza. */
+.modal .study-body { flex: none; }

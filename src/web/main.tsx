@@ -14,9 +14,11 @@ import './rb.css';
 import './brujula.css';
 import { initTheme } from './theme';
 import { startUpdater } from './updater';
+import { installTabFade } from './tabFade';
 
 initTheme();
 
+installTabFade();
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 
 // PWA: permite instalar Rumbo en el teléfono y abrirlo sin conexión (pantalla principal en caché).

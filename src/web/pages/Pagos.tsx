@@ -71,7 +71,7 @@ export function Pagos() {
             <span className="kicker"><Icon name="wallet" size={14} />CUOTA DE {periodLabel(w.period).toUpperCase()}</span>
             <span className="status-chip">{w.paid ? 'Pagada' : w.state === 'open' ? `Abierta · ${w.daysToClose} d` : `Abre en ${w.daysToOpen} d`}</span>
           </div>
-          <span className="amount num"><small>RD$</small>{w.amount ? Number(w.amount).toLocaleString('es-DO') : '—'}</span>
+          {w.amount ? <span className="amount num"><small>RD$</small>{Number(w.amount).toLocaleString('es-DO')}</span> : <span className="amount" style={{ fontSize: 22, fontWeight: 700 }}>Pon tu monto abajo ↓</span>}
           <div className="window">
             <div className="window-dates num"><span>{dateLabel(w.opensAt)}</span><span>{dateLabel(w.closesAt)}</span></div>
             <div className="paydays" style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}>

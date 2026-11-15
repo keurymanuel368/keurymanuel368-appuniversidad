@@ -1458,7 +1458,7 @@ button.grade-row:disabled { opacity: 1; }
 .mascot .m-eyes { transform-box: fill-box; transform-origin: center; animation: m-blink 4.6s infinite; }
 .mascot .m-eyes.m-spin { animation: m-spin 1s linear infinite; }
 .mascot .m-tassel { transform-origin: 60px 32px; animation: m-tassel 2.8s ease-in-out infinite; }
-.mascot .m-needle, .mascot .m-needle2 { transform-origin: 60px 106px; animation: m-needle 6s ease-in-out infinite; }
+.mascot .m-needle, .mascot .m-needle2 { transform-origin: 60px 31px; animation: m-needle 6s ease-in-out infinite; }
 .mascot.m-waving .m-arm-r { transform-origin: 96px 80px; animation: m-wave .5s ease-in-out 4 alternate; }
 .mascot .m-talk { transform-box: fill-box; transform-origin: center; animation: m-talk .22s ease-in-out infinite alternate; }
 .mascot .m-sweat { animation: m-sweat 1.6s ease-in infinite; }

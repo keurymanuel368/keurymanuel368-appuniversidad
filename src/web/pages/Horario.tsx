@@ -160,7 +160,7 @@ function Timetable({ data, sel, onSel, now }: { data: Data; sel: number; onSel: 
             {list.filter((k) => k.day === i).map((k) => {
               const h = hue(k.title), live = todayI === i && nowMin >= k.start_min && nowMin < k.end_min;
               return (
-                <div key={k.id} className="blk" style={{ top: px(k.start_min), height: Math.max(34, px(k.end_min) - px(k.start_min) - 2), background: `hsl(${h} 90% 94%)`, borderLeft: `5px solid hsl(${h} 75% 52%)`, boxShadow: live ? `0 0 0 2px hsl(${h} 75% 52%)` : undefined }}>
+                <div key={k.id} className="blk" role="button" tabIndex={0} onClick={() => { haptic(6); onSel(i); setTimeout(() => document.getElementById('hz-day')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }} style={{ cursor: 'pointer', top: px(k.start_min), height: Math.max(34, px(k.end_min) - px(k.start_min) - 2), background: `hsl(${h} 90% 94%)`, borderLeft: `5px solid hsl(${h} 75% 52%)`, boxShadow: live ? `0 0 0 2px hsl(${h} 75% 52%)` : undefined }}>
                   <b>{k.title}</b>{hShort(k.start_min)}–{hShort(k.end_min)}
                 </div>
               );
@@ -371,7 +371,7 @@ export function Horario() {
           <div className="col">
             <Timetable data={d} sel={sel} onSel={(i) => { setPicked(true); setSel(i); }} now={now} />
             <section className="card">
-              <div className="head"><h3>{DIAS_LARGO[sel]}{dayIdx(now) === sel ? ' · hoy' : ''}</h3></div>
+              <div className="head" id="hz-day"><h3>{DIAS_LARGO[sel]}{dayIdx(now) === sel ? ' · hoy' : ''}</h3></div>
               <DayAgenda data={d} day={sel} now={now} />
             </section>
           </div>

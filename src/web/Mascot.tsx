@@ -1,4 +1,5 @@
-// La mascota de Rumbo: un estudiante redondito con birrete y una brújula en la barriga.
+// La mascota de Rumbo («Rumbi»): una brújula con vida. Su cara es la esfera del reloj, lleva birrete de estudiante
+// y una pequeña aguja naranja que siempre señala hacia adelante.
 // Su cara cambia según cómo vas (feliz, tranqui, atento, alerta) y reacciona cuando la tocas.
 import { useId } from 'react';
 
@@ -15,7 +16,7 @@ function Eyes({ face }: { face: MascotFace }) {
   if (face === 'dizzy') {
     const spiral = (x: number) => `M${x},${Y} m-1,0 a2,2 0 1,1 3,1 a4,4 0 1,1 -6,-3 a6.5,6.5 0 1,1 10,6`;
     return <g className="m-eyes m-spin">
-      <ellipse cx={L} cy={Y} rx="11" ry="13" fill="#fff" /><ellipse cx={R} cy={Y} rx="11" ry="13" fill="#fff" />
+      <ellipse cx={L} cy={Y} rx="11" ry="13" fill="#fff" stroke={INK} strokeOpacity=".25" strokeWidth="1.5" /><ellipse cx={R} cy={Y} rx="11" ry="13" fill="#fff" stroke={INK} strokeOpacity=".25" strokeWidth="1.5" />
       <path d={spiral(L)} stroke={INK} strokeWidth="2.4" fill="none" strokeLinecap="round" /><path d={spiral(R)} stroke={INK} strokeWidth="2.4" fill="none" strokeLinecap="round" />
     </g>;
   }
@@ -27,12 +28,12 @@ function Eyes({ face }: { face: MascotFace }) {
   const look = face === 'atento' ? [2, -2] : face === 'alerta' ? [0, -1] : face === 'wow' ? [0, 0] : [1, 1];
   const pr = face === 'alerta' || face === 'wow' ? 5 : 6.5;
   const eye = (x: number, closed: boolean) => closed
-    ? <path key={x} d={`M${x - 9},${Y + 2} Q${x},${Y - 6} ${x + 9},${Y + 2}`} stroke={INK} strokeWidth="3.2" fill="none" strokeLinecap="round" />
+    ? <path key={x} d={`M${x - 8},${Y + 2} Q${x},${Y - 6} ${x + 8},${Y + 2}`} stroke={INK} strokeWidth="3.2" fill="none" strokeLinecap="round" />
     : <g key={x}>
-        <ellipse cx={x} cy={Y} rx="11" ry="13" fill="#fff" />
-        <circle cx={x + look[0]} cy={Y + look[1]} r={pr} fill={INK} />
-        <circle cx={x + look[0] - 2.2} cy={Y + look[1] - 2.8} r="2.3" fill="#fff" />
-        <circle cx={x + look[0] + 2} cy={Y + look[1] + 2.4} r="1.1" fill="#fff" />
+        <ellipse cx={x + look[0] * .6} cy={Y + look[1] * .6} rx={pr + 2.2} ry={pr + 4.2} fill={INK} />
+        <ellipse cx={x + look[0] * .6} cy={Y + look[1] * .6 + 3} rx={pr} ry={pr * .8} fill="#2F6BFF" opacity=".55" />
+        <circle cx={x + look[0] * .6 - 2.6} cy={Y + look[1] * .6 - 3.8} r="3" fill="#fff" />
+        <circle cx={x + look[0] * .6 + 2.6} cy={Y + look[1] * .6 + 2.8} r="1.5" fill="#fff" />
       </g>;
   return <g className="m-eyes">{eye(L, false)}{eye(R, face === 'wink')}</g>;
 }
@@ -45,7 +46,7 @@ function Brows({ face }: { face: MascotFace }) {
     dizzy: 'M36,52 Q44,49 52,53 M68,51 Q76,55 84,51',
     feliz: 'M37,53 Q44,49 51,52 M69,52 Q76,49 83,53',
   };
-  return p[face] ? <path d={p[face]} stroke="#0D2259" strokeWidth="3" fill="none" strokeLinecap="round" /> : null;
+  return p[face] ? <path d={p[face]} transform="translate(60 57) scale(.86) translate(-60 -52)" stroke={INK} strokeWidth="3.2" fill="none" strokeLinecap="round" /> : null;
 }
 
 function Mouth({ face }: { face: MascotFace }) {
@@ -73,44 +74,56 @@ export function Mascot({ mood, size = 64, wave = false, className = '' }: { mood
   return (
     <svg className={`mascot m-${face} ${wave ? 'm-waving' : ''} ${className}`} width={size} height={size * 140 / 120} viewBox="0 0 120 140" aria-hidden="true">
       <defs>
-        <radialGradient id={`b${id}`} cx="38%" cy="30%" r="80%">
-          <stop offset="0" stopColor="#8CC8FF" /><stop offset=".45" stopColor="#3E86F5" /><stop offset="1" stopColor="#1A4FCB" />
+        <radialGradient id={`b${id}`} cx="34%" cy="24%" r="92%">
+          <stop offset="0" stopColor="#9CCBFF" /><stop offset=".32" stopColor="#4C8DFF" /><stop offset=".7" stopColor="#2347D8" /><stop offset="1" stopColor="#15208F" />
         </radialGradient>
-        <linearGradient id={`c${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1B3A86" /><stop offset="1" stopColor="#0D2259" /></linearGradient>
+        <radialGradient id={`f${id}`} cx="40%" cy="28%" r="85%">
+          <stop offset="0" stopColor="#FFFFFF" /><stop offset=".6" stopColor="#EEF5FF" /><stop offset="1" stopColor="#CFE0FB" />
+        </radialGradient>
+        <linearGradient id={`c${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#24408F" /><stop offset="1" stopColor="#0B1B52" /></linearGradient>
+        <linearGradient id={`o${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFB04A" /><stop offset="1" stopColor="#F26A1B" /></linearGradient>
+        <radialGradient id={`r${id}`} cx="78%" cy="86%" r="45%"><stop offset="0" stopColor="#7FE7FF" stopOpacity=".55" /><stop offset="1" stopColor="#7FE7FF" stopOpacity="0" /></radialGradient>
       </defs>
       {/* sombra */}
-      <ellipse className="m-shadow" cx="60" cy="134" rx="34" ry="5" fill="#0A1A38" opacity=".16" />
+      <ellipse className="m-shadow" cx="60" cy="134" rx="34" ry="5" fill="#0A1A38" opacity=".18" />
       <g className="m-body">
-        {/* pies */}
-        <ellipse cx="45" cy="127" rx="11" ry="6" fill="#1747AE" /><ellipse cx="75" cy="127" rx="11" ry="6" fill="#1747AE" />
-        {/* brazos */}
-        <ellipse cx="19" cy="90" rx="7" ry="13" fill="#2A66DD" transform="rotate(22 19 90)" />
-        <g className="m-arm-r"><ellipse cx="101" cy="90" rx="7" ry="13" fill="#2A66DD" transform="rotate(-22 101 90)" /></g>
-        {/* cuerpo */}
-        <path d="M60,30 C89,30 105,53 105,83 C105,111 87,127 60,127 C33,127 15,111 15,83 C15,53 31,30 60,30 Z" fill={`url(#b${id})`} />
-        <path d="M34,44 C40,37 50,34 56,35 C46,39 39,45 36,53 C33,52 32,47 34,44 Z" fill="#fff" opacity=".45" />
-        {/* barriga con brújula */}
-        <ellipse cx="60" cy="106" rx="24" ry="16" fill="#E3EFFF" opacity=".95" />
-        <circle cx="60" cy="106" r="8.5" fill="#fff" stroke="#1A4FCB" strokeWidth="2" />
-        <path className="m-needle" d="M60,99 L62.6,106 L57.4,106 Z" fill="#EF4444" />
-        <path className="m-needle2" d="M60,113 L62.6,106 L57.4,106 Z" fill="#0D2259" />
+        {/* pies naranja */}
+        <ellipse cx="44" cy="127" rx="12" ry="6.5" fill={`url(#o${id})`} /><ellipse cx="76" cy="127" rx="12" ry="6.5" fill={`url(#o${id})`} />
+        <ellipse cx="41" cy="125" rx="4" ry="1.8" fill="#fff" opacity=".45" /><ellipse cx="73" cy="125" rx="4" ry="1.8" fill="#fff" opacity=".45" />
+        {/* manitas */}
+        <ellipse cx="12" cy="92" rx="7.5" ry="11.5" fill="#2A5FE6" transform="rotate(20 12 92)" />
+        <g className="m-arm-r"><ellipse cx="108" cy="92" rx="7.5" ry="11.5" fill="#2A5FE6" transform="rotate(-20 108 92)" /><ellipse cx="110" cy="87" rx="2.4" ry="3.6" fill="#fff" opacity=".4" transform="rotate(-20 110 87)" /></g>
+        {/* cuerpo-brújula */}
+        <ellipse cx="60" cy="82" rx="48" ry="46" fill={`url(#b${id})`} />
+        <ellipse cx="60" cy="82" rx="48" ry="46" fill={`url(#r${id})`} />
+        {/* bisel con marcas de brújula */}
+        <circle cx="60" cy="80" r="43.5" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="2.6" strokeDasharray="1.1 8.4" />
+        <path d="M60,33.5 L63,38.5 L57,38.5 Z" fill={`url(#o${id})`} />
+        {/* reflejo del cuerpo */}
+        <path d="M24,62 C27,47 38,38 52,36 C40,42 32,52 30,66 C27,68 24,66 24,62 Z" fill="#fff" opacity=".5" />
+        {/* esfera (cara) */}
+        <circle cx="60" cy="81" r="37" fill="#0A1A55" opacity=".25" transform="translate(0 2)" />
+        <circle cx="60" cy="80" r="37" fill={`url(#f${id})`} stroke="#fff" strokeWidth="2" />
+        <path d="M33,68 C36,56 46,49 58,48 C49,53 43,60 41,70 C37,72 33,71 33,68 Z" fill="#fff" opacity=".85" />
         {/* cachetes */}
-        <ellipse cx="32" cy="86" rx="6.5" ry="3.8" fill="#FF7A9A" opacity=".45" /><ellipse cx="88" cy="86" rx="6.5" ry="3.8" fill="#FF7A9A" opacity=".45" />
+        <ellipse cx="34" cy="88" rx="6" ry="3.6" fill="#FF7A9A" opacity=".5" /><ellipse cx="86" cy="88" rx="6" ry="3.6" fill="#FF7A9A" opacity=".5" />
         <Brows face={face} />
         <Eyes face={face} />
         <Mouth face={face} />
-        {/* birrete */}
+        {/* birrete con aguja */}
         <g transform="rotate(-9 60 34)">
-          <path d="M41,36 L41,45 C49,51 71,51 79,45 L79,36 L60,44 Z" fill="#13306F" />
-          <path d="M27,32 L60,19 L93,32 L60,45 Z" fill={`url(#c${id})`} />
-          <circle cx="60" cy="32" r="2.4" fill="#F5B82E" />
-          <g className="m-tassel"><path d="M60,32 Q75,33 88,35 L88,49" stroke="#F5B82E" strokeWidth="1.8" fill="none" strokeLinecap="round" /><path d="M85,48 L91,48 L90,56 L86,56 Z" fill="#F5B82E" /></g>
+          <path d="M41,35 L41,45 C49,51 71,51 79,45 L79,35 L60,43 Z" fill="#0F2561" />
+          <path d="M26,31 L60,17 L94,31 L60,45 Z" fill={`url(#c${id})`} />
+          <path d="M34,31 L60,20.5 L66,23 L38,34 Z" fill="#fff" opacity=".18" />
+          <g className="m-needle"><path d="M60,31 L63.4,22 L60,9 L56.6,22 Z" fill={`url(#o${id})`} /><path d="M60,31 L63.4,22 L60,24 L56.6,22 Z" fill="#fff" opacity=".35" /></g>
+          <circle cx="60" cy="31" r="3" fill="#fff" stroke="#F26A1B" strokeWidth="1.6" />
+          <g className="m-tassel"><path d="M60,31 Q76,32 90,34 L90,49" stroke="#FF9A2E" strokeWidth="1.9" fill="none" strokeLinecap="round" /><path d="M87,48 L93,48 L92,57 L88,57 Z" fill={`url(#o${id})`} /></g>
         </g>
         {/* extras según el ánimo */}
-        {face === 'alerta' && <path className="m-sweat" d="M100,48 C104,55 105,59 102,62 C99,64 95,62 96,58 C96,55 98,52 100,48 Z" fill="#9BD4FF" />}
-        {(face === 'feliz' || face === 'love') && <g className="m-sparks" fill="#F5B82E"><path d="M106,40 l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2 Z" /><path d="M12,52 l1.4,3.4 3.4,1.4 -3.4,1.4 -1.4,3.4 -1.4,-3.4 -3.4,-1.4 3.4,-1.4 Z" /></g>}
-        {face === 'sleep' && <g className="m-zzz" fill="#1A4FCB" fontFamily="Sora, sans-serif" fontWeight="800"><text x="94" y="30" fontSize="14">z</text><text x="104" y="18" fontSize="10">z</text></g>}
-        {face === 'wow' && <g stroke="#F5B82E" strokeWidth="3" strokeLinecap="round"><path d="M104,30 l6,-6 M108,44 l8,-1 M96,22 l2,-8" /></g>}
+        {face === 'alerta' && <path className="m-sweat" d="M102,48 C106,55 107,59 104,62 C101,64 97,62 98,58 C98,55 100,52 102,48 Z" fill="#9BD4FF" />}
+        {(face === 'feliz' || face === 'love') && <g className="m-sparks" fill="#FF9A2E"><path d="M108,38 l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2 Z" /><path d="M10,50 l1.4,3.4 3.4,1.4 -3.4,1.4 -1.4,3.4 -1.4,-3.4 -3.4,-1.4 3.4,-1.4 Z" /></g>}
+        {face === 'sleep' && <g className="m-zzz" fill="#1A4FCB" fontFamily="Sora, sans-serif" fontWeight="800"><text x="96" y="30" fontSize="14">z</text><text x="106" y="18" fontSize="10">z</text></g>}
+        {face === 'wow' && <g stroke="#FF9A2E" strokeWidth="3" strokeLinecap="round"><path d="M106,30 l6,-6 M110,44 l8,-1 M98,22 l2,-8" /></g>}
       </g>
     </svg>
   );
