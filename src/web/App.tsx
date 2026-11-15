@@ -357,7 +357,7 @@ function Login({ onIn }: { onIn: () => void }) {
         <ul className="lg2-perks">
           <li><Icon name="tasks" size={14} />Entregas</li><li><Icon name="trend" size={14} />Notas</li><li><Icon name="wallet" size={14} />Pagos</li><li><Icon name="bell" size={14} />Avisos</li>
         </ul>
-        <span className="auth-foot">¿Te invitaron? Abre el enlace que te mandaron · BY DEXA · UAPA</span>
+        <span className="auth-foot">¿Te invitaron? Abre el enlace que te mandaron · DEXA · Keury Manuel · Todos los derechos reservados</span>
       </form>
     </div>
   );

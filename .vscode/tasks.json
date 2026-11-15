@@ -1,9 +1,7 @@
 {
   "version": "2.0.0",
   "tasks": [
-    { "label": "Rumbo: servidor local (API)", "type": "shell", "command": "npx wrangler dev --local --port 8787", "isBackground": true, "problemMatcher": [] },
-    { "label": "Rumbo: web con recarga en vivo", "type": "shell", "command": "npx vite --host --open /dev/phone.html", "isBackground": true, "problemMatcher": [] },
-    { "label": "Rumbo: iPhone en vivo (todo)", "dependsOn": ["Rumbo: servidor local (API)", "Rumbo: web con recarga en vivo"], "problemMatcher": [] },
+    { "label": "Rumbo: ver en vivo", "type": "shell", "command": "npx vite --port 5173", "options": { "env": { "API_TARGET": "https://rumbo-pruebas.gestori.workers.dev" } }, "isBackground": true, "problemMatcher": [] },
     { "label": "Rumbo: subir a pruebas", "type": "shell", "command": "git push origin HEAD:dev", "problemMatcher": [] },
     { "label": "Rumbo: subir a producción", "type": "shell", "command": "git push origin HEAD:main", "problemMatcher": [] }
   ]

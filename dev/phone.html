@@ -1,11 +1,20 @@
 <!doctype html><meta charset="utf-8"><title>Rumbo · iPhone</title>
 <style>
-body{margin:0;min-height:100vh;display:flex;gap:24px;align-items:center;justify-content:center;background:#1c1c1e;font:14px system-ui;color:#aaa;flex-wrap:wrap;padding:16px}
-.p{border:12px solid #000;border-radius:54px;box-shadow:0 0 0 2px #444,0 20px 60px #000;overflow:hidden;background:#000;position:relative}
+html,body{margin:0;height:100%;overflow:hidden;background:#1c1c1e;font:13px system-ui;color:#aaa}
+#w{position:absolute;top:0;left:0;transform-origin:0 0;display:flex;gap:40px;padding:12px}
+.p{border:12px solid #000;border-radius:54px;box-shadow:0 0 0 2px #444;overflow:hidden;background:#000;position:relative}
 .p:before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);width:110px;height:30px;background:#000;border-radius:20px;z-index:2}
 iframe{display:block;border:0;background:#fff}
 .ip iframe{width:390px;height:844px}.an{border-radius:32px}.an iframe{width:412px;height:800px}
-label{display:block;text-align:center;margin-bottom:8px}
+label{display:block;text-align:center;margin-bottom:6px}.ad{display:none}
 </style>
-<div><label>iPhone 15 (390×844)</label><div class="p ip"><iframe src="/"></iframe></div></div>
-<div><label>Android (412×800)</label><div class="p an"><iframe src="/"></iframe></div></div>
+<div id="w">
+<div><label>iPhone 15</label><div class="p ip"><iframe src="/"></iframe></div></div>
+<div class="ad"><label>Android</label><div class="p an"><iframe src="/"></iframe></div></div>
+</div>
+<script>
+if(location.search.includes("android"))document.querySelector(".ad").style.display="block";
+const w=document.getElementById("w");
+function fit(){const s=Math.min(innerWidth/w.offsetWidth,innerHeight/w.offsetHeight,1);w.style.transform=`scale(${s})`;w.style.left=Math.max(0,(innerWidth-w.offsetWidth*s)/2)+"px"}
+addEventListener("resize",fit);fit();
+</script>

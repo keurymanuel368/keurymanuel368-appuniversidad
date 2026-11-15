@@ -229,3 +229,6 @@ h1, h2, h3 { text-wrap: balance; }
 .rev-list{padding-left:18px !important;list-style:disc !important;font-size:14px;line-height:1.5;display:flex;flex-direction:column;gap:4px}
 .rev .chip{display:inline-flex;border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700}
 .rev .chip.c-blue{background:var(--blue-soft);color:var(--blue-dark)}.rev .chip.c-mint{background:var(--green-soft);color:var(--green)}.rev .chip.c-rose{background:var(--red-soft);color:var(--red)}
+
+/* El campo del login ya muestra su propio borde de enfoque: el input interno no dibuja otro encima. */
+.lg2-field input:focus, .lg2-field input:focus-visible { outline: none !important; box-shadow: none !important; border-color: transparent !important; background: transparent !important; }
